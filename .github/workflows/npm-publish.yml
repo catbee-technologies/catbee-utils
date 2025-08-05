@@ -1,0 +1,17 @@
+# 📦 Publish to npm when pushing to main or tagging a release
+
+name: 📦 Publish to npm
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  npm-publish:
+    name: 🚀 NPM Publish Job
+    uses: catbee-technologies/.github/workflows/npm-publish.yml@main
+    secrets:
+      npm_token: ${{ secrets.NPM_TOKEN }}
