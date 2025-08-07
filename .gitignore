@@ -3,3 +3,5 @@ build/
 .env
 logs/
 *.log
+reports
+**/test-report.xml

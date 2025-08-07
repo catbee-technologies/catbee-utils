@@ -1,0 +1,22 @@
+/** @type {import('ts-jest').JestConfigWithTsJest} */
+export default {
+  preset: 'ts-jest',
+  testEnvironment: 'node',
+  collectCoverage: false,
+  collectCoverageFrom: ['src/**/*.ts'],
+  coverageDirectory: 'reports/coverage',
+  coverageReporters: ['text', 'text-summary', 'lcov'],
+  reporters: [
+    'default',
+    [
+      'jest-junit',
+      {
+        outputDirectory: 'reports',
+        outputName: 'test-results.xml'
+      }
+    ],
+  ],
+  testMatch: ['**/tests/**/*.test.ts'],
+  coveragePathIgnorePatterns: ['index.ts'],
+  testResultsProcessor: 'jest-sonar-reporter'
+}
