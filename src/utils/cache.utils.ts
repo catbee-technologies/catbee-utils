@@ -37,6 +37,18 @@ export class TTLCache<K, V> {
   }
 
   /**
+   * Sets a key-value pair in the cache with a custom TTL.
+   *
+   * @param key - The key to set.
+   * @param value - The value to associate with the key.
+   * @param ttlMs - Time-to-live in milliseconds.
+   */
+  setWithTTL(key: K, value: V, ttlMs: number): void {
+    const expiresAt = Date.now() + ttlMs;
+    this.cache.set(key, { value, expiresAt });
+  }
+
+  /**
    * Retrieves the value for a given key if it hasn't expired.
    *
    * @param key - The key to retrieve.
@@ -80,11 +92,67 @@ export class TTLCache<K, V> {
   }
 
   /**
-   * Returns the number of entries currently in the cache.
+   * Returns the number of entries currently in the cache (includes expired entries until next access/cleanup).
    *
-   * @returns Number of items in the cache.
+   * @returns Number of items in the cache (may include expired keys).
    */
   size(): number {
     return this.cache.size;
+  }
+
+  /**
+   * Removes all expired entries from the cache.
+   *
+   * @returns Number of entries removed.
+   */
+  cleanup(): number {
+    let removed = 0;
+    const now = Date.now();
+    for (const [key, entry] of this.cache.entries()) {
+      if (now > entry.expiresAt) {
+        this.cache.delete(key);
+        removed++;
+      }
+    }
+    return removed;
+  }
+
+  /**
+   * Returns an iterator of all current valid [key, value] pairs.
+   *
+   * @returns IterableIterator<[K, V]>
+   */
+  *entries(): IterableIterator<[K, V]> {
+    for (const [key, entry] of this.cache.entries()) {
+      if (Date.now() <= entry.expiresAt) {
+        yield [key, entry.value];
+      }
+    }
+  }
+
+  /**
+   * Returns an iterator of all current valid keys.
+   *
+   * @returns IterableIterator<K>
+   */
+  *keys(): IterableIterator<K> {
+    for (const [key, entry] of this.cache.entries()) {
+      if (Date.now() <= entry.expiresAt) {
+        yield key;
+      }
+    }
+  }
+
+  /**
+   * Returns an iterator of all current valid values.
+   *
+   * @returns IterableIterator<V>
+   */
+  *values(): IterableIterator<V> {
+    for (const entry of this.cache.values()) {
+      if (Date.now() <= entry.expiresAt) {
+        yield entry.value;
+      }
+    }
   }
 }

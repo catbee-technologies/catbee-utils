@@ -20,7 +20,7 @@ export const StoreKeys = {
 /**
  * Retrieves the current request ID from the async context, if available.
  *
- * @returns The request ID string or undefined if not present.
+ * @returns {string | undefined} The request ID string or undefined if not present in the current context.
  */
 export function getRequestId(): string | undefined {
   return ContextStore.get<string>(StoreKeys.REQUEST_ID);
@@ -30,63 +30,40 @@ export function getRequestId(): string | undefined {
  * ContextStore manages per-request scoped context using AsyncLocalStorage.
  * It allows storing and retrieving data across async calls (e.g., request ID, logger).
  *
- * 🧪 Example (Express middleware usage):
- *
- * ```ts
- * // ✅ Recommended: Unified middleware to initialize context and logger
- * import { ContextStore, StoreKeys } from "./context-store";
- * import { getLogger } from "./logger";
- * import crypto from "crypto";
- *
- * export function setupRequestContext(req: Request, res: Response, next: NextFunction): void {
+ * Example (Express middleware):
+ * ```
+ * // Middleware to initialize context and logger
+ * app.use((req, res, next) => {
  *   const requestId = req.headers["x-request-id"]?.toString() || crypto.randomUUID();
- *
  *   ContextStore.run({ [StoreKeys.REQUEST_ID]: requestId }, () => {
- *     const logger = getLogger().child({ reqId: requestId });
- *     ContextStore.set(StoreKeys.LOGGER, logger);
- *     logger.info("Request context initialized");
+ *     ContextStore.set(StoreKeys.LOGGER, getLogger().child({ reqId: requestId }));
  *     next();
  *   });
- * }
- *
- * // In your app entry point
- * app.use(setupRequestContext);
- * ```
- *
- * 👇 Alternatively, split it into two separate middlewares:
- *
- * ```ts
- * // First: Initialize context with request ID
- * app.use((req, res, next) => {
- *   const requestId = req.headers["x-request-id"] || crypto.randomUUID();
- *   ContextStore.run({ [StoreKeys.REQUEST_ID]: requestId }, () => next());
- * });
- *
- * // Second: Inject logger into the context
- * app.use((req, res, next) => {
- *   const logger = getLogger().child({ reqId: req.headers["x-request-id"] });
- *   ContextStore.set(StoreKeys.LOGGER, logger);
- *   logger.info("Request started");
- *   next();
  * });
  * ```
  */
 export class ContextStore {
+  /**
+   * The underlying AsyncLocalStorage instance for context.
+   * @private
+   */
   private static readonly storage = new AsyncLocalStorage<Store>();
 
   /**
-   * Returns the raw AsyncLocalStorage instance.
+   * Returns the raw AsyncLocalStorage instance for advanced access.
+   *
+   * @returns {AsyncLocalStorage<Store>} The AsyncLocalStorage instance.
    */
   static getInstance(): AsyncLocalStorage<Store> {
     return this.storage;
   }
 
   /**
-   * Retrieves a value from the store using the provided symbol key.
+   * Retrieves a value from the async context store by symbol key.
    *
-   * @template T - The expected return type of the value.
-   * @param key - Unique symbol used as the store key.
-   * @returns The value or undefined if not present.
+   * @typeParam T - The expected return type of the value.
+   * @param {symbol} key - Unique symbol used as the store key.
+   * @returns {T | undefined} The value found (typed) or undefined if not present.
    */
   static get<T>(key: symbol): T | undefined {
     const store = this.storage.getStore();
@@ -94,12 +71,12 @@ export class ContextStore {
   }
 
   /**
-   * Sets a value in the current context by symbol key.
+   * Sets a value in the current context store by symbol key.
    *
-   * @template T - The value type.
-   * @param key - Unique symbol key.
-   * @param value - Value to set in context.
-   * @throws Error if called outside an active context (i.e., not within `run`).
+   * @typeParam T - The value type to set.
+   * @param {symbol} key - Unique symbol key.
+   * @param {T} value - Value to set in context.
+   * @throws {Error} If called outside an active context (not within a .run call or in the wrong async boundaries).
    */
   static set<T>(key: symbol, value: T): void {
     const store = this.storage.getStore();
@@ -112,7 +89,9 @@ export class ContextStore {
   }
 
   /**
-   * Retrieves the entire context store object.
+   * Retrieves the entire context store object for the current async context.
+   *
+   * @returns {Store | undefined} The current store object or undefined if called outside a context.
    */
   static getAll(): Store | undefined {
     return this.storage.getStore();
@@ -120,11 +99,12 @@ export class ContextStore {
 
   /**
    * Initializes a new async context and executes a callback within it.
-   * This must be called at the beginning of a request or async flow.
+   * This must be called at the beginning of a request or logical async flow.
    *
-   * @param store - Initial key-value store object.
-   * @param callback - The function to run within the context.
-   * @returns The return value of the callback.
+   * @typeParam T - The callback's return type.
+   * @param {Store} store - The initial key-value store object.
+   * @param {() => T} callback - The function to run within the new context.
+   * @returns {T} The result of the callback function.
    */
   static run<T>(store: Store, callback: () => T): T {
     return this.storage.run(store, callback);

@@ -3,9 +3,9 @@ import { URL, URLSearchParams } from "url";
 /**
  * Appends query parameters to a given URL.
  *
- * @param url - The base URL to which query parameters will be appended.
- * @param params - A record of key-value pairs to append as query parameters.
- * @returns The new URL string with query parameters appended.
+ * @param {string} url - The base URL to which query parameters will be appended.
+ * @param {Record<string, string | number>} params - Key-value pairs to add as query parameters.
+ * @returns {string} The new URL string with query parameters appended.
  *
  * @example
  * appendQueryParams('https://example.com', { page: 1, limit: 10 });
@@ -25,8 +25,8 @@ export function appendQueryParams(
 /**
  * Parses a query string into a key-value object.
  *
- * @param query - The query string (with or without leading '?').
- * @returns A record representing the parsed query parameters.
+ * @param {string} query - The query string (with or without leading '?').
+ * @returns {Record<string, string>} Object representing parsed query parameters.
  *
  * @example
  * parseQueryString('?page=1&limit=10');
@@ -34,5 +34,9 @@ export function appendQueryParams(
  */
 export function parseQueryString(query: string): Record<string, string> {
   const cleanQuery = query.startsWith("?") ? query.slice(1) : query;
-  return Object.fromEntries(new URLSearchParams(cleanQuery));
+  // Object.fromEntries guarantees string values in result
+  return Object.fromEntries(new URLSearchParams(cleanQuery)) as Record<
+    string,
+    string
+  >;
 }

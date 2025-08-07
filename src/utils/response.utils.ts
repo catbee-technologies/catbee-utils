@@ -6,7 +6,7 @@ import { getRequestId } from "./context-store.utils";
  * Standard HTTP response wrapper for successful responses.
  * Implements the `ApiResponse<T>` interface and sets default values.
  *
- * @template T - The shape of the data returned in the response.
+ * @typeParam T - The shape of the data returned in the response.
  */
 export class SuccessResponse<T> implements ApiResponse<T> {
   /** Message describing the result of the operation. */
@@ -27,8 +27,8 @@ export class SuccessResponse<T> implements ApiResponse<T> {
   /**
    * Constructs a new success response.
    *
-   * @param message - Optional message to override the default.
-   * @param data - Optional data payload.
+   * @param {string} message - Optional message to override the default.
+   * @param {T} [data] - Optional data payload.
    */
   constructor(message: string, data?: T) {
     if (message) this.message = message;
@@ -38,9 +38,12 @@ export class SuccessResponse<T> implements ApiResponse<T> {
 
 /**
  * Wrapper for error responses that extends the native `Error` object.
- * Implements `ApiResponse` without the `data` field.
+ * Implements `ApiResponse` but omits the `data` field (which should not be present in errors).
  */
-export class ErrorResponse extends Error implements Omit<ApiResponse, "data"> {
+export class ErrorResponse
+  extends Error
+  implements Omit<ApiResponse<never>, "data">
+{
   /** HTTP status code associated with the error (e.g., 404, 500). */
   status: number;
 
@@ -56,8 +59,8 @@ export class ErrorResponse extends Error implements Omit<ApiResponse, "data"> {
   /**
    * Constructs a new error response.
    *
-   * @param message - The error message to display or log.
-   * @param status - Optional HTTP status code (defaults to 500).
+   * @param {string} message - The error message to display or log.
+   * @param {number} [status=500] - Optional HTTP status code (defaults to 500).
    */
   constructor(message: string, status: number = 500) {
     super(message);

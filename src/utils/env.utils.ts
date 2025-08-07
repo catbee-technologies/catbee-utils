@@ -18,7 +18,7 @@ export class Env {
   /**
    * Checks if the current NODE_ENV is 'development'.
    *
-   * @returns `true` if NODE_ENV is 'development', else `false`.
+   * @returns {boolean} `true` if NODE_ENV is 'development', else `false`.
    */
   static isDev(): boolean {
     return (
@@ -27,10 +27,10 @@ export class Env {
   }
 
   /**
-   * Sets an environment variable (only affects runtime memory, not persisted in .env files).
+   * Sets an environment variable (only affects runtime memory).
    *
-   * @param key - The environment variable key.
-   * @param value - The value to set.
+   * @param {string} key - The environment variable key.
+   * @param {string} value - The value to set.
    */
   static set(key: string, value: string): void {
     process.env[key] = value;
@@ -39,7 +39,7 @@ export class Env {
   /**
    * Returns all environment variables as an object.
    *
-   * @returns The current `process.env` object.
+   * @returns {object} The current `process.env` object.
    */
   static getAll(): object {
     return process.env;
@@ -48,9 +48,9 @@ export class Env {
   /**
    * Retrieves a string environment variable with a fallback default.
    *
-   * @param key - The environment variable key.
-   * @param defaultValue - Value to return if the key is missing.
-   * @returns The environment variable's value or the fallback.
+   * @param {string} key - The environment variable key.
+   * @param {string} [defaultValue] - Value to return if the key is missing.
+   * @returns {string | undefined} The env value or the fallback.
    */
   static get(key: string, defaultValue?: string): string | undefined {
     return process.env[key] ?? defaultValue;
@@ -59,9 +59,9 @@ export class Env {
   /**
    * Retrieves a string environment variable and throws if it's missing.
    *
-   * @param key - The environment variable key.
-   * @returns The required environment variable's value.
-   * @throws If the variable is not defined.
+   * @param {string} key - The environment variable key.
+   * @returns {string} The environment variable's value.
+   * @throws {Error} If the variable is not defined.
    */
   static getRequired(key: string): string {
     const value = process.env[key];
@@ -74,10 +74,10 @@ export class Env {
   /**
    * Retrieves an environment variable as a number, or returns a default.
    *
-   * @param key - The environment variable key.
-   * @param defaultValue - Fallback number if key is not present.
-   * @returns Parsed numeric value or default.
-   * @throws If the value is not a valid number.
+   * @param {string} key - The environment variable key.
+   * @param {number} defaultValue - Fallback number if key is not present.
+   * @returns {number} Parsed numeric value or default.
+   * @throws {Error} If the value is not a valid number.
    */
   static getNumber(key: string, defaultValue: number): number {
     const value = process.env[key] ?? defaultValue;
@@ -91,9 +91,9 @@ export class Env {
   /**
    * Retrieves a required environment variable as a number.
    *
-   * @param key - The environment variable key.
-   * @returns Parsed number.
-   * @throws If the value is missing or not a number.
+   * @param {string} key - The environment variable key.
+   * @returns {number} Parsed number.
+   * @throws {Error} If the value is missing or not a number.
    */
   static getNumberRequired(key: string): number {
     const value = process.env[key];
@@ -111,10 +111,10 @@ export class Env {
    * Retrieves an environment variable as a boolean.
    * Accepts `true`, `1`, `yes`, `on` as true; `false`, `0`, `no`, `off` as false.
    *
-   * @param key - The environment variable key.
-   * @param defaultValue - Optional fallback value if key is missing.
-   * @returns Parsed boolean.
-   * @throws If the value is not a recognized boolean string.
+   * @param {string} key - The environment variable key.
+   * @param {boolean} [defaultValue=false] - Optional fallback value if key is missing.
+   * @returns {boolean} Parsed boolean.
+   * @throws {Error} If the value is not a recognized boolean string.
    */
   static getBoolean(key: string, defaultValue = false): boolean {
     const value = (process.env[key] ?? defaultValue).toString().toLowerCase();
@@ -126,9 +126,9 @@ export class Env {
   /**
    * Retrieves a required environment variable as a boolean.
    *
-   * @param key - The environment variable key.
-   * @returns Parsed boolean value.
-   * @throws If missing or invalid.
+   * @param {string} key - The environment variable key.
+   * @returns {boolean} Parsed boolean value.
+   * @throws {Error} If missing or invalid.
    */
   static getBooleanRequired(key: string): boolean {
     const value = process.env[key];
@@ -141,10 +141,11 @@ export class Env {
   /**
    * Parses a stringified JSON object from an environment variable.
    *
-   * @param key - The environment variable key.
-   * @param defaultValue - Value to return if key is missing.
-   * @returns Parsed object or default.
-   * @throws If the value is not valid JSON.
+   * @typeParam T - The type to parse as (defaults to `object`).
+   * @param {string} key - The environment variable key.
+   * @param {T} defaultValue - Value to return if key is missing.
+   * @returns {T} Parsed object or default.
+   * @throws {Error} If the value is not valid JSON.
    */
   static getJSON<T extends object = object>(key: string, defaultValue: T): T {
     const v = process.env[key];
@@ -161,10 +162,11 @@ export class Env {
   /**
    * Parses a comma-separated string as an array.
    *
-   * @param key - The environment variable key.
-   * @param defaultValue - Array to return if value is empty or missing.
-   * @param splitter - Delimiter to split on (default is `,`).
-   * @returns An array of strings.
+   * @typeParam T - The item type (optional, defaults to string).
+   * @param {string} key - The environment variable key.
+   * @param {T[]} [defaultValue=[]] - Array to return if value is empty or missing.
+   * @param {string} [splitter=','] - Delimiter to split on.
+   * @returns {string[] | T[]} An array of strings.
    */
   static getArray<T = string>(
     key: string,
@@ -184,11 +186,12 @@ export class Env {
   /**
    * Retrieves an enum-like environment variable value, validating against allowed values.
    *
-   * @param key - The environment variable key.
-   * @param allowedValues - Array of accepted string values.
-   * @param defaultValue - Optional fallback value.
-   * @returns The validated environment value.
-   * @throws If missing or invalid.
+   * @typeParam T - The allowed value type (string literal types).
+   * @param {string} key - The environment variable key.
+   * @param {T[]} allowedValues - Array of accepted string values.
+   * @param {T} [defaultValue] - Optional fallback value.
+   * @returns {T} The validated environment value.
+   * @throws {Error} If missing or invalid.
    */
   static getEnum<T extends string>(
     key: string,
@@ -207,8 +210,8 @@ export class Env {
   /**
    * Checks whether the specified environment variable exists.
    *
-   * @param key - The environment variable key.
-   * @returns `true` if the variable is defined, otherwise `false`.
+   * @param {string} key - The environment variable key.
+   * @returns {boolean} `true` if the variable is defined, otherwise `false`.
    */
   static has(key: string): boolean {
     return process.env[key] !== undefined;
@@ -217,7 +220,8 @@ export class Env {
   /**
    * Deletes the given environment variable (useful in tests).
    *
-   * @param key - The environment variable key to delete.
+   * @param {string} key - The environment variable key to delete.
+   * @returns {void}
    */
   static delete(key: string): void {
     delete process.env[key];

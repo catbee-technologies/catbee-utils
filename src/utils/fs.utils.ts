@@ -3,8 +3,8 @@ import fs from "fs/promises";
 /**
  * Checks whether a file or directory exists at the given path.
  *
- * @param path - The file or directory path to check.
- * @returns A promise that resolves to `true` if the path exists, `false` otherwise.
+ * @param {string} path - The file or directory path to check.
+ * @returns {Promise<boolean>} Resolves to `true` if the path exists, `false` otherwise.
  */
 export async function fileExists(path: string): Promise<boolean> {
   try {
@@ -19,8 +19,8 @@ export async function fileExists(path: string): Promise<boolean> {
  * Reads and parses a JSON file from the specified path.
  *
  * @typeParam T - The expected type of the parsed JSON object.
- * @param path - The path to the JSON file.
- * @returns A promise that resolves to the parsed object or `null` if reading or parsing fails.
+ * @param {string} path - The path to the JSON file.
+ * @returns {Promise<T | null>} The parsed object, or `null` if reading or parsing fails.
  */
 export async function readJsonFile<T = any>(path: string): Promise<T | null> {
   try {
@@ -34,10 +34,10 @@ export async function readJsonFile<T = any>(path: string): Promise<T | null> {
 /**
  * Writes a JavaScript object to a file as formatted JSON.
  *
- * @param path - The destination file path.
- * @param data - The object to serialize and write.
- * @param space - Number of spaces for JSON formatting (default is 2).
- * @returns A promise that resolves when writing is complete.
+ * @param {string} path - The destination file path.
+ * @param {any} data - The object to serialize and write.
+ * @param {number} [space=2] - Number of spaces for JSON formatting.
+ * @returns {Promise<void>} Resolves when writing is complete.
  */
 export async function writeJsonFile(
   path: string,
@@ -51,8 +51,8 @@ export async function writeJsonFile(
 /**
  * Deletes a file if it exists.
  *
- * @param path - The file path to delete.
- * @returns A promise that resolves to `true` if the file was deleted or didn't exist, `false` if deletion failed.
+ * @param {string} path - The file path to delete.
+ * @returns {Promise<boolean>} Resolves to `true` if the file was deleted or didn't exist, `false` if deletion failed.
  */
 export async function deleteFileIfExists(path: string): Promise<boolean> {
   try {

@@ -1,28 +1,24 @@
 import pino, { LoggerOptions, stdTimeFunctions } from "pino";
-import type { Logger } from "pino"; // ⬅️ Type-only import to avoid runtime conflicts
+import type { Logger } from "pino"; // Type-only import
 import { Config } from "../config";
 import { ContextStore, StoreKeys } from "./context-store.utils";
 
 /**
- * Global symbol used to store the root logger in the global object.
- * Symbol.for ensures consistency across different modules in the same runtime.
+ * Symbol used to store the root logger in the Node.js global object.
  */
 const GLOBAL_LOGGER_KEY = Symbol.for("logger");
 
 /**
- * Use the appropriate global object depending on environment.
- * Node.js always uses `globalThis`, fallback for older runtimes.
+ * Use an object compatible with either modern or legacy global scopes.
  */
 export const _globalThis = typeof globalThis === "object" ? globalThis : global;
-
-// Cast global object to include our logger symbol key.
-const _global = _globalThis as unknown as {
-  [GLOBAL_LOGGER_KEY]: Logger;
-};
+const _global = _globalThis as unknown as { [GLOBAL_LOGGER_KEY]: Logger };
 
 /**
- * Initializes the global root logger based on configuration.
- * Sets formatters, timestamp formats, redaction, and log level.
+ * Initializes the global root logger according to app configuration.
+ *
+ * - Sets log name, level, timestamp, and redaction for sensitive fields.
+ * - Uses singleton in global symbol registry.
  */
 function setupLogger(): void {
   const logParams: LoggerOptions = {
@@ -44,29 +40,25 @@ function setupLogger(): void {
     },
   };
 
-  // Enable ISO 8601 timestamps if configured
   if (Config.Logger.isoTimestamp) {
     logParams.timestamp = stdTimeFunctions.isoTime;
   }
 
-  // Initialize the global logger
   _global[GLOBAL_LOGGER_KEY] = pino(logParams);
   _global[GLOBAL_LOGGER_KEY].debug("Logger initialized");
 }
 
 /**
- * Retrieves the current logger.
- * - Prefers request-scoped logger from AsyncLocalStorage
- * - Falls back to global root logger (singleton)
- * - Initializes global logger if not already set
+ * Retrieves the current logger instance:
+ * - Returns a request-scoped logger from AsyncLocalStorage if available
+ * - Falls back to the global (singleton) logger
+ * - Initializes the global logger if not created yet
  *
- * @returns Pino logger instance
+ * @returns {Logger} The logger instance (request-bound or global root logger)
  */
 export function getLogger(): Logger {
   const logger = ContextStore.get<Logger>(StoreKeys.LOGGER);
-  if (logger) {
-    return logger;
-  }
+  if (logger) return logger;
 
   if (!_global[GLOBAL_LOGGER_KEY]) {
     setupLogger();

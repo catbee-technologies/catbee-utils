@@ -9,8 +9,16 @@
  * @returns {boolean} True if valid email, else false.
  */
 export function isEmail(str: string): boolean {
-  // RFC 5322 official standard is more complex—this is practical.
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str)) return false;
+
+  // Additional checks
+  const [local, domain] = str.split("@");
+  if (!local || !domain) return false;
+
+  // Disallow consecutive dots in local or domain part
+  if (local.includes("..") || domain.includes("..")) return false;
+
+  return true;
 }
 
 /**
@@ -47,10 +55,14 @@ export function isURL(str: string): boolean {
  * @returns {boolean} True if looks like a phone number.
  */
 export function isPhone(str: string): boolean {
-  // E.164 or basic with spaces, dashes, parentheses
-  return /^(\+?[1-9]\d{1,14}|(\+?\d{1,3}[-.\s]?)?\(?\d{2,4}\)?([-\s]?\d{3,4}){2,})$/.test(
-    str,
-  );
+  if (typeof str !== "string") return false;
+
+  // Strip non-digit characters to count total digits
+  const digitsOnly = str.replace(/\D/g, "");
+  if (digitsOnly.length < 6 || digitsOnly.length > 15) return false;
+
+  // Accept typical phone characters: +, digits, space, -, (, )
+  return /^[+]?[\d\s().-]+$/.test(str);
 }
 
 /**
@@ -70,10 +82,9 @@ export function isAlphanumeric(str: string): boolean {
  * @returns {boolean} True if the value is numeric.
  */
 export function isNumeric(value: string | number): boolean {
-  if (typeof value === "number") return !isNaN(value) && isFinite(value);
-  return (
-    typeof value === "string" && value.trim() !== "" && !isNaN(Number(value))
-  );
+  if (typeof value === "string" && value.trim() === "") return false;
+  const num = typeof value === "number" ? value : Number(value);
+  return typeof num === "number" && isFinite(num);
 }
 
 /**
@@ -87,14 +98,19 @@ export function isHexColor(str: string): boolean {
 }
 
 /**
- * Checks if a string is a valid ISO8601 date string.
+ * Checks if a string is a valid date string.
  *
  * @param {string} str - Input string.
  * @returns {boolean}
  */
 export function isISODate(str: string): boolean {
-  // YYYY-MM-DD, extended, or with time portion
-  return /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(?:\.\d+)?(Z|[\+|-]\d{2}:\d{2})?)?$/.test(
-    str,
+  const isoRegex =
+    /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?)?$/;
+
+  if (!isoRegex.test(str)) return false;
+
+  const date = new Date(str);
+  return (
+    !isNaN(date.getTime()) && date.toISOString().startsWith(str.slice(0, 10))
   );
 }

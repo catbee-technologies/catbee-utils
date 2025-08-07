@@ -6,13 +6,13 @@ import {
 } from "crypto";
 
 /**
- * Generates an HMAC digest using the specified algorithm, input string, and secret.
+ * Generates an HMAC digest using the specified algorithm and secret key.
  *
- * @param algorithm - The hashing algorithm (e.g., 'sha256', 'sha1').
- * @param input - The string to hash.
- * @param secret - Secret key used for HMAC generation.
- * @param encoding - Output encoding (default is `'hex'`).
- * @returns HMAC digest as a string.
+ * @param {string} algorithm - The hashing algorithm (e.g., 'sha256', 'sha1').
+ * @param {string} input - The string to hash.
+ * @param {string} secret - The secret key for HMAC.
+ * @param {BinaryToTextEncoding} [encoding='hex'] - Output encoding ('hex', 'base64', etc).
+ * @returns {string} HMAC digest as a string.
  */
 export const hmac = (
   algorithm: string,
@@ -26,10 +26,10 @@ export const hmac = (
 /**
  * Generates a hash digest using the specified algorithm.
  *
- * @param algorithm - The hashing algorithm (e.g., 'sha256', 'md5').
- * @param input - The string to hash.
- * @param encoding - Output encoding (default is `'hex'`).
- * @returns Hash digest as a string.
+ * @param {string} algorithm - The hashing algorithm (e.g., 'sha256', 'md5').
+ * @param {string} input - The string to hash.
+ * @param {BinaryToTextEncoding} [encoding='hex'] - Output encoding ('hex', 'base64', etc).
+ * @returns {string} Hash digest as a string.
  */
 export const hash = (
   algorithm: string,
@@ -42,9 +42,9 @@ export const hash = (
 /**
  * Generates an HMAC-SHA256 digest.
  *
- * @param input - The string to hash.
- * @param secret - The secret key.
- * @returns SHA-256 HMAC digest as a string.
+ * @param {string} input - The string to hash.
+ * @param {string} secret - The secret key.
+ * @returns {string} SHA-256 HMAC digest as a string.
  */
 export const sha256Hmac = (input: string, secret: string): string => {
   return hmac("sha256", input, secret);
@@ -53,9 +53,9 @@ export const sha256Hmac = (input: string, secret: string): string => {
 /**
  * Generates a SHA1 hash digest.
  *
- * @param input - The string to hash.
- * @param encoding - Output encoding (default is `'hex'`).
- * @returns SHA-1 hash as a string.
+ * @param {string} input - The string to hash.
+ * @param {BinaryToTextEncoding} [encoding='hex'] - Output encoding.
+ * @returns {string} SHA-1 hash as a string.
  */
 export const sha1 = (
   input: string,
@@ -67,9 +67,9 @@ export const sha1 = (
 /**
  * Generates a SHA256 hash digest.
  *
- * @param input - The string to hash.
- * @param encoding - Output encoding (default is `'hex'`).
- * @returns SHA-256 hash as a string.
+ * @param {string} input - The string to hash.
+ * @param {BinaryToTextEncoding} [encoding='hex'] - Output encoding.
+ * @returns {string} SHA-256 hash as a string.
  */
 export const sha256 = (
   input: string,
@@ -81,18 +81,17 @@ export const sha256 = (
 /**
  * Generates an MD5 hash digest.
  *
- * @param input - The string to hash.
- * @returns MD5 hash as a string.
+ * @param {string} input - The string to hash.
+ * @returns {string} MD5 hash as a string.
  */
 export const md5 = (input: string): string => {
   return hash("md5", input);
 };
 
 /**
- * Generates a SHA256 hash of a random UUID string.
- * Useful for creating cryptographically strong random tokens.
+ * Generates a cryptographically strong random string by hashing a random UUID with SHA-256.
  *
- * @returns Random string hashed with SHA-256.
+ * @returns {string} Random string hashed with SHA-256 (hex encoding).
  */
 export const randomString = (): string => {
   return sha256(randomUUID());
