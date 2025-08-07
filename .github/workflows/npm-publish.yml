@@ -18,7 +18,7 @@ jobs:
       - name: 🟢 Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: 22
           registry-url: 'https://registry.npmjs.org'
 
       - name: 📦 Install dependencies
@@ -26,6 +26,12 @@ jobs:
 
       - name: 🧪 Run lint
         run: npm run lint
+
+      - name: 🔡 Type check
+        run: npx tsc --noEmit
+
+      - name: 🧪 Run tests
+        run: npm run test
 
       - name: 🛠️ Build package
         run: npm run compile
