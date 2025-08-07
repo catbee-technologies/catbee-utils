@@ -4,7 +4,7 @@
 
 A modular, production-grade utility toolkit for Node.js and TypeScript, designed for robust, scalable applications (including Express-based services). All utilities are tree-shakable and can be imported independently.
 
----
+![CI](https://github.com/catbee-technologies/catbee-utils/actions/workflows/node-build.yml/badge.svg) ![Coverage](https://codecov.io/gh/catbee-technologies/catbee-utils/branch/main/graph/badge.svg) ![Audit](https://github.com/catbee-technologies/catbee-utils/actions/workflows/audit.yml/badge.svg) ![Publish](https://github.com/catbee-technologies/catbee-utils/actions/workflows/npm-publish.yml/badge.svg)
 
 ## 📦 Installation
 
@@ -15,7 +15,7 @@ npm i @catbee/utils
 ## ⚡ Quick Start
 
 ```ts
-import { chunk, sleep, getLogger } from "@catbee/utils";
+import { chunk, sleep, getLogger, uuid, isEmail } from "@catbee/utils";
 
 // Chunk an array
 const result = chunk([1, 2, 3, 4, 5], 2); // [[1, 2], [3, 4], [5]]
@@ -24,29 +24,35 @@ const result = chunk([1, 2, 3, 4, 5], 2); // [[1, 2], [3, 4], [5]]
 await sleep(1000);
 
 // Log with context
-const logger = getLogger();
-logger.info("App started");
+getLogger().info("App started");
+
+// Generate a secure UUID
+console.log(uuid()); // e.g. 2a563ec1-caf6-4fe2-b60c-9cf7fb1bdb7f
+
+// Basic validation
+console.log(isEmail("user@example.com")); // true
+
 ```
 
 ## 📦 Modules Overview
 
-- **Array Utilities** (`array.utils.ts`)
-- **Async Utilities** (`async.utils.ts`)
-- **Cache Utilities** (`cache.utils.ts`)
-- **Context Store** (`context-store.utils.ts`)
-- **Crypto Utilities** (`crypto.utils.ts`)
-- **Directory Utilities** (`dir.utils.ts`)
-- **Environment Utilities** (`env.utils.ts`)
-- **Exception Utilities** (`exception.utils.ts`)
-- **File System Utilities** (`fs.utils.ts`)
-- **HTTP Status Codes** (`http-status-codes.ts`)
-- **Logger** (`logger.utils.ts`)
-- **Object Utilities** (`obj.utils.ts`)
-- **Response Utilities** (`response.utils.ts`)
-- **String Utilities** (`string.utils.ts`)
-- **URL Utilities** (`url.utils.ts`)
-
----
+- [**Array Utilities**](#-array-utilities)
+- [**Async Utilities**](#-async-utilities)
+- [**Cache Utilities**](#-cache-utilities)
+- [**Context Store**](#-context-store)
+- [**Crypto Utilities**](#-crypto-utilities)
+- [**Directory Utilities**](#-directory-utilities)
+- [**Environment Utilities**](#-environment-utilities)
+- [**Exception Utilities**](#-exception-utilities)
+- [**File System Utilities**](#-file-system-utilities)
+- [**HTTP Status Codes**](#-http-status-codes)
+- [**ID Utilities**](#-id-utilities)
+- [**Logger Utilities**](#-logger-utility)
+- [**Object Utilities**](#-object-utilities)
+- [**Response Utilities**](#-response-utilities)
+- [**String Utilities**](#-string-utilities)
+- [**URL Utilities**](#-url-utilities)
+- [**Validate Utilities**](#-validate-utilities)
 
 ## 📦 Array Utilities
 
@@ -60,40 +66,32 @@ logger.info("App started");
 - `intersect<T>(a: T[], b: T[]): T[]` – Intersection.
 - `mergeSort<T extends object>(array: T[], key: string, direction = 'asc'): T[]` – Merge sort by nested key.
 
----
-
 ## ⏳ Async Utilities
 
 - `sleep(ms: number): Promise<void>`
-- `debounce<T>(fn, wait): T`
-- `throttle<T>(fn, wait): T`
-- `retry<T>(fn: () => Promise<T>, retries: number): Promise<T>`
+- `debounce<T>(fn: T, wait: number): T & { cancel(): void; flush(): void }`
+- `throttle<T>(fn: T, wait: number, options?): T`
+- `retry<T>(fn: () => Promise<T>, retries?: number): Promise<T>`
 - `withTimeout<T>(promise: Promise<T>, ms: number): Promise<T>`
-- `runInBatches<T>(items: T[], batchSize: number, fn: (item: T) => Promise<void>): Promise<void>`
+- `runInBatches<T>(tasks: (() => Promise<T>)[], batchSize: number): Promise<T[]>`
 - `singletonAsync<TArgs, TResult>(fn: (...args: TArgs) => Promise<TResult>): (...args: TArgs) => Promise<TResult>`
-- `settleAll<T>(promises: Promise<T>[]): Promise<SettledResult<T>[]>`
+- `settleAll<T>(tasks: (() => Promise<T>)[]): Promise<SettledResult<T>[]>`
 - `createTaskQueue(limit: number)`
-- `runInSeries<T>(items: T[], fn: (item: T) => Promise<void>): Promise<void>`
-
----
+- `runInSeries<T>(tasks: (() => Promise<T>)[]): Promise<T[]>`
 
 ## 🗃️ Cache Utilities
 
 - `TTLCache<K, V>(ttl: number)` – In-memory TTL cache with `.set`, `.get`, `.has`, `.delete`, `.clear`.
 
----
+You can use it like:
 
-## 🔐 Crypto Utilities
-
-- `hmac(input: string, secret: string): string`
-- `hash(input: string): string`
-- `sha256Hmac(input: string, secret: string): string`
-- `sha1(input: string): string`
-- `sha256(input: string): string`
-- `md5(input: string): string`
-- `randomString(): string`
-
----
+```ts
+const cache = new TTLCache<string, number>(3600_000);
+cache.set("foo", 42);
+cache.get("foo"); // 42
+cache.has("foo"); // true
+cache.cleanup();  // cleans expired
+```
 
 ## 🧩 Context Store
 
@@ -109,7 +107,56 @@ logger.info("App started");
 - `StoreKeys` – Common context keys.
 - `getRequestId(): string | undefined` – Get the current request ID from context.
 
----
+### Example (Express middleware usage):
+
+```ts
+// ✅ Recommended: Unified middleware to initialize context and logger
+import { ContextStore, StoreKeys, getLogger } from "@catbee/utils";
+import crypto from "crypto";
+
+export function setupRequestContext(req: Request, res: Response, next: NextFunction): void {
+  const requestId = req.headers["x-request-id"]?.toString() || crypto.randomUUID();
+
+  ContextStore.run({ [StoreKeys.REQUEST_ID]: requestId }, () => {
+    const logger = getLogger().child({ reqId: requestId });
+    ContextStore.set(StoreKeys.LOGGER, logger);
+    logger.info("Request context initialized");
+    next();
+  });
+}
+
+// In your app entry point
+app.use(setupRequestContext);
+```
+
+👇 Alternatively, split it into two separate middlewares:
+
+```ts
+// First: Initialize context with request ID
+app.use((req, res, next) => {
+  const requestId = req.headers["x-request-id"] || crypto.randomUUID();
+  ContextStore.run({ [StoreKeys.REQUEST_ID]: requestId }, () => next());
+});
+
+// Second: Inject logger into the context
+app.use((req, res, next) => {
+  const logger = getLogger().child({ reqId: req.headers["x-request-id"] });
+  ContextStore.set(StoreKeys.LOGGER, logger);
+  logger.info("Request started");
+  next();
+});
+```
+
+## 🔐 Crypto Utilities
+
+- `hmac(algorithm: string, input: string, secret: string): string`
+- `hash(algorithm: string, input: string): string`
+- `sha256Hmac(input: string, secret: string): string`
+- `sha1(input: string): string`
+- `sha256(input: string): string`
+- `md5(input: string): string`
+- `randomString(): string`
+
 
 ## 📂 Directory Utilities
 
@@ -123,7 +170,6 @@ logger.info("App started");
 - `getDirSize(dirPath: string): Promise<number>`
 - `watchDir(dirPath: string, cb: (event, filename) => void)`
 
----
 
 ## 🌱 Environment Utilities
 
@@ -145,14 +191,12 @@ logger.info("App started");
   - `getEnum<T extends string>(key: string, allowedValues: T[], defaultValue?: T): T` – Get and validate an enum-like environment variable.
   - `has(key: string): boolean` – Check if an environment variable exists.
   - `delete(key: string): void` – Delete an environment variable (useful in tests). 
- 
----
+
 
 ## 🚨 Exception Utilities
 
 - `HttpError`, `InternalServerErrorException`, `UnauthorizedException`, `BadRequestException`, `NotFoundException`, `ForbiddenException`, `ConflictException`, `BadGatewayException`, `TooManyRequestsException`, `ServiceUnavailableException`, `GatewayTimeoutException` – All extend `ErrorResponse`.
 
----
 
 ## 📁 File System Utilities
 
@@ -161,7 +205,6 @@ logger.info("App started");
 - `writeJsonFile(path: string, data: any): Promise<void>`
 - `deleteFileIfExists(path: string): Promise<boolean>`
 
----
 
 ## 📊 HTTP Status Codes
 
@@ -179,13 +222,21 @@ import { HttpStatusCodes } from "@catbee/utils";
 res.status(HttpStatusCodes.BAD_REQUEST).send("Invalid payload");
 ```
 
-## 📝 Response Utilities
+## 🆔 ID Utilities
 
-- `SuccessResponse<T>` – Standard API success wrapper.
-- `ErrorResponse` – Standard API error wrapper.
-- Types: `ApiResponse<T>`, `Pagination<T>`, `PaginationResponse<T>`
+Helpers for generating unique and random identifiers, covering popular formats for distributed systems and secure tokens.
 
----
+- `uuid(): string` — Generate a UUID v4 string (RFC 4122).
+- `ulidString(): string` — Generate a ULID (Universally Unique Lexicographically Sortable Identifier).
+- `nanoId(size?: number): string` — Generate a nanoid string.
+- `randomHex(byteLength?: number): string` — Generate a cryptographically strong random hex string of given length in bytes.
+- `randomInt(min: number, max: number): number` — Generate a secure random integer between min and max, inclusive.
+
+
+## 📄 Logger Utilities
+
+- `getLogger(): Logger` – Context-aware logger (uses `pino`).
+
 
 ## 🧩 Object Utilities
 
@@ -196,7 +247,13 @@ res.status(HttpStatusCodes.BAD_REQUEST).send("Invalid payload");
 - `flattenObject<T>(obj: T): Record<string, any>`
 - `getValueByPath<T>(obj: T, path: string)`
 
----
+
+## 📝 Response Utilities
+
+- `SuccessResponse<T>` – Standard API success wrapper.
+- `ErrorResponse` – Standard API error wrapper.
+- Types: `ApiResponse<T>`, `Pagination<T>`, `PaginationResponse<T>`
+
 
 ## 🧵 String Utilities
 
@@ -206,20 +263,24 @@ res.status(HttpStatusCodes.BAD_REQUEST).send("Invalid payload");
 - `slugify(str: string): string`
 - `truncate(str: string, len: number): string`
 
----
 
 ## 🌐 URL Utilities
 
 - `appendQueryParams(url: string, params: object): string`
 - `parseQueryString(query: string): Record<string, string>`
 
----
 
-## 📄 Logger Utility
+## ✅ Validate Utilities
+A comprehensive suite of string/format validators for safe input and API checks.
 
-- `getLogger(): Logger` – Context-aware logger (uses `pino`).
-
----
+- `isEmail(str: string): boolean` — Validate basic email address.
+- `isUUID(str: string): boolean` — Validate string as UUID (v1–v5).
+- `isURL(str: string): boolean` — Check if string is a valid URL.
+- `isPhone(str: string): boolean` — Validate (international/E164/local) phone number.
+- `isAlphanumeric(str: string): boolean` — Check for letters/numbers only.
+- `isNumeric(strOrNum: string | number)`: boolean — Check safely parsable numeric value.
+- `isHexColor(str: string): boolean` — Validate hex color (#RGB or #RRGGBB).
+- `isISODate(str: string): boolean` — Validate ISO 8601 date string.
 
 ## 🏁 Usage
 
@@ -228,8 +289,6 @@ Import only what you need:
 ```ts
 import { chunk, sleep, TTLCache, getLogger } from "@catbee/utils";
 ```
-
----
 
 ## 📜 License
 
