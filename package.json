@@ -34,8 +34,10 @@
   "dependencies": {
     "abort-controller": "^3.0.0",
     "mysql2": "^3.14.3",
+    "nanoid": "^5.1.5",
     "node-fetch": "^3.3.2",
-    "pino": "^9.7.0"
+    "pino": "^9.7.0",
+    "ulid": "^3.0.1"
   },
   "devDependencies": {
     "@types/node": "^24.2.0",
