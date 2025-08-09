@@ -6,13 +6,13 @@ describe("CacheUtils", () => {
   afterEach(() => jest.useRealTimers());
 
   it("set() + get() returns value before TTL expires", () => {
-    const cache = new TTLCache<string, number>(1000);
+    const cache = new TTLCache<string, number>({ ttlMs: 1000 });
     cache.set("foo", 42);
     expect(cache.get("foo")).toBe(42);
   });
 
   it("get() returns undefined after TTL expires and deletes key", () => {
-    const cache = new TTLCache<string, number>(1000);
+    const cache = new TTLCache<string, number>({ ttlMs: 1000 });
     cache.set("foo", 1);
     jest.advanceTimersByTime(1001);
     expect(cache.get("foo")).toBeUndefined();
@@ -33,7 +33,7 @@ describe("CacheUtils", () => {
   });
 
   it("has() only true for fresh entry, false after expiry", () => {
-    const cache = new TTLCache<string, number>(1000);
+    const cache = new TTLCache<string, number>({ ttlMs: 1000 });
     expect(cache.has("x")).toBe(false);
     cache.set("x", 500);
     expect(cache.has("x")).toBe(true);
@@ -60,7 +60,7 @@ describe("CacheUtils", () => {
   });
 
   it("size() returns current Map size (includes expired until cleanup/get)", () => {
-    const cache = new TTLCache<string, number>(100);
+    const cache = new TTLCache<string, number>({ ttlMs: 100 });
     cache.set("a", 1);
     cache.set("b", 2);
     expect(cache.size()).toBe(2);
@@ -123,5 +123,72 @@ describe("CacheUtils", () => {
     expect(cache.get(77)).toBe("lucky");
     cache.set(99, "great");
     expect(Array.from(cache.keys()).sort()).toEqual([77, 99]);
+  });
+
+  it("getOrCompute returns cached value or computes and caches if missing", async () => {
+    const cache = new TTLCache<string, number>({ ttlMs: 100 });
+    const producer = jest.fn(async () => 123);
+    // Not present, should call producer
+    await expect(cache.getOrCompute("a", producer)).resolves.toBe(123);
+    expect(producer).toHaveBeenCalledTimes(1);
+    // Present, should not call producer again
+    await expect(cache.getOrCompute("a", producer)).resolves.toBe(123);
+    expect(producer).toHaveBeenCalledTimes(1);
+    // After expiry, should call producer again
+    jest.advanceTimersByTime(101);
+    await expect(cache.getOrCompute("a", producer)).resolves.toBe(123);
+    expect(producer).toHaveBeenCalledTimes(2);
+  });
+
+  it("setMany and getMany work as expected", () => {
+    const cache = new TTLCache<string, number>();
+    cache.setMany([
+      ["a", 1],
+      ["b", 2],
+      ["c", 3],
+    ]);
+    expect(cache.getMany(["a", "b", "c", "d"])).toEqual([1, 2, 3, undefined]);
+  });
+
+  it("refresh extends the TTL of an entry", () => {
+    const cache = new TTLCache<string, number>({ ttlMs: 100 });
+    cache.set("foo", 1);
+    jest.advanceTimersByTime(90);
+    expect(cache.refresh("foo")).toBe(true);
+    jest.advanceTimersByTime(90);
+    // Should still be valid after refresh
+    expect(cache.get("foo")).toBe(1);
+    jest.advanceTimersByTime(101);
+    // Now expired
+    expect(cache.get("foo")).toBeUndefined();
+  });
+
+  it("refresh returns false for missing or expired keys", () => {
+    const cache = new TTLCache<string, number>({ ttlMs: 50 });
+    expect(cache.refresh("nope")).toBe(false);
+    cache.set("x", 1);
+    jest.advanceTimersByTime(51);
+    expect(cache.refresh("x")).toBe(false);
+  });
+
+  it("stats returns correct cache statistics", () => {
+    const cache = new TTLCache<string, number>({ ttlMs: 100, maxSize: 10 });
+    cache.set("a", 1);
+    cache.set("b", 2);
+    jest.advanceTimersByTime(101);
+    cache.set("c", 3);
+    const stats = cache.stats();
+    expect(stats.size).toBe(3);
+    expect(stats.validEntries).toBe(1);
+    expect(stats.expiredEntries).toBe(2);
+    expect(stats.maxSize).toBe(10);
+  });
+
+  it("destroy stops auto-cleanup interval", () => {
+    const cache = new TTLCache<string, number>({ autoCleanupMs: 100 });
+    const spy = jest.spyOn(global, "clearInterval");
+    cache.destroy();
+    expect(spy).toHaveBeenCalled();
+    spy.mockRestore();
   });
 });

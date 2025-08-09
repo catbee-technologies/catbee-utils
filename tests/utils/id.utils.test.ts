@@ -1,9 +1,9 @@
 import {
   uuid,
-  ulidString,
-  nanoId,
   randomHex,
   randomInt,
+  randomBase64,
+  nanoId,
 } from "../../src/utils/id.utils";
 
 describe("IdUtils", () => {
@@ -18,81 +18,58 @@ describe("IdUtils", () => {
     });
   });
 
-  describe("ulidString", () => {
-    it("returns the result of ulid()", () => {
-      const ulidValue = "01H7ZXS9FJKPX06P1AYZKCGHQF";
-      const spy = jest
-        .spyOn(require("ulid"), "ulid")
-        .mockReturnValue(ulidValue);
-      expect(ulidString()).toBe(ulidValue);
-      expect(spy).toHaveBeenCalled();
+  describe("nanoid", () => {
+    it("returns a string of requested length", () => {
+      const spy = jest.spyOn(require("crypto"), "randomBytes");
+      // 21 chars needs ceil(21*3/4) = 16 bytes
+      spy.mockReturnValue(Buffer.alloc(16, 1));
+      expect(nanoId()).toHaveLength(21);
+      expect(typeof nanoId()).toBe("string");
       spy.mockRestore();
     });
-  });
-
-  describe("nanoId", () => {
-    it("returns nanoid of correct length (default 21)", () => {
-      const out = "a".repeat(21);
-      const spy = jest.spyOn(require("nanoid"), "nanoid").mockReturnValue(out);
-      expect(nanoId()).toBe(out);
-      expect(spy).toHaveBeenCalledWith(21);
+    it("is url-safe (no +, /, =)", () => {
+      const spy = jest.spyOn(require("crypto"), "randomBytes");
+      spy.mockReturnValue(
+        Buffer.from([255, 254, 253, 252, 251, 250, 249, 248]),
+      );
+      const result = nanoId(12);
+      expect(result).not.toMatch(/[+/=]/);
+      expect(result.length).toBe(12);
       spy.mockRestore();
     });
-
-    it("generates nanoid with specified length", () => {
-      const out = "b".repeat(8);
-      const spy = jest.spyOn(require("nanoid"), "nanoid").mockReturnValue(out);
-      expect(nanoId(8)).toBe(out);
-      expect(spy).toHaveBeenCalledWith(8);
-      spy.mockRestore();
+    it("returns empty string if length is 0", () => {
+      expect(nanoId(0)).toBe("");
     });
   });
 
   describe("randomHex", () => {
-    beforeEach(() => {
-      // Node.js: global.crypto is not set. We'll patch it for tests.
-      // Returns incremented numbers for predictability.
-      const getRandomValues = (arr: Uint8Array) => {
-        for (let i = 0; i < arr.length; ++i) arr[i] = i + 1;
-        return arr;
-      };
-      // @ts-ignore
-      global.crypto = { getRandomValues };
-    });
-
-    afterEach(() => {
-      // @ts-ignore
-      delete global.crypto;
-    });
-
-    it("returns 32 hex chars for default byteLength=16", () => {
-      const hex = randomHex();
-      expect(hex).toHaveLength(32);
-      expect(hex).toBe(
-        Buffer.from(Array.from({ length: 16 }, (_, i) => i + 1))
-          .toString("hex")
-          .slice(0, 32),
+    it("returns correct hex length for default and custom byteLength", () => {
+      const spy = jest.spyOn(require("crypto"), "randomBytes");
+      spy.mockReturnValue(
+        Buffer.from(Array.from({ length: 16 }, (_, i) => i + 1)),
       );
-    });
-
-    it("returns correct length for custom byteLength", () => {
+      expect(randomHex()).toBe(
+        Buffer.from(Array.from({ length: 16 }, (_, i) => i + 1)).toString(
+          "hex",
+        ),
+      );
       expect(randomHex(4)).toHaveLength(8);
       expect(randomHex(8)).toHaveLength(16);
       expect(randomHex(32)).toHaveLength(64);
+      spy.mockRestore();
     });
-
     it("each byte is correctly hex-encoded", () => {
-      // For byteLength = 4, outputs: 01 02 03 04
-      const hex = randomHex(4);
-      expect(hex).toBe("01020304");
+      const spy = jest.spyOn(require("crypto"), "randomBytes");
+      spy.mockReturnValue(Buffer.from([1, 2, 3, 4]));
+      expect(randomHex(4)).toBe("01020304");
+      spy.mockRestore();
     });
   });
 
   describe("randomInt", () => {
     it("returns a number between min and max inclusive", () => {
-      // We'll spy on Math.random to get determinism
-      jest.spyOn(Math, "random").mockReturnValue(0.4); // so result is predictable
-      const n = randomInt(10, 20); // 0.4 * 11 = 4.4 -> floor 4 -> 14
+      jest.spyOn(Math, "random").mockReturnValue(0.4);
+      const n = randomInt(10, 20);
       expect(n).toBe(14);
       (Math.random as any).mockRestore();
     });
@@ -105,13 +82,32 @@ describe("IdUtils", () => {
 
     it("returns max if Math.random() is just under 1", () => {
       jest.spyOn(Math, "random").mockReturnValue(0.99999999);
-      const res = randomInt(1, 4); // should be 4
-      expect(res).toBe(4);
+      expect(randomInt(1, 4)).toBe(4);
       (Math.random as any).mockRestore();
     });
 
     it("works when min == max", () => {
       expect(randomInt(5, 5)).toBe(5);
+    });
+  });
+
+  describe("randomBase64", () => {
+    it("returns a base64url string of expected length", () => {
+      const spy = jest.spyOn(require("crypto"), "randomBytes");
+      spy.mockReturnValue(Buffer.from("1234567890123456"));
+      const result = randomBase64(8);
+      expect(typeof result).toBe("string");
+      expect(result.length).toBeGreaterThanOrEqual(8); // base64url is variable, but should be >= input
+      spy.mockRestore();
+    });
+    it("is url-safe (no +, /, =)", () => {
+      const spy = jest.spyOn(require("crypto"), "randomBytes");
+      spy.mockReturnValue(
+        Buffer.from([255, 254, 253, 252, 251, 250, 249, 248]),
+      );
+      const result = randomBase64(8);
+      expect(result).not.toMatch(/[+/=]/);
+      spy.mockRestore();
     });
   });
 });

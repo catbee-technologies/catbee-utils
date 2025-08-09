@@ -10,6 +10,7 @@ describe("Config", () => {
       Env: {
         get: jest.fn((key: string, fallback: string) => fallback),
         getBoolean: jest.fn(() => false),
+        getNumber: jest.fn((key: string, fallback: number) => fallback),
       },
     }));
 
@@ -39,6 +40,7 @@ describe("Config", () => {
         getBoolean: jest.fn((key: string, fallback: boolean) =>
           key === "LOGGER_ISO_TIMESTAMP" ? true : fallback,
         ),
+        getNumber: jest.fn((key: string, fallback: number) => fallback),
       },
     }));
 
@@ -60,6 +62,7 @@ describe("Config", () => {
           return key in values ? values[key] : fallback;
         }),
         getBoolean: jest.fn(() => false),
+        getNumber: jest.fn((key: string, fallback: number) => fallback),
       },
     }));
 
@@ -75,6 +78,7 @@ describe("Config", () => {
       Env: {
         get: jest.fn(() => "nonsense"),
         getBoolean: jest.fn(() => false),
+        getNumber: jest.fn((key: string, fallback: number) => fallback),
       },
     }));
 
