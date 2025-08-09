@@ -114,3 +114,228 @@ export function isISODate(str: string): boolean {
     !isNaN(date.getTime()) && date.toISOString().startsWith(str.slice(0, 10))
   );
 }
+
+/**
+ * Checks if a string matches a specified length range.
+ *
+ * @param {string} str - The input string.
+ * @param {number} min - Minimum length (inclusive).
+ * @param {number} max - Maximum length (inclusive).
+ * @returns {boolean} True if string length is within range.
+ */
+export function isLengthBetween(
+  str: string,
+  min: number,
+  max: number,
+): boolean {
+  return str.length >= min && str.length <= max;
+}
+
+/**
+ * Validates that a number is between specified min and max values (inclusive).
+ *
+ * @param {number} value - The number to validate.
+ * @param {number} min - Minimum value.
+ * @param {number} max - Maximum value.
+ * @returns {boolean} True if number is within range.
+ */
+export function isNumberBetween(
+  value: number,
+  min: number,
+  max: number,
+): boolean {
+  return value >= min && value <= max;
+}
+
+/**
+ * Checks if a string contains only alphabetic characters.
+ *
+ * @param {string} str - The input string.
+ * @returns {boolean} True if alphabetic only.
+ */
+export function isAlpha(str: string): boolean {
+  return /^[a-zA-Z]+$/.test(str);
+}
+
+/**
+ * Validates that a string contains at least one uppercase letter,
+ * one lowercase letter, one number, and one special character.
+ *
+ * @param {string} str - The input string.
+ * @returns {boolean} True if string meets password complexity requirements.
+ */
+export function isStrongPassword(str: string): boolean {
+  if (str.length < 8) return false;
+  const hasUpperCase = /[A-Z]/.test(str);
+  const hasLowerCase = /[a-z]/.test(str);
+  const hasNumbers = /[0-9]/.test(str);
+  const hasSpecialChar = /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>?]/.test(str);
+  return hasUpperCase && hasLowerCase && hasNumbers && hasSpecialChar;
+}
+
+/**
+ * Checks if a string is a valid IPv4 address.
+ *
+ * @param {string} str - The input string.
+ * @returns {boolean} True if valid IPv4 address.
+ */
+export function isIPv4(str: string): boolean {
+  const parts = str.split(".");
+  if (parts.length !== 4) return false;
+
+  return parts.every((part) => {
+    const num = parseInt(part, 10);
+    return part === num.toString() && num >= 0 && num <= 255;
+  });
+}
+
+/**
+ * Checks if a string is a valid IPv6 address.
+ *
+ * @param {string} str - The input string.
+ * @returns {boolean} True if valid IPv6 address.
+ */
+export function isIPv6(str: string): boolean {
+  // Simple but effective check for common IPv6 formats
+  return /^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]+|::(ffff(:0{1,4})?:)?((25[0-5]|(2[0-4]|1?[0-9])?[0-9])\.){3}(25[0-5]|(2[0-4]|1?[0-9])?[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1?[0-9])?[0-9])\.){3}(25[0-5]|(2[0-4]|1?[0-9])?[0-9]))$/.test(
+    str,
+  );
+}
+
+/**
+ * Validates a credit card number using the Luhn algorithm.
+ *
+ * @param {string} str - The credit card number string.
+ * @returns {boolean} True if valid credit card number.
+ */
+export function isCreditCard(str: string): boolean {
+  // Remove non-digit characters
+  const cardNumber = str.replace(/\D/g, "");
+  if (cardNumber.length < 13 || cardNumber.length > 19) return false;
+
+  // Luhn algorithm implementation
+  let sum = 0;
+  let shouldDouble = false;
+
+  for (let i = cardNumber.length - 1; i >= 0; i--) {
+    let digit = parseInt(cardNumber.charAt(i), 10);
+
+    if (shouldDouble) {
+      digit *= 2;
+      if (digit > 9) digit -= 9;
+    }
+
+    sum += digit;
+    shouldDouble = !shouldDouble;
+  }
+
+  return sum % 10 === 0;
+}
+
+/**
+ * Checks if a string is a valid JSON.
+ *
+ * @param {string} str - The input string.
+ * @returns {boolean} True if valid JSON.
+ */
+export function isJSON(str: string): boolean {
+  try {
+    const result = JSON.parse(str);
+    return !!result && typeof result === "object";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Type guard that checks if a value is an array.
+ *
+ * @template T Optional expected element type
+ * @param {unknown} value - The value to check.
+ * @param {(item: unknown) => boolean} [itemGuard] - Optional function to validate each item.
+ * @returns {boolean} True if value is an array (with optional item validation).
+ */
+export function isArray<T = unknown>(
+  value: unknown,
+  itemGuard?: (item: unknown) => item is T,
+): value is T[] {
+  if (!Array.isArray(value)) return false;
+  return !itemGuard || value.every((item) => itemGuard(item));
+}
+
+/**
+ * Checks if a string is a valid base64 encoded string.
+ *
+ * @param {string} str - The input string.
+ * @returns {boolean} True if valid base64.
+ */
+export function isBase64(str: string): boolean {
+  return /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(
+    str,
+  );
+}
+
+/**
+ * Validates that an object has all required properties.
+ *
+ * @param {object} obj - The object to validate.
+ * @param {string[]} requiredProps - Array of required property names.
+ * @returns {boolean} True if all required properties exist.
+ */
+export function hasRequiredProps(
+  obj: Record<string, unknown>,
+  requiredProps: string[],
+): boolean {
+  return requiredProps.every(
+    (prop) =>
+      Object.prototype.hasOwnProperty.call(obj, prop) &&
+      obj[prop] !== undefined &&
+      obj[prop] !== null,
+  );
+}
+
+/**
+ * Validates a date is within a specified range.
+ *
+ * @param {Date} date - The date to validate.
+ * @param {Date} [minDate] - Optional minimum date (inclusive).
+ * @param {Date} [maxDate] - Optional maximum date (inclusive).
+ * @returns {boolean} True if date is within range.
+ */
+export function isDateInRange(
+  date: Date,
+  minDate?: Date,
+  maxDate?: Date,
+): boolean {
+  if (!(date instanceof Date) || isNaN(date.getTime())) return false;
+
+  if (minDate && date < minDate) return false;
+  if (maxDate && date > maxDate) return false;
+
+  return true;
+}
+
+/**
+ * Validates a string matches a specific regular expression pattern.
+ *
+ * @param {string} str - The input string.
+ * @param {RegExp} pattern - Regular expression to test against.
+ * @returns {boolean} True if string matches pattern.
+ */
+export function matchesPattern(str: string, pattern: RegExp): boolean {
+  return pattern.test(str);
+}
+
+/**
+ * Validates data against multiple constraints.
+ *
+ * @param {unknown} value - The value to validate.
+ * @param {Array<(value: unknown) => boolean>} validators - Array of validation functions.
+ * @returns {boolean} True if value passes all validations.
+ */
+export function validateAll(
+  value: unknown,
+  validators: Array<(value: unknown) => boolean>,
+): boolean {
+  return validators.every((validator) => validator(value));
+}

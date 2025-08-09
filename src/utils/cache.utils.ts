@@ -1,10 +1,25 @@
+import { Config } from "../config";
+
 /**
  * Represents a cached entry with a value and an expiration timestamp.
  */
 type CacheEntry<T> = {
   value: T;
   expiresAt: number;
+  lastAccessed?: number; // Track last access time for LRU functionality
 };
+
+/**
+ * Options for configuring a TTLCache instance.
+ */
+export interface TTLCacheOptions {
+  /** Default time-to-live in milliseconds for cache entries */
+  ttlMs?: number;
+  /** Maximum number of entries to keep in cache (uses LRU eviction policy) */
+  maxSize?: number;
+  /** Auto-cleanup interval in milliseconds (disabled if 0 or negative) */
+  autoCleanupMs?: number;
+}
 
 /**
  * An in-memory cache with time-to-live (TTL) support for each entry.
@@ -13,17 +28,31 @@ type CacheEntry<T> = {
  * @typeParam V - Type of the value.
  *
  * @example
- * const cache = new TTLCache<string, number>(1000);
+ * const cache = new TTLCache<string, number>({ ttlMs: 1000 });
  * cache.set("x", 123);
  * const value = cache.get("x"); // 123
  */
 export class TTLCache<K, V> {
   private cache = new Map<K, CacheEntry<V>>();
+  private ttlMs: number;
+  private maxSize?: number;
+  private cleanupInterval?: NodeJS.Timeout;
 
   /**
-   * @param ttlMs - Default time-to-live in milliseconds for cache entries.
+   * @param options - Configuration options for the cache
    */
-  constructor(private ttlMs: number = 5 * 60 * 1000) {}
+  constructor(options: TTLCacheOptions = {}) {
+    this.ttlMs = options.ttlMs ?? Config.Cache.defaultTtl;
+    this.maxSize = options.maxSize;
+
+    // Setup auto-cleanup if enabled
+    const autoCleanupMs = options.autoCleanupMs;
+    if (autoCleanupMs && autoCleanupMs > 0) {
+      this.cleanupInterval = setInterval(() => {
+        this.cleanup();
+      }, autoCleanupMs);
+    }
+  }
 
   /**
    * Sets a key-value pair in the cache with the default TTL.
@@ -32,8 +61,7 @@ export class TTLCache<K, V> {
    * @param value - The value to associate with the key.
    */
   set(key: K, value: V): void {
-    const expiresAt = Date.now() + this.ttlMs;
-    this.cache.set(key, { value, expiresAt });
+    this.setWithTTL(key, value, this.ttlMs);
   }
 
   /**
@@ -44,8 +72,14 @@ export class TTLCache<K, V> {
    * @param ttlMs - Time-to-live in milliseconds.
    */
   setWithTTL(key: K, value: V, ttlMs: number): void {
-    const expiresAt = Date.now() + ttlMs;
-    this.cache.set(key, { value, expiresAt });
+    const now = Date.now();
+    const expiresAt = now + ttlMs;
+    this.cache.set(key, { value, expiresAt, lastAccessed: now });
+
+    // Enforce max size limit if configured
+    if (this.maxSize && this.cache.size > this.maxSize) {
+      this.evictLRU();
+    }
   }
 
   /**
@@ -57,11 +91,37 @@ export class TTLCache<K, V> {
   get(key: K): V | undefined {
     const entry = this.cache.get(key);
     if (!entry) return undefined;
-    if (Date.now() > entry.expiresAt) {
+
+    const now = Date.now();
+    if (now > entry.expiresAt) {
       this.cache.delete(key);
       return undefined;
     }
+
+    // Update last access time for LRU tracking
+    entry.lastAccessed = now;
     return entry.value;
+  }
+
+  /**
+   * Retrieves or computes a value if it's not in the cache or has expired.
+   *
+   * @param key - The key to retrieve
+   * @param producer - Function to generate the value if not cached
+   * @param ttlMs - Optional custom TTL for the computed value
+   * @returns The cached or computed value
+   */
+  async getOrCompute(
+    key: K,
+    producer: () => Promise<V>,
+    ttlMs?: number,
+  ): Promise<V> {
+    const value = this.get(key);
+    if (value !== undefined) return value;
+
+    const newValue = await producer();
+    this.setWithTTL(key, newValue, ttlMs ?? this.ttlMs);
+    return newValue;
   }
 
   /**
@@ -98,6 +158,27 @@ export class TTLCache<K, V> {
    */
   size(): number {
     return this.cache.size;
+  }
+
+  /**
+   * Set multiple key-value pairs at once with the default TTL.
+   *
+   * @param entries - Array of [key, value] tuples to set
+   */
+  setMany(entries: [K, V][]): void {
+    for (const [key, value] of entries) {
+      this.set(key, value);
+    }
+  }
+
+  /**
+   * Get multiple values at once.
+   *
+   * @param keys - Array of keys to retrieve
+   * @returns Array of values (undefined for keys that don't exist or expired)
+   */
+  getMany(keys: K[]): (V | undefined)[] {
+    return keys.map((key) => this.get(key));
   }
 
   /**
@@ -153,6 +234,91 @@ export class TTLCache<K, V> {
       if (Date.now() <= entry.expiresAt) {
         yield entry.value;
       }
+    }
+  }
+
+  /**
+   * Extends the expiration of a key by the specified time or default TTL.
+   *
+   * @param key - The key to refresh
+   * @param ttlMs - Optional new TTL in milliseconds (uses default if not specified)
+   * @returns true if the key was found and refreshed, false otherwise
+   */
+  refresh(key: K, ttlMs?: number): boolean {
+    const entry = this.cache.get(key);
+    if (!entry) return false;
+
+    const now = Date.now();
+    if (now > entry.expiresAt) {
+      this.cache.delete(key);
+      return false;
+    }
+
+    entry.expiresAt = now + (ttlMs ?? this.ttlMs);
+    entry.lastAccessed = now;
+    return true;
+  }
+
+  /**
+   * Returns a snapshot of cache stats.
+   *
+   * @returns Object containing cache statistics
+   */
+  stats() {
+    const now = Date.now();
+    let expired = 0;
+    let valid = 0;
+
+    for (const entry of this.cache.values()) {
+      if (now > entry.expiresAt) {
+        expired++;
+      } else {
+        valid++;
+      }
+    }
+
+    return {
+      size: this.cache.size,
+      validEntries: valid,
+      expiredEntries: expired,
+      maxSize: this.maxSize,
+    };
+  }
+
+  /**
+   * Stop the auto-cleanup interval if it's running.
+   */
+  destroy() {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = undefined;
+    }
+  }
+
+  /**
+   * Evict the least recently used entry from the cache.
+   * @private
+   */
+  private evictLRU(): void {
+    let oldestKey: K | undefined;
+    let oldestAccess = Infinity;
+
+    for (const [key, entry] of this.cache.entries()) {
+      // Skip entries that are already expired
+      if (Date.now() > entry.expiresAt) {
+        this.cache.delete(key);
+        return;
+      }
+
+      // Find the oldest accessed entry
+      if (entry.lastAccessed && entry.lastAccessed < oldestAccess) {
+        oldestAccess = entry.lastAccessed;
+        oldestKey = key;
+      }
+    }
+
+    if (oldestKey) {
+      this.cache.delete(oldestKey);
     }
   }
 }
