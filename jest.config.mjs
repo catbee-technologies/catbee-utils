@@ -3,6 +3,8 @@ export default {
   preset: 'ts-jest',
   testEnvironment: 'node',
   collectCoverage: false,
+  resetMocks: true,
+  resetModules: true,
   collectCoverageFrom: ['src/**/*.ts'],
   coverageDirectory: 'reports/coverage',
   coverageReporters: ['text', 'text-summary', 'lcov'],
