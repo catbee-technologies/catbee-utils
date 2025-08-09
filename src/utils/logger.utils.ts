@@ -66,3 +66,69 @@ export function getLogger(): Logger {
 
   return _global[GLOBAL_LOGGER_KEY];
 }
+
+/**
+ * Creates a child logger with additional context.
+ *
+ * @param {Record<string, any>} bindings - Properties to attach to all log records
+ * @param {Logger} [parentLogger] - Parent logger (defaults to current context logger or global)
+ * @returns {Logger} Child logger with merged context
+ */
+export function createChildLogger(
+  bindings: Record<string, any>,
+  parentLogger?: Logger,
+): Logger {
+  const logger = parentLogger || getLogger();
+  return logger.child(bindings);
+}
+
+/**
+ * Creates a request-scoped logger with request ID and stores it in context
+ *
+ * @param {string} requestId - Unique request identifier
+ * @param {object} [additionalContext] - Additional context to include in logs
+ * @returns {Logger} Request-scoped logger instance
+ */
+export function createRequestLogger(
+  requestId: string,
+  additionalContext: Record<string, any> = {},
+): Logger {
+  const logger = createChildLogger({
+    requestId,
+    ...additionalContext,
+  });
+
+  try {
+    ContextStore.set(StoreKeys.LOGGER, logger);
+  } catch {
+    // Context not initialized, can't store logger
+    logger.debug(
+      "Failed to store logger in context - AsyncLocalStorage not initialized",
+    );
+  }
+
+  return logger;
+}
+
+/**
+ * Utility to safely log errors with proper stack trace extraction
+ *
+ * @param {Error|unknown} error - Error object to log
+ * @param {string} [message] - Optional message to include
+ * @param {Record<string, any>} [context] - Additional context properties
+ */
+export function logError(
+  error: Error | unknown,
+  message?: string,
+  context?: Record<string, any>,
+): void {
+  const logger = getLogger();
+
+  const errObj = error instanceof Error ? error : new Error(String(error));
+  const logContext = {
+    ...context,
+    err: errObj,
+  };
+
+  logger.error(logContext, message || errObj.message);
+}

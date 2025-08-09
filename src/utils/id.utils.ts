@@ -1,6 +1,4 @@
-import { randomUUID } from "crypto";
-import { ulid } from "ulid";
-import { nanoid } from "nanoid";
+import { randomUUID, randomBytes } from "crypto";
 
 /**
  * Generates a UUID v4 string (RFC 4122).
@@ -12,22 +10,20 @@ export function uuid(): string {
 }
 
 /**
- * Generates a ULID (Universally Unique Lexicographically Sortable Identifier).
+ * Generates a nanoid-style random ID (URL-safe, customizable length).
  *
- * @returns {string} ULID string (26 chars, Crockford Base32, e.g., '01H7ZXS9FJKPX06P1AYZKCGHQF').
+ * @param {number} length - Length of the ID (default: 21).
+ * @returns {string} Nanoid-style random string.
  */
-export function ulidString(): string {
-  return ulid();
-}
-
-/**
- * Generates a nanoid string (URL-friendly, collision-resistant, customizable size).
- *
- * @param {number} [size=21] - Number of characters for the ID (default: 21).
- * @returns {string} nanoid string.
- */
-export function nanoId(size: number = 21): string {
-  return nanoid(size);
+export function nanoId(length: number = 21): string {
+  if (length <= 0) return "";
+  let id = "";
+  while (id.length < length) {
+    id += randomBytes(Math.ceil((length * 3) / 4))
+      .toString("base64url")
+      .replace(/[+/=]/g, "");
+  }
+  return id.slice(0, length);
 }
 
 /**
@@ -37,10 +33,11 @@ export function nanoId(size: number = 21): string {
  * @returns {string} Random hex string.
  */
 export function randomHex(byteLength: number = 16): string {
-  // Node: crypto.getRandomValues is not available; use randomBytes if needed.
-  // If using browser target, replace this impl accordingly.
-  return Buffer.from(crypto.getRandomValues(new Uint8Array(byteLength)))
+  // Use Node.js crypto for both Node and browser compatibility
+  // Prefer randomBytes if available (Node), fallback to getRandomValues for browser (not used here)
+  return randomBytes(byteLength)
     .toString("hex")
+    .padStart(byteLength * 2, "0")
     .slice(0, byteLength * 2);
 }
 
@@ -54,4 +51,14 @@ export function randomHex(byteLength: number = 16): string {
 export function randomInt(min: number, max: number): number {
   const range = max - min + 1;
   return Math.floor(Math.random() * range) + min;
+}
+
+/**
+ * Generates a cryptographically strong random base64 string.
+ *
+ * @param {number} byteLength - Number of random bytes (default: 16).
+ * @returns {string} Random base64 string (URL-safe, no padding).
+ */
+export function randomBase64(byteLength: number = 16): string {
+  return randomBytes(byteLength).toString("base64url");
 }

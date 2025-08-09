@@ -10,6 +10,7 @@ export * from "./utils/fs.utils";
 export * from "./utils/http-status-codes";
 export * from "./utils/id.utils";
 export * from "./utils/logger.utils";
+export * from "./utils/middleware.utils";
 export * from "./utils/obj.utils";
 export * from "./utils/response.utils";
 export * from "./utils/string.utils";
