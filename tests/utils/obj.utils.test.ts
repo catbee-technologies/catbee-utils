@@ -5,6 +5,13 @@ import {
   deepObjMerge,
   flattenObject,
   getValueByPath,
+  setValueByPath,
+  isEqual,
+  filterObject,
+  mapObject,
+  deepFreeze,
+  isObject,
+  getAllPaths,
 } from "../../src/utils/obj.utils";
 
 describe("ObjUtils", () => {
@@ -158,6 +165,114 @@ describe("ObjUtils", () => {
     it("works with root key (no dot)", () => {
       expect(getValueByPath(example, "a")).toEqual({ b: { c: 5 } });
       expect(getValueByPath({ foo: 9 }, "foo")).toBe(9);
+    });
+  });
+
+  describe("setValueByPath", () => {
+    it("sets value at nested path (dot/bracket)", () => {
+      const obj: any = { a: { b: [{ c: 1 }] } };
+      expect(setValueByPath(obj, "a.b[0].c", 42)).toBe(obj);
+      expect(obj.a.b[0].c).toBe(42);
+    });
+    it("creates intermediate objects/arrays as needed", () => {
+      const obj: any = {};
+      setValueByPath(obj, "x.y[0].z", 5);
+      expect(obj.x.y[0].z).toBe(5);
+    });
+    it("returns original object if not object", () => {
+      expect(setValueByPath(null as any, "a.b", 1)).toBe(null);
+      expect(setValueByPath("str" as any, "a", 1)).toBe("str");
+    });
+    it("handles empty path", () => {
+      const obj = { a: 1 };
+      expect(setValueByPath(obj, "", 2)).toBe(obj);
+    });
+  });
+
+  describe("isEqual", () => {
+    it("returns true for deeply equal objects", () => {
+      expect(isEqual({ a: 1, b: [2, 3] }, { a: 1, b: [2, 3] })).toBe(true);
+    });
+    it("returns false for different objects", () => {
+      expect(isEqual({ a: 1 }, { a: 2 })).toBe(false);
+      expect(isEqual({ a: 1 }, { a: 1, b: 2 })).toBe(false);
+    });
+    it("handles arrays and primitives", () => {
+      expect(isEqual([1, 2], [1, 2])).toBe(true);
+      expect(isEqual([1, 2], [2, 1])).toBe(false);
+      expect(isEqual(1, 1)).toBe(true);
+      expect(isEqual(1, "1")).toBe(false);
+    });
+    it("handles Date objects", () => {
+      expect(isEqual(new Date("2020-01-01"), new Date("2020-01-01"))).toBe(
+        true,
+      );
+      expect(isEqual(new Date("2020-01-01"), new Date("2021-01-01"))).toBe(
+        false,
+      );
+    });
+    it("returns false for null/undefined", () => {
+      expect(isEqual(null, {})).toBe(false);
+      expect(isEqual(undefined, {})).toBe(false);
+      expect(isEqual(null, null)).toBe(true);
+    });
+  });
+
+  describe("filterObject", () => {
+    it("filters properties by predicate", () => {
+      const obj = { a: 1, b: 2, c: 3 };
+      expect(filterObject(obj, (v) => v > 1)).toEqual({ b: 2, c: 3 });
+    });
+    it("returns empty object if none match", () => {
+      expect(filterObject({ a: 1 }, () => false)).toEqual({});
+    });
+  });
+
+  describe("mapObject", () => {
+    it("maps values using mapFn", () => {
+      const obj = { a: 1, b: 2 };
+      expect(mapObject(obj, (v) => v * 10)).toEqual({ a: 10, b: 20 });
+    });
+    it("passes key and obj to mapFn", () => {
+      const obj = { x: 2 };
+      expect(mapObject(obj, (v, k, _o) => k + v)).toEqual({ x: "x2" });
+    });
+  });
+
+  describe("deepFreeze", () => {
+    it("freezes object and nested objects", () => {
+      const obj = { a: { b: 2 } };
+      const frozen = deepFreeze(obj);
+      expect(Object.isFrozen(frozen)).toBe(true);
+      expect(Object.isFrozen(frozen.a)).toBe(true);
+      // Should not throw when accessing
+      expect(frozen.a.b).toBe(2);
+    });
+  });
+
+  describe("isObject", () => {
+    it("returns true for plain objects", () => {
+      expect(isObject({})).toBe(true);
+      expect(isObject({ a: 1 })).toBe(true);
+    });
+    it("returns false for arrays, null, non-objects", () => {
+      expect(isObject([])).toBe(false);
+      expect(isObject(null)).toBe(false);
+      expect(isObject(1)).toBe(false);
+      expect(isObject("x")).toBe(false);
+    });
+  });
+
+  describe("getAllPaths", () => {
+    it("returns all dot notation paths", () => {
+      const obj = { a: { b: { c: 1 } }, d: 2 };
+      expect(getAllPaths(obj).sort()).toEqual(
+        ["a", "a.b", "a.b.c", "d"].sort(),
+      );
+    });
+    it("returns empty array for non-object", () => {
+      expect(getAllPaths(null as any)).toEqual([]);
+      expect(getAllPaths(1 as any)).toEqual([]);
     });
   });
 });

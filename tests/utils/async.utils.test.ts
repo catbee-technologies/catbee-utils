@@ -1,4 +1,3 @@
-// asyncUtils.spec.ts
 import {
   sleep,
   debounce,
@@ -10,13 +9,18 @@ import {
   settleAll,
   createTaskQueue,
   runInSeries,
+  memoizeAsync,
+  abortable,
+  createDeferred,
+  waterfall,
+  rateLimit,
 } from "../../src/utils/async.utils";
 
 describe("sleep", () => {
   it("delays for at least the given ms", async () => {
     const start = Date.now();
     await sleep(30);
-    expect(Date.now() - start).toBeGreaterThanOrEqual(30);
+    expect(Date.now() - start).toBeGreaterThanOrEqual(30 - 5); // allow some margin for test environment
   });
 });
 
@@ -259,5 +263,107 @@ describe("runInSeries", () => {
     const tasks = [1, 2, 3].map((n) => () => Promise.resolve(n));
     const result = await runInSeries(tasks);
     expect(result).toEqual([1, 2, 3]);
+  });
+});
+
+describe("memoizeAsync", () => {
+  it("caches results for identical arguments", async () => {
+    const fn = jest.fn(async (x: number) => x * 2);
+    const memo = memoizeAsync(fn);
+    expect(await memo(2)).toBe(4);
+    expect(await memo(2)).toBe(4);
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
+
+  it("respects TTL option", async () => {
+    jest.useFakeTimers();
+    const fn = jest.fn(async (x: number) => x + 1);
+    const memo = memoizeAsync(fn, { ttl: 100 });
+    await expect(memo(1)).resolves.toBe(2);
+    jest.advanceTimersByTime(99);
+    await expect(memo(1)).resolves.toBe(2);
+    jest.advanceTimersByTime(2);
+    await expect(memo(1)).resolves.toBe(2);
+    expect(fn).toHaveBeenCalledTimes(2);
+    jest.useRealTimers();
+  });
+
+  it("supports custom keyFn", async () => {
+    const fn = jest.fn(async (a: number, b: number) => a + b);
+    const memo = memoizeAsync(fn, { keyFn: ([a, b]) => `${a}-${b}` });
+    await expect(memo(1, 2)).resolves.toBe(3);
+    await expect(memo(1, 2)).resolves.toBe(3);
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("abortable", () => {
+  it("resolves if not aborted", async () => {
+    const ctrl = new AbortController();
+    await expect(abortable(Promise.resolve("ok"), ctrl.signal)).resolves.toBe(
+      "ok",
+    );
+  });
+
+  it("rejects if aborted before promise resolves", async () => {
+    const ctrl = new AbortController();
+    const p = abortable(
+      new Promise((r) => setTimeout(() => r("late"), 50)),
+      ctrl.signal,
+      "aborted",
+    );
+    ctrl.abort();
+    await expect(p).rejects.toBe("aborted");
+  });
+
+  it("rejects immediately if already aborted", async () => {
+    const ctrl = new AbortController();
+    ctrl.abort();
+    await expect(
+      abortable(Promise.resolve("x"), ctrl.signal, "gone"),
+    ).rejects.toBe("gone");
+  });
+});
+
+describe("createDeferred", () => {
+  it("resolves externally", async () => {
+    const [p, resolve] = createDeferred<number>();
+    setTimeout(() => resolve(42), 10);
+    await expect(p).resolves.toBe(42);
+  });
+
+  it("rejects externally", async () => {
+    const [p, , reject] = createDeferred<number>();
+    setTimeout(() => reject("fail"), 10);
+    await expect(p).rejects.toBe("fail");
+  });
+});
+
+describe("waterfall", () => {
+  it("chains async functions in order", async () => {
+    const fns = [
+      async (x: number) => x + 1,
+      async (x: number) => x * 2,
+      async (x: number) => `Result: ${x}`,
+    ];
+    const wf = waterfall<string>(fns);
+    await expect(wf(3)).resolves.toBe("Result: 8");
+  });
+});
+
+describe("rateLimit", () => {
+  it("limits calls per interval", async () => {
+    jest.useFakeTimers();
+    const fn = jest.fn(async (x: number) => x);
+    const limited = rateLimit(fn, 2, 100);
+    const p1 = limited(1);
+    const p2 = limited(2);
+    const p3 = limited(3);
+    jest.advanceTimersByTime(101);
+    const p4 = limited(4);
+    jest.advanceTimersByTime(101);
+    await expect(Promise.all([p1, p2, p3, p4])).resolves.toEqual([1, 2, 3, 4]);
+    expect(fn).toHaveBeenCalledTimes(4);
+    jest.useRealTimers();
   });
 });

@@ -13,11 +13,13 @@ describe("EnvUtils", () => {
   const OLD_ENV = process.env;
 
   beforeEach(() => {
+    jest.resetModules();
     process.env = { ...OLD_ENV };
   });
 
   afterEach(() => {
     process.env = OLD_ENV;
+    jest.restoreAllMocks();
   });
 
   describe("isDev", () => {
@@ -34,6 +36,27 @@ describe("EnvUtils", () => {
     it("defaults to development if NODE_ENV is unset", () => {
       Env.delete("NODE_ENV");
       expect(Env.isDev()).toBe(true);
+    });
+  });
+
+  describe("isProd, isTest, isStaging", () => {
+    it("isProd returns true only for production", () => {
+      Env.set("NODE_ENV", "production");
+      expect(Env.isProd()).toBe(true);
+      Env.set("NODE_ENV", "development");
+      expect(Env.isProd()).toBe(false);
+    });
+    it("isTest returns true only for testing", () => {
+      Env.set("NODE_ENV", "testing");
+      expect(Env.isTest()).toBe(true);
+      Env.set("NODE_ENV", "production");
+      expect(Env.isTest()).toBe(false);
+    });
+    it("isStaging returns true only for staging", () => {
+      Env.set("NODE_ENV", "staging");
+      expect(Env.isStaging()).toBe(true);
+      Env.set("NODE_ENV", "production");
+      expect(Env.isStaging()).toBe(false);
     });
   });
 
@@ -218,6 +241,111 @@ describe("EnvUtils", () => {
       expect(Env.has("QWERTY")).toBe(true);
       Env.delete("QWERTY");
       expect(Env.has("QWERTY")).toBe(false);
+    });
+  });
+
+  describe("getUrl", () => {
+    it("returns valid URL if present", () => {
+      Env.set("URL", "http://example.com");
+      expect(Env.getUrl("URL")).toBe("http://example.com");
+    });
+    it("throws if invalid URL", () => {
+      Env.set("URL", "not-a-url");
+      expect(() => Env.getUrl("URL")).toThrow(/not a valid URL/);
+    });
+    it("throws if protocol not allowed", () => {
+      Env.set("URL", "ftp://example.com");
+      expect(() =>
+        Env.getUrl("URL", undefined, { protocols: ["http", "https"] }),
+      ).toThrow(/must use one of/);
+    });
+    it("throws if TLD required and missing", () => {
+      Env.set("URL", "http://localhost");
+      expect(() => Env.getUrl("URL", undefined, { requireTld: true })).toThrow(
+        /must have a valid host with TLD/,
+      );
+    });
+    it("allows localhost if requireTld is false", () => {
+      Env.set("URL", "http://localhost");
+      expect(Env.getUrl("URL", undefined, { requireTld: false })).toBe(
+        "http://localhost",
+      );
+    });
+  });
+
+  describe("getEmail", () => {
+    it("returns valid email", () => {
+      Env.set("EMAIL", "foo@bar.com");
+      expect(Env.getEmail("EMAIL")).toBe("foo@bar.com");
+    });
+    it("throws if invalid email", () => {
+      Env.set("EMAIL", "not-an-email");
+      expect(() => Env.getEmail("EMAIL")).toThrow(/not a valid email address/);
+    });
+  });
+
+  describe("getPath", () => {
+    it("returns absolute path if exists", () => {
+      Env.set("PATHVAR", __filename);
+      expect(Env.getPath("PATHVAR", undefined, { mustExist: true })).toBe(
+        __filename,
+      );
+    });
+    it("throws if mustExist and not found", () => {
+      Env.set("PATHVAR", "/no/such/file");
+      expect(() =>
+        Env.getPath("PATHVAR", undefined, { mustExist: true }),
+      ).toThrow(/does not exist/);
+    });
+    it("returns absolute path if makeAbsolute", () => {
+      Env.set("PATHVAR", "foo/bar");
+      expect(
+        Env.getPath("PATHVAR", undefined, { makeAbsolute: true }),
+      ).toContain("foo" + require("path").sep + "bar");
+    });
+  });
+
+  describe("getPort", () => {
+    it("returns port as number", () => {
+      Env.set("PORT", "8080");
+      expect(Env.getPort("PORT")).toBe(8080);
+    });
+    it("throws if port is out of range", () => {
+      Env.set("PORT", "70000");
+      expect(() => Env.getPort("PORT")).toThrow(/must be a valid port number/);
+    });
+  });
+
+  describe("getDuration", () => {
+    it("parses ms, s, m, h, d, and combos", () => {
+      Env.set("DUR", "1d2h3m4s5ms");
+      expect(Env.getDuration("DUR")).toBe(
+        1 * 86400000 + 2 * 3600000 + 3 * 60000 + 4 * 1000 + 5,
+      );
+      Env.set("DUR", "1000");
+      expect(Env.getDuration("DUR")).toBe(1000);
+    });
+    it("throws on invalid duration", () => {
+      Env.set("DUR", "notaduration");
+      expect(() => Env.getDuration("DUR")).toThrow(/invalid duration format/);
+    });
+  });
+
+  describe("getSafeEnv", () => {
+    it("masks sensitive keys", () => {
+      Env.set("MY_SECRET", "abc123");
+      Env.set("MY_TOKEN", "tok");
+      Env.set("MY_PASSWORD", "pw");
+      Env.set("MY_KEY", "k");
+      Env.set("MY_AUTH", "a");
+      Env.set("SAFE", "ok");
+      const safe = Env.getSafeEnv();
+      expect(safe.MY_SECRET).toBe("******");
+      expect(safe.MY_TOKEN).toBe("******");
+      expect(safe.MY_PASSWORD).toBe("******");
+      expect(safe.MY_KEY).toBe("******");
+      expect(safe.MY_AUTH).toBe("******");
+      expect(safe.SAFE).toBe("ok");
     });
   });
 });
