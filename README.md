@@ -4,7 +4,7 @@
 
 A modular, production-grade utility toolkit for Node.js and TypeScript, designed for robust, scalable applications (including Express-based services). All utilities are tree-shakable and can be imported independently.
 
-![CI](https://github.com/catbee-technologies/catbee-utils/actions/workflows/node-build.yml/badge.svg) ![Coverage](https://codecov.io/gh/catbee-technologies/catbee-utils/branch/main/graph/badge.svg) ![Audit](https://github.com/catbee-technologies/catbee-utils/actions/workflows/audit.yml/badge.svg) ![Publish](https://github.com/catbee-technologies/catbee-utils/actions/workflows/npm-publish.yml/badge.svg)
+[build](https://github.com/catbee-technologies/catbee-utils/actions/workflows/node-build.yml/badge.svg) ![test](https://github.com/catbee-technologies/catbee-utils/actions/workflows/code-coverage.yml/badge.svg) ![coverage](https://codecov.io/gh/catbee-technologies/catbee-utils/branch/main/graph/badge.svg) ![dependencies](https://img.shields.io/librariesio/release/npm/@catbee%2Futils)
 
 ## 📦 Installation
 
