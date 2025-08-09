@@ -4,8 +4,9 @@
  * @param {number} ms - The number of milliseconds to sleep.
  * @returns {Promise<void>} A Promise that resolves after the given time.
  */
-export const sleep = (ms: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, ms));
+export function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 /**
  * Creates a debounced version of a function that delays its execution.
@@ -338,4 +339,169 @@ export async function runInSeries<T>(
     results.push(await task());
   }
   return results;
+}
+
+/**
+ * Memoizes an async function, caching results for repeated calls with identical arguments.
+ * Optional TTL (time-to-live) for cached entries.
+ *
+ * @template T Function return type
+ * @template Args Function arguments types
+ * @param {(...args: Args) => Promise<T>} fn - The async function to memoize
+ * @param {object} [options] - Memoization options
+ * @param {number} [options.ttl] - Cache TTL in milliseconds (optional)
+ * @param {(args: Args) => string} [options.keyFn] - Custom key generator function
+ * @returns {(...args: Args) => Promise<T>} Memoized function
+ */
+export function memoizeAsync<T, Args extends any[]>(
+  fn: (...args: Args) => Promise<T>,
+  options: {
+    ttl?: number;
+    keyFn?: (args: Args) => string;
+  } = {},
+): (...args: Args) => Promise<T> {
+  const cache = new Map<string, { value: T; expires: number }>();
+  const { ttl, keyFn = JSON.stringify } = options;
+
+  return async function (...args: Args): Promise<T> {
+    const key = keyFn(args);
+    const cached = cache.get(key);
+
+    if (cached && (!ttl || Date.now() < cached.expires)) {
+      return cached.value;
+    }
+
+    const result = await fn(...args);
+    cache.set(key, {
+      value: result,
+      expires: ttl ? Date.now() + ttl : Infinity,
+    });
+
+    return result;
+  };
+}
+
+/**
+ * Creates an abortable version of a promise that can be cancelled using an AbortController.
+ *
+ * @template T
+ * @param {Promise<T>} promise - The promise to make abortable
+ * @param {AbortSignal} signal - AbortSignal from AbortController
+ * @param {any} [abortValue] - Value to use when rejecting on abort
+ * @returns {Promise<T>} Promise that rejects if the signal is aborted
+ */
+export function abortable<T>(
+  promise: Promise<T>,
+  signal: AbortSignal,
+  abortValue: any = new Error("Operation aborted"),
+): Promise<T> {
+  if (signal.aborted) {
+    return Promise.reject(abortValue);
+  }
+
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => {
+      const abort = () => reject(abortValue);
+      signal.addEventListener("abort", abort, { once: true });
+      promise.finally(() => signal.removeEventListener("abort", abort));
+    }),
+  ]);
+}
+
+/**
+ * Creates a promise with external resolve/reject functions.
+ * Useful for creating promises that can be resolved or rejected from outside.
+ *
+ * @template T
+ * @returns {[Promise<T>, (value: T | PromiseLike<T>) => void, (reason?: any) => void]}
+ *   Tuple of [promise, resolve, reject]
+ */
+export function createDeferred<T>(): [
+  Promise<T>,
+  (value: T | PromiseLike<T>) => void,
+  (reason?: any) => void,
+] {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: any) => void;
+
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+
+  return [promise, resolve, reject];
+}
+
+/**
+ * Chains a series of async functions, passing the result of each to the next.
+ * Similar to function composition but for async functions.
+ *
+ * @template T
+ * @param {Array<(input: any) => Promise<any>>} fns - Array of async functions to compose
+ * @returns {(input: any) => Promise<T>} Composed function
+ */
+export function waterfall<T>(
+  fns: Array<(input: any) => Promise<any>>,
+): (initialValue: any) => Promise<T> {
+  return async (initialValue: any): Promise<T> => {
+    return fns.reduce(
+      async (acc, fn) => fn(await acc),
+      Promise.resolve(initialValue),
+    ) as Promise<T>;
+  };
+}
+
+/**
+ * Creates a rate limiter that ensures functions aren't called more than
+ * a specified number of times per interval.
+ *
+ * @template T
+ * @param {(...args: any[]) => Promise<T>} fn - Function to rate limit
+ * @param {number} maxCalls - Maximum calls allowed per interval
+ * @param {number} interval - Time interval in milliseconds
+ * @returns {(...args: any[]) => Promise<T>} Rate limited function
+ */
+export function rateLimit<T>(
+  fn: (...args: any[]) => Promise<T>,
+  maxCalls: number,
+  interval: number,
+): (...args: any[]) => Promise<T> {
+  const calls: number[] = [];
+
+  return async function (...args: any[]): Promise<T> {
+    const now = Date.now();
+    calls.splice(
+      0,
+      calls.length,
+      ...calls.filter((time) => now - time < interval),
+    );
+
+    if (calls.length >= maxCalls) {
+      const oldestCall = calls[0];
+      const delay = interval - (now - oldestCall);
+      await sleep(Math.max(1, delay));
+      // Remove potentially stale entries after sleep
+      const currentTime = Date.now();
+      calls.splice(
+        0,
+        calls.length,
+        ...calls.filter((time) => currentTime - time < interval),
+      );
+
+      // If still at limit after sleep, wait for another cycle
+      if (calls.length >= maxCalls) {
+        const nextDelay = interval - (currentTime - calls[0]);
+        await sleep(Math.max(1, nextDelay));
+        calls.splice(
+          0,
+          calls.length,
+          ...calls.filter((time) => Date.now() - time < interval),
+        );
+      }
+    }
+
+    calls.push(Date.now());
+    return fn(...args);
+  };
 }

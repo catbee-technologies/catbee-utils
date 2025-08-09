@@ -10,7 +10,7 @@ import { getValueByPath } from "./obj.utils";
  * @throws {TypeError} If array is not an array.
  * @throws {Error} If chunk size is not a positive integer.
  */
-export const chunk = <T>(array: T[], size: number): T[][] => {
+export function chunk<T>(array: T[], size: number): T[][] {
   if (!Array.isArray(array)) throw new TypeError("Expected an array");
   if (!array.length) return [];
   if (!Number.isInteger(size) || size <= 0)
@@ -18,7 +18,7 @@ export const chunk = <T>(array: T[], size: number): T[][] => {
   return Array.from({ length: Math.ceil(array.length / size) }, (_, i) =>
     array.slice(i * size, i * size + size),
   );
-};
+}
 
 /**
  * Removes duplicate values from an array.
@@ -228,4 +228,158 @@ export function mergeSort<T>(
     return merge(left, right);
   };
   return sort(array);
+}
+
+/**
+ * Combines multiple arrays into a single array of grouped elements.
+ * Output array length equals the length of the shortest input array.
+ *
+ * @example zip([1, 2], ['a', 'b']) => [[1, 'a'], [2, 'b']]
+ * @param {...Array<T>[]} arrays - Two or more arrays to zip together.
+ * @returns {Array<T[]>} Array of grouped elements.
+ */
+export function zip<T>(...arrays: T[][]): T[][] {
+  if (arrays.length === 0) return [];
+  if (arrays.some((arr) => !Array.isArray(arr))) {
+    throw new TypeError("All arguments must be arrays");
+  }
+
+  const minLength = Math.min(...arrays.map((arr) => arr.length));
+  const result: T[][] = [];
+
+  for (let i = 0; i < minLength; i++) {
+    result.push(arrays.map((arr) => arr[i]));
+  }
+
+  return result;
+}
+
+/**
+ * Splits an array into two arrays based on a predicate function.
+ *
+ * @template T The type of array elements.
+ * @param {T[]} array - The input array.
+ * @param {(item: T, index: number, array: T[]) => boolean} predicate - Function to test each element.
+ * @returns {[T[], T[]]} A tuple of two arrays: [matched, unmatched].
+ */
+export function partition<T>(
+  array: T[],
+  predicate: (item: T, index: number, array: T[]) => boolean,
+): [T[], T[]] {
+  if (!Array.isArray(array)) return [[], []];
+
+  return array.reduce(
+    ([pass, fail], item, index) => {
+      return predicate(item, index, array)
+        ? [[...pass, item], fail]
+        : [pass, [...fail, item]];
+    },
+    [[] as T[], [] as T[]],
+  );
+}
+
+/**
+ * Generates an array of numbers within a specified range.
+ *
+ * @param {number} start - Start of range (inclusive).
+ * @param {number} end - End of range (exclusive).
+ * @param {number} [step=1] - Step between numbers.
+ * @returns {number[]} Array of numbers in range.
+ */
+export function range(start: number, end: number, step: number = 1): number[] {
+  if (
+    !Number.isFinite(start) ||
+    !Number.isFinite(end) ||
+    !Number.isFinite(step)
+  ) {
+    throw new TypeError("Arguments must be finite numbers");
+  }
+  if (step === 0) throw new Error("Step cannot be zero");
+
+  const isAscending = step > 0;
+  if ((isAscending && start >= end) || (!isAscending && start <= end)) {
+    return [];
+  }
+
+  const length = Math.max(Math.ceil((end - start) / step), 0);
+  const result = new Array(length);
+
+  for (let i = 0, value = start; i < length; i++, value += step) {
+    result[i] = value;
+  }
+
+  return result;
+}
+
+/**
+ * Returns the first n elements of an array.
+ *
+ * @template T The type of array elements.
+ * @param {T[]} array - The input array.
+ * @param {number} [n=1] - Number of elements to take.
+ * @returns {T[]} New array with first n elements.
+ */
+export function take<T>(array: T[], n: number = 1): T[] {
+  if (!Array.isArray(array) || n <= 0) return [];
+  return array.slice(0, n);
+}
+
+/**
+ * Takes elements from the array while predicate returns true.
+ *
+ * @template T The type of array elements.
+ * @param {T[]} array - The input array.
+ * @param {(item: T, index: number) => boolean} predicate - Function to test each element.
+ * @returns {T[]} New array with taken elements.
+ */
+export function takeWhile<T>(
+  array: T[],
+  predicate: (item: T, index: number) => boolean,
+): T[] {
+  if (!Array.isArray(array)) return [];
+
+  const result: T[] = [];
+  for (let i = 0; i < array.length; i++) {
+    if (!predicate(array[i], i)) break;
+    result.push(array[i]);
+  }
+
+  return result;
+}
+
+/**
+ * Removes all falsy values from an array.
+ * False, null, 0, "", undefined, and NaN are falsy.
+ *
+ * @template T The type of array elements.
+ * @param {T[]} array - The input array.
+ * @returns {NonNullable<T>[]} New array with falsy values removed.
+ */
+export function compact<T>(array: T[]): NonNullable<T>[] {
+  if (!Array.isArray(array)) return [];
+  return array.filter(Boolean) as NonNullable<T>[];
+}
+
+/**
+ * Counts array elements by a key function.
+ *
+ * @template T The type of array elements.
+ * @param {T[]} array - The input array.
+ * @param {(item: T) => string | number | symbol} keyFn - Function to generate count key.
+ * @returns {Record<string, number>} Object with counts by key.
+ */
+export function countBy<T>(
+  array: T[],
+  keyFn: (item: T) => string | number | symbol,
+): Record<string, number> {
+  if (!Array.isArray(array)) return {};
+
+  return array.reduce(
+    (acc, item) => {
+      const key = String(keyFn(item));
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    },
+    {} as Record<string, number>,
+  );
 }

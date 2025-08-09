@@ -29,4 +29,18 @@ export const Config = {
      */
     isoTimestamp: Env.getBoolean("LOGGER_ISO_TIMESTAMP", false),
   },
+
+  Http: {
+    /**
+     * Timeout for HTTP requests in milliseconds
+     */
+    timeout: Env.getNumber("HTTP_TIMEOUT", 30000),
+  },
+
+  Cache: {
+    /**
+     * Default TTL (time to live) for cache entries in seconds
+     */
+    defaultTtl: Env.getNumber("CACHE_DEFAULT_TTL", 300),
+  },
 };
