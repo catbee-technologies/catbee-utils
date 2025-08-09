@@ -4,6 +4,13 @@ import {
   toCamelCase,
   slugify,
   truncate,
+  toPascalCase,
+  toSnakeCase,
+  mask,
+  stripHtml,
+  equalsIgnoreCase,
+  reverse,
+  countOccurrences,
 } from "../../src/utils/string.utils";
 
 describe("StringUtils", () => {
@@ -103,6 +110,89 @@ describe("StringUtils", () => {
     });
     it("handles unicode properly", () => {
       expect(truncate("汉字汉字汉字", 2)).toBe("汉字...");
+    });
+  });
+
+  describe("toPascalCase", () => {
+    it("converts kebab-case and snake_case to PascalCase", () => {
+      expect(toPascalCase("foo-bar")).toBe("FooBar");
+      expect(toPascalCase("foo_bar")).toBe("FooBar");
+    });
+    it("capitalizes camelCase", () => {
+      expect(toPascalCase("fooBar")).toBe("FooBar");
+    });
+    it("returns empty string for empty input", () => {
+      expect(toPascalCase("")).toBe("");
+    });
+  });
+
+  describe("toSnakeCase", () => {
+    it("converts camelCase and kebab-case to snake_case", () => {
+      expect(toSnakeCase("fooBarTest")).toBe("foo_bar_test");
+      expect(toSnakeCase("foo-bar-test")).toBe("foo_bar_test");
+      expect(toSnakeCase("Foo Bar test")).toBe("foo_bar_test");
+    });
+    it("handles leading/trailing spaces and dashes", () => {
+      expect(toSnakeCase("  Foo-Bar ")).toBe("foo_bar");
+    });
+    it("returns empty string for empty input", () => {
+      expect(toSnakeCase("")).toBe("");
+    });
+  });
+
+  describe("mask", () => {
+    it("masks all but visibleStart and visibleEnd", () => {
+      expect(mask("1234567890", 2, 2)).toBe("12******90");
+      expect(mask("abcdef", 1, 1, "#")).toBe("a####f");
+    });
+    it("returns empty string for empty input", () => {
+      expect(mask("")).toBe("");
+    });
+    it("returns original if visibleStart >= length", () => {
+      expect(mask("abc", 3, 2)).toBe("abc");
+    });
+    it("returns only mask if visibleStart and visibleEnd are 0", () => {
+      expect(mask("abc")).toBe("***");
+    });
+  });
+
+  describe("stripHtml", () => {
+    it("removes HTML tags", () => {
+      expect(stripHtml("<div>foo</div>bar")).toBe("foobar");
+      expect(stripHtml("<p>test</p><br>")).toBe("test");
+      expect(stripHtml("no tags")).toBe("no tags");
+    });
+  });
+
+  describe("equalsIgnoreCase", () => {
+    it("returns true for equal strings ignoring case", () => {
+      expect(equalsIgnoreCase("abc", "ABC")).toBe(true);
+      expect(equalsIgnoreCase("TeSt", "test")).toBe(true);
+    });
+    it("returns false for different strings", () => {
+      expect(equalsIgnoreCase("abc", "def")).toBe(false);
+    });
+  });
+
+  describe("reverse", () => {
+    it("reverses the string", () => {
+      expect(reverse("abc")).toBe("cba");
+      expect(reverse("racecar")).toBe("racecar");
+      expect(reverse("")).toBe("");
+    });
+  });
+
+  describe("countOccurrences", () => {
+    it("counts substring occurrences (case sensitive)", () => {
+      expect(countOccurrences("ababab", "ab")).toBe(3);
+      expect(countOccurrences("aaaa", "aa")).toBe(2);
+      expect(countOccurrences("abc", "d")).toBe(0);
+    });
+    it("counts substring occurrences (case insensitive)", () => {
+      expect(countOccurrences("aBaBaB", "ab", false)).toBe(3);
+    });
+    it("returns 0 if substring is not found", () => {
+      expect(countOccurrences("foo", "bar")).toBe(0);
     });
   });
 });

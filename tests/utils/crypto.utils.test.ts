@@ -6,6 +6,14 @@ import {
   sha256,
   md5,
   randomString,
+  generateRandomBytes,
+  generateRandomBytesAsString,
+  generateApiKey,
+  safeCompare,
+  encrypt,
+  decrypt,
+  createSignedToken,
+  verifySignedToken,
 } from "../../src/utils/crypto.utils";
 
 import { randomUUID } from "crypto";
@@ -114,6 +122,107 @@ describe("CryptoUtils", () => {
       // restore randomUUID (for test isolation)
       // @ts-ignore
       require("crypto").randomUUID = orig;
+    });
+  });
+
+  describe("generateRandomBytes", () => {
+    it("returns a Buffer of requested length", () => {
+      const buf = generateRandomBytes(16);
+      expect(Buffer.isBuffer(buf)).toBe(true);
+      expect(buf).toHaveLength(16);
+    });
+  });
+
+  describe("generateRandomBytesAsString", () => {
+    it("returns a string of requested encoding and length", () => {
+      const str = generateRandomBytesAsString(8, "hex");
+      expect(typeof str).toBe("string");
+      expect(str).toHaveLength(16); // 8 bytes = 16 hex chars
+    });
+  });
+
+  describe("generateApiKey", () => {
+    it("returns a string with optional prefix", () => {
+      const key = generateApiKey("test");
+      expect(key.startsWith("test_")).toBe(true);
+      expect(typeof key).toBe("string");
+      expect(key.length).toBeGreaterThan(5);
+    });
+    it("returns a string without prefix", () => {
+      const key = generateApiKey();
+      expect(typeof key).toBe("string");
+      expect(key).not.toContain("_");
+    });
+  });
+
+  describe("safeCompare", () => {
+    it("returns true for equal strings", () => {
+      expect(safeCompare("abc", "abc")).toBe(true);
+    });
+    it("returns false for different strings", () => {
+      expect(safeCompare("abc", "def")).toBe(false);
+    });
+    it("returns true for equal buffers", () => {
+      expect(safeCompare(Buffer.from("123"), Buffer.from("123"))).toBe(true);
+    });
+    it("returns false for different buffers", () => {
+      expect(safeCompare(Buffer.from("123"), Buffer.from("456"))).toBe(false);
+    });
+    it("throws for mismatched types", () => {
+      expect(() => safeCompare("abc", Buffer.from("abc"))).toThrow();
+    });
+  });
+
+  describe("encrypt/decrypt", () => {
+    it("encrypts and decrypts string data with passphrase", async () => {
+      const secret = "my-secret";
+      const data = "Sensitive data!";
+      const encrypted = await encrypt(data, secret);
+      expect(encrypted.ciphertext).not.toBe(data);
+      const decrypted = await decrypt(encrypted, secret);
+      expect(decrypted).toBe(data);
+    });
+
+    it("encrypts and decrypts Buffer data", async () => {
+      const secret = "buffer-key";
+      const data = Buffer.from("BufferData");
+      const encrypted = await encrypt(data, secret);
+      const decrypted = await decrypt(encrypted, secret);
+      expect(decrypted).toBe("BufferData");
+    });
+
+    it("throws if wrong key is used for decryption", async () => {
+      const encrypted = await encrypt("failme", "right-key");
+      await expect(decrypt(encrypted, "wrong-key")).rejects.toThrow();
+    });
+  });
+
+  describe("createSignedToken/verifySignedToken", () => {
+    it("creates and verifies a signed token", () => {
+      const payload = { foo: "bar" };
+      const secret = "tokensecret";
+      const token = createSignedToken(payload, secret, 60);
+      const decoded = verifySignedToken(token, secret);
+      expect(decoded).toBeTruthy();
+      expect(decoded!.foo).toBe("bar");
+    });
+
+    it("returns null for invalid signature", () => {
+      const payload = { foo: "bar" };
+      const token = createSignedToken(payload, "secret1", 60);
+      expect(verifySignedToken(token, "wrongsecret")).toBeNull();
+    });
+
+    it("returns null for expired token", () => {
+      const payload = { foo: "bar" };
+      const secret = "tokensecret";
+      // Expired token
+      const token = createSignedToken(payload, secret, -1);
+      expect(verifySignedToken(token, secret)).toBeNull();
+    });
+
+    it("returns null for malformed token", () => {
+      expect(verifySignedToken("not.a.token", "secret")).toBeNull();
     });
   });
 });

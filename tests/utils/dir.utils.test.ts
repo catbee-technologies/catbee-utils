@@ -12,6 +12,16 @@ import {
   emptyDir,
   getDirSize,
   watchDir,
+  findFilesByPattern,
+  getSubdirectories,
+  ensureEmptyDir,
+  createTempDir,
+  findNewestFile,
+  findOldestFile,
+  findInDir,
+  watchDirRecursive,
+  getDirStats,
+  walkDir,
 } from "../../src/utils/dir.utils";
 
 describe("DirUtils", () => {
@@ -168,6 +178,177 @@ describe("DirUtils", () => {
       await new Promise((res) => setTimeout(res, 300));
       stop();
       expect(events.some((e) => e.filename === "abc.txt")).toBe(true);
+    });
+  });
+
+  describe("findFilesByPattern", () => {
+    it("finds files matching glob pattern", async () => {
+      const d = path.join(tempDir, "globdir");
+      await ensureDir(d);
+      await fsp.writeFile(path.join(d, "a.txt"), "1");
+      await fsp.writeFile(path.join(d, "b.md"), "2");
+      const files = await findFilesByPattern("*.txt", { cwd: d });
+      expect(files.map((f) => path.basename(f))).toContain("a.txt");
+      expect(files.map((f) => path.basename(f))).not.toContain("b.md");
+    });
+  });
+
+  describe("getSubdirectories", () => {
+    it("returns subdirectories (non-recursive and recursive)", async () => {
+      const d = path.join(tempDir, "dirs");
+      await ensureDir(path.join(d, "sub1"));
+      await ensureDir(path.join(d, "sub2", "deep"));
+      const nonrec = await getSubdirectories(d, false);
+      expect(nonrec.map((p) => path.basename(p)).sort()).toEqual([
+        "sub1",
+        "sub2",
+      ]);
+      const rec = await getSubdirectories(d, true);
+      expect(rec.map((p) => path.basename(p)).sort()).toEqual([
+        "deep",
+        "sub1",
+        "sub2",
+      ]);
+    });
+  });
+
+  describe("ensureEmptyDir", () => {
+    it("empties existing dir or creates new one", async () => {
+      const d = path.join(tempDir, "emptyme");
+      await ensureDir(d);
+      await fsp.writeFile(path.join(d, "foo.txt"), "x");
+      await ensureEmptyDir(d);
+      expect(await fsp.readdir(d)).toHaveLength(0);
+      // Remove and ensureEmptyDir again (should create)
+      await fsp.rm(d, { recursive: true, force: true });
+      await ensureEmptyDir(d);
+      expect(await isDirectory(d)).toBe(true);
+    });
+  });
+
+  describe("createTempDir", () => {
+    it("creates a temp dir and cleans up", async () => {
+      const { path: tmp, cleanup } = await createTempDir({ prefix: "ctd-" });
+      expect(await isDirectory(tmp)).toBe(true);
+      await cleanup();
+      expect(await isDirectory(tmp)).toBe(false);
+    });
+  });
+
+  describe("findNewestFile and findOldestFile", () => {
+    it("finds newest and oldest files", async () => {
+      const d = path.join(tempDir, "age");
+      await ensureDir(d);
+      const f1 = path.join(d, "a.txt");
+      const f2 = path.join(d, "b.txt");
+      await fsp.writeFile(f1, "1");
+      await new Promise((res) => setTimeout(res, 10));
+      await fsp.writeFile(f2, "2");
+      expect(await findNewestFile(d)).toBe(f2);
+      expect(await findOldestFile(d)).toBe(f1);
+    });
+    it("returns null if no files", async () => {
+      const d = path.join(tempDir, "emptyage");
+      await ensureDir(d);
+      expect(await findNewestFile(d)).toBeNull();
+      expect(await findOldestFile(d)).toBeNull();
+    });
+  });
+
+  describe("findInDir", () => {
+    it("finds files matching predicate", async () => {
+      const d = path.join(tempDir, "findme");
+      await ensureDir(d);
+      await fsp.writeFile(path.join(d, "a.txt"), "1");
+      await fsp.writeFile(path.join(d, "b.md"), "2");
+      const found = await findInDir(d, (p, _stat) => p.endsWith(".md"), false);
+      expect(found.length).toBe(1);
+      expect(path.basename(found[0])).toBe("b.md");
+    });
+    it("recursively finds files", async () => {
+      const d = path.join(tempDir, "findrec");
+      await ensureDir(path.join(d, "sub"));
+      await fsp.writeFile(path.join(d, "a.txt"), "1");
+      await fsp.writeFile(path.join(d, "sub", "b.md"), "2");
+      const found = await findInDir(d, (p, _stat) => p.endsWith(".md"), true);
+      expect(found.some((f) => f.endsWith("b.md"))).toBe(true);
+    });
+  });
+
+  describe("watchDirRecursive", () => {
+    it("watches directory recursively for changes", async () => {
+      const d = path.join(tempDir, "watchrec");
+      await ensureDir(path.join(d, "sub"));
+      const events: Array<{ event: string; filename: string }> = [];
+      const stop = await watchDirRecursive(d, (event, filename) => {
+        events.push({ event, filename });
+      });
+      // Write file in subdir
+      const f = path.join(d, "sub", "file.txt");
+      await fsp.writeFile(f, "z");
+      await new Promise((res) => setTimeout(res, 300));
+      stop();
+      expect(events.some((e) => e.filename.endsWith("file.txt"))).toBe(true);
+    });
+  });
+
+  describe("getDirStats", () => {
+    it("returns file/dir count and total size", async () => {
+      const d = path.join(tempDir, "statsdir");
+      await ensureDir(path.join(d, "sub"));
+      await fsp.writeFile(path.join(d, "a.txt"), "abc");
+      await fsp.writeFile(path.join(d, "sub", "b.txt"), "defg");
+      const stats = await getDirStats(d);
+      expect(stats.fileCount).toBe(2);
+      expect(stats.dirCount).toBe(1);
+      expect(stats.totalSize).toBe(3 + 4);
+    });
+  });
+
+  describe("walkDir", () => {
+    it("walks directory tree and visits all entries", async () => {
+      const d = path.join(tempDir, "walkme");
+      await ensureDir(path.join(d, "sub"));
+      await fsp.writeFile(path.join(d, "a.txt"), "1");
+      await fsp.writeFile(path.join(d, "sub", "b.txt"), "2");
+      const visited: string[] = [];
+      await walkDir(d, {
+        visitorFn: (entry) => {
+          visited.push(entry.path);
+        },
+      });
+      expect(visited.some((p) => p.endsWith("a.txt"))).toBe(true);
+      expect(visited.some((p) => p.endsWith("b.txt"))).toBe(true);
+    });
+    it("supports post-order traversal", async () => {
+      const d = path.join(tempDir, "walkpost");
+      await ensureDir(path.join(d, "sub"));
+      await fsp.writeFile(path.join(d, "a.txt"), "1");
+      const order: string[] = [];
+      await walkDir(d, {
+        visitorFn: (entry) => {
+          order.push(entry.name);
+        },
+        traversalOrder: "post",
+      });
+      // Directory visited after file
+      expect(order[order.length - 1]).toBe("walkpost");
+    });
+    it("can skip subdirectories by returning false", async () => {
+      const d = path.join(tempDir, "walkskip");
+      await ensureDir(path.join(d, "sub"));
+      await fsp.writeFile(path.join(d, "a.txt"), "1");
+      await fsp.writeFile(path.join(d, "sub", "b.txt"), "2");
+      const visited: string[] = [];
+      await walkDir(d, {
+        visitorFn: (entry) => {
+          visited.push(entry.path);
+          if (entry.isDirectory && entry.name === "sub") return false;
+          return undefined;
+        },
+      });
+      expect(visited.some((p) => p.endsWith("a.txt"))).toBe(true);
+      expect(visited.some((p) => p.endsWith("b.txt"))).toBe(false);
     });
   });
 });

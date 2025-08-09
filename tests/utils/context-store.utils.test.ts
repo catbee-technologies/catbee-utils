@@ -2,6 +2,8 @@ import {
   ContextStore,
   StoreKeys,
   getRequestId,
+  getFromContext,
+  TypedContextKey,
 } from "../../src/utils/context-store.utils";
 
 describe("ContextStoreUtils", () => {
@@ -79,5 +81,92 @@ describe("ContextStoreUtils", () => {
     expect(instance).toBeDefined();
     // Should at least have getStore method
     expect(typeof instance.getStore).toBe("function");
+  });
+
+  it("getFromContext returns correct value", () => {
+    const requestId = "id-xyz";
+    ContextStore.run({ [StoreKeys.REQUEST_ID]: requestId }, () => {
+      expect(getFromContext<string>(StoreKeys.REQUEST_ID)).toBe(requestId);
+      expect(getFromContext<string>(StoreKeys.USER_ID)).toBeUndefined();
+    });
+  });
+
+  it("ContextStore.has returns true only if key exists in context", () => {
+    ContextStore.run({ [StoreKeys.USER_ID]: "u1" }, () => {
+      expect(ContextStore.has(StoreKeys.USER_ID)).toBe(true);
+      expect(ContextStore.has(StoreKeys.REQUEST_ID)).toBe(false);
+    });
+  });
+
+  it("ContextStore.delete removes key and returns true, throws outside context", () => {
+    ContextStore.run({ [StoreKeys.USER_ID]: "u2" }, () => {
+      expect(ContextStore.delete(StoreKeys.USER_ID)).toBe(true);
+      expect(ContextStore.get(StoreKeys.USER_ID)).toBeUndefined();
+    });
+    expect(() => ContextStore.delete(StoreKeys.USER_ID)).toThrow(
+      /AsyncLocalStorage store is not initialized/,
+    );
+  });
+
+  it("ContextStore.patch updates multiple values in context", () => {
+    ContextStore.run({ [StoreKeys.REQUEST_ID]: "r1" }, () => {
+      const patchObj: Partial<Record<symbol, unknown>> = {};
+      patchObj[StoreKeys.USER_ID] = "patched-user";
+      ContextStore.patch(patchObj);
+      expect(ContextStore.get(StoreKeys.USER_ID)).toBe("patched-user");
+    });
+  });
+
+  it("ContextStore.withValue temporarily overrides value in context", () => {
+    ContextStore.run({ [StoreKeys.REQUEST_ID]: "orig" }, () => {
+      const result = ContextStore.withValue(
+        StoreKeys.REQUEST_ID,
+        "temp",
+        () => {
+          return ContextStore.get(StoreKeys.REQUEST_ID);
+        },
+      );
+      expect(result).toBe("temp");
+      expect(ContextStore.get(StoreKeys.REQUEST_ID)).toBe("orig");
+    });
+  });
+
+  it("ContextStore.extend creates a new context inheriting from current", () => {
+    ContextStore.run({ [StoreKeys.REQUEST_ID]: "base" }, () => {
+      const result = ContextStore.extend(
+        { [StoreKeys.USER_ID]: "extended" },
+        () => ({
+          req: ContextStore.get(StoreKeys.REQUEST_ID),
+          user: ContextStore.get(StoreKeys.USER_ID),
+        }),
+      );
+      expect(result.req).toBe("base");
+      expect(result.user).toBe("extended");
+      // Original context not affected
+      expect(ContextStore.get(StoreKeys.USER_ID)).toBeUndefined();
+    });
+  });
+
+  it("TypedContextKey works for get/set/exists/delete", () => {
+    const key = new TypedContextKey<string>(StoreKeys.CORRELATION_ID, "def");
+    ContextStore.run({}, () => {
+      expect(key.get()).toBe("def");
+      key.set("corr-1");
+      expect(key.get()).toBe("corr-1");
+      expect(key.exists()).toBe(true);
+      expect(key.delete()).toBe(true);
+      expect(key.get()).toBe("def");
+    });
+  });
+
+  it("ContextStore.createExpressMiddleware initializes context for requests", (done) => {
+    const req = { headers: { "x-request-id": "req-abc" } };
+    const middleware = ContextStore.createExpressMiddleware((r) => ({
+      [StoreKeys.REQUEST_ID]: r.headers["x-request-id"],
+    }));
+    middleware(req, {}, () => {
+      expect(ContextStore.get(StoreKeys.REQUEST_ID)).toBe("req-abc");
+      done();
+    });
   });
 });

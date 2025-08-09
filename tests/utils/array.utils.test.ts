@@ -9,6 +9,13 @@ import {
   difference,
   intersect,
   mergeSort,
+  zip,
+  partition,
+  range,
+  take,
+  takeWhile,
+  compact,
+  countBy,
 } from "../../src/utils/array.utils";
 
 jest.mock("../../src/utils/obj.utils", () => ({
@@ -195,6 +202,92 @@ describe("ArrayUtils", () => {
     it("throws for non-array", () => {
       // @ts-expect-error
       expect(() => mergeSort(null, "x")).toThrow("Expected array");
+    });
+  });
+
+  describe("zip", () => {
+    it("zips arrays together", () => {
+      expect(zip([1, 2], ["a", "b"] as any)).toEqual([
+        [1, "a"],
+        [2, "b"],
+      ]);
+      expect(zip([1, 2, 3], ["a"] as any)).toEqual([[1, "a"]]);
+      expect(zip()).toEqual([]);
+      expect(() => zip([1], null as any)).toThrow(
+        "All arguments must be arrays",
+      );
+    });
+  });
+
+  describe("partition", () => {
+    it("splits array by predicate", () => {
+      expect(partition([1, 2, 3, 4], (x) => x % 2 === 0)).toEqual([
+        [2, 4],
+        [1, 3],
+      ]);
+    });
+    it("returns [[], []] for non-array", () => {
+      // @ts-expect-error
+      expect(partition(null, () => true)).toEqual([[], []]);
+    });
+  });
+
+  describe("range", () => {
+    it("generates a range of numbers", () => {
+      expect(range(0, 5)).toEqual([0, 1, 2, 3, 4]);
+      expect(range(5, 0, -2)).toEqual([5, 3, 1]);
+      expect(range(0, 0)).toEqual([]);
+    });
+    it("throws for invalid args", () => {
+      expect(() => range(NaN, 1)).toThrow();
+      expect(() => range(0, 1, 0)).toThrow();
+    });
+  });
+
+  describe("take", () => {
+    it("returns first n elements", () => {
+      expect(take([1, 2, 3], 2)).toEqual([1, 2]);
+      expect(take([1, 2, 3], 0)).toEqual([]);
+      expect(take([1, 2, 3])).toEqual([1]);
+      expect(take([], 2)).toEqual([]);
+      // @ts-expect-error
+      expect(take(null, 2)).toEqual([]);
+    });
+  });
+
+  describe("takeWhile", () => {
+    it("takes elements while predicate is true", () => {
+      expect(takeWhile([1, 2, 3, 0, 4], (x) => x > 0)).toEqual([1, 2, 3]);
+      expect(takeWhile([1, 2, 3], () => false)).toEqual([]);
+      // @ts-expect-error
+      expect(takeWhile(null, () => true)).toEqual([]);
+    });
+  });
+
+  describe("compact", () => {
+    it("removes falsy values", () => {
+      expect(compact([0, 1, false, 2, "", 3, null, undefined])).toEqual([
+        1, 2, 3,
+      ]);
+      expect(compact([])).toEqual([]);
+      // @ts-expect-error
+      expect(compact(null)).toEqual([]);
+    });
+  });
+
+  describe("countBy", () => {
+    it("counts elements by key function", () => {
+      expect(countBy(["a", "b", "a"], (x) => x)).toEqual({ a: 2, b: 1 });
+      expect(
+        countBy([1, 2, 3, 2], (x) => (x % 2 === 0 ? "even" : "odd")),
+      ).toEqual({
+        odd: 2,
+        even: 2,
+      });
+    });
+    it("returns {} for non-array", () => {
+      // @ts-expect-error
+      expect(countBy(null, () => "x")).toEqual({});
     });
   });
 });
