@@ -1,6 +1,6 @@
 # 📦 Publish to npm when pushing to main or tagging a release
 
-name: 📦 Publish to npm
+name: 📦 Auto Publish to npm
 
 on:
   push:
@@ -10,8 +10,8 @@ on:
 
 jobs:
   build:
+    name: 📦 Build & Publish Package
     runs-on: ubuntu-latest
-
     steps:
       - name: ⬇️ Checkout code
         uses: actions/checkout@v4

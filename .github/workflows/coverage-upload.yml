@@ -1,4 +1,4 @@
-name: 🧪 Test Coverage
+name: 📤 Upload Coverage to Codecov
 
 on:
   push:
@@ -9,17 +9,15 @@ on:
   workflow_dispatch:
 
 jobs:
-  coverage:
+  coverage-upload-codecov:
+    if: >
+      github.event_name != 'pull_request' ||
+      (!contains(github.event.pull_request.title, 'WIP') && !contains(github.event.pull_request.title, '!COV'))
     runs-on: ubuntu-latest
+    name: 📤 Upload Coverage to Codecov
     steps:
       - name: ⬇️ Checkout repository
         uses: actions/checkout@v4
-
-      - name: ⏭ Skip tests & coverage
-        if: github.event_name == 'pull_request' && (contains(github.event.pull_request.title, 'WIP') || contains(github.event.pull_request.title, '!COV'))
-        run: |
-          echo "Skipping tests and coverage upload due to PR title containing 'WIP' or '!COV'."
-          exit 0
 
       - name: 🟢 Setup Node.js
         uses: actions/setup-node@v4
