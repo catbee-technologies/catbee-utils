@@ -1,4 +1,4 @@
-name: 🔒 Audit Dependencies
+name: 🔒 Dependency Audit
 
 on:
   schedule:
@@ -7,8 +7,8 @@ on:
 
 jobs:
   audit:
+    name: 🔒 Audit Dependencies
     runs-on: ubuntu-latest
-
     steps:
       - name: ⬇️ Checkout repository
         uses: actions/checkout@v4
