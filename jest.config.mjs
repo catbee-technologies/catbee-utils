@@ -7,7 +7,7 @@ export default {
   resetModules: true,
   collectCoverageFrom: ['src/**/*.ts'],
   coverageDirectory: 'reports/coverage',
-  coverageReporters: ['text', 'text-summary', 'lcov'],
+  coverageReporters: ['text', 'text-summary', 'lcov', 'cobertura'],
   reporters: [
     'default',
     [
