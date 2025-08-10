@@ -1,0 +1,66 @@
+test:
+  - changed-files:
+      - any-glob-to-any-file: 'tests/**'
+
+ci:
+  - changed-files:
+      - any-glob-to-any-file: '.github/workflows/**'
+
+utils:
+  - changed-files:
+      - any-glob-to-any-file: 'src/utils/**'
+
+core:
+  - changed-files:
+      - any-glob-to-any-file: 'src/core/**'
+
+middleware:
+  - changed-files:
+      - any-glob-to-any-file: 'src/middleware/**'
+
+cache:
+  - changed-files:
+      - any-glob-to-any-file: 'src/cache/**'
+
+config:
+  - changed-files:
+      - any-glob-to-any-file: '*.config.js'
+      - any-glob-to-any-file: '*.config.mjs'
+      - any-glob-to-any-file: '*.config.ts'
+      - any-glob-to-any-file: 'config/**'
+
+types:
+  - changed-files:
+      - any-glob-to-any-file: 'src/types/**'
+
+readme:
+  - changed-files:
+      - any-glob-to-any-file: 'README.md'
+
+changelog:
+  - changed-files:
+      - any-glob-to-any-file: 'CHANGELOG.md'
+
+dependency:
+  - changed-files:
+      - any-glob-to-any-file: 'package.json'
+      - any-glob-to-any-file: 'package-lock.json'
+
+docs:
+  - changed-files:
+      - any-glob-to-any-file: 'docs/**'
+
+scripts:
+  - changed-files:
+      - any-glob-to-any-file: 'scripts/**'
+
+env:
+  - changed-files:
+      - any-glob-to-any-file: '.env*'
+
+feature:
+  - head-branch: ['^feature-']
+
+hotfix:
+  - head-branch: ['^hotfix-']
+
