@@ -4,14 +4,22 @@ on:
   push:
     branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, edited]
+    branches: [main]
+  workflow_dispatch:
 
 jobs:
   coverage:
     runs-on: ubuntu-latest
-
     steps:
       - name: ⬇️ Checkout repository
         uses: actions/checkout@v4
+
+      - name: ⏭ Skip tests & coverage
+        if: github.event_name == 'pull_request' && (contains(github.event.pull_request.title, 'WIP') || contains(github.event.pull_request.title, '!COV'))
+        run: |
+          echo "Skipping tests and coverage upload due to PR title containing 'WIP' or '!COV'."
+          exit 0
 
       - name: 🟢 Setup Node.js
         uses: actions/setup-node@v4
