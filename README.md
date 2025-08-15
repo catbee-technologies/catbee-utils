@@ -54,6 +54,7 @@ console.log(isEmail("user@example.com")); // true
 - [**String Utilities**](#-string-utilities)
 - [**URL Utilities**](#-url-utilities)
 - [**Validate Utilities**](#-validate-utilities)
+- [**Decorators Utilities**](#decorators-utilities)
 
 ---
 
@@ -407,6 +408,75 @@ A comprehensive suite of string/format validators for safe input and API checks.
 - `validateAll(value: unknown, validators: Array<(value: unknown) => boolean>): boolean`
 
 ---
+
+# 📧 Decorators Utilities
+
+## Available Decorators
+
+- `@Controller(basePath: string)` – Class decorator to set the base route.
+- `@Get(path)`, `@Post(path)`, `@Put(path)`, `@Patch(path)`, `@Delete(path)`, `@Options(path)`, `@Head(path)`, `@Trace(path)`, `@Connect(path)` – Method decorators for HTTP verbs.
+- `@Use(...middlewares)` – Attach Express-style middleware to a route handler.
+- `@Query(key?)`, `@Param(key?)`, `@Body(key?)`, `@Req()`, `@Res()` – Parameter decorators for extracting request data.
+- `@HttpCode(status)` – Set custom HTTP status code for the response.
+- `@Header(name, value)` – Set custom response headers.
+- `@Before(fn)`, `@After(fn)` – Register before/after hooks for a route handler.
+
+## Example Usage
+
+```typescript
+import {
+  Controller, Get, Post, Use, Query, Param, Body, Req, Res,
+  HttpCode, Header, Before, After, registerControllers, Request, Response, NextFunction
+} from './src/utils/decorators.utils';
+
+// Example middleware
+function logMiddleware(req: Request, res: Response, next: NextFunction) {
+  console.log('Request:', req.method, req.url);
+  next();
+}
+
+// Example before/after hooks
+function beforeHook(req: Request, res: Response) {
+  console.log('Before handler');
+}
+function afterHook(req: Request, res: Response, result: any) {
+  console.log('After handler', result);
+}
+
+@Controller('/api')
+class ExampleController {
+  @Get('/items/:id')
+  @Use(logMiddleware)
+  @HttpCode(200)
+  @Header('X-Example', 'yes')
+  @Before(beforeHook)
+  @After(afterHook)
+  getItem(
+    @Query('q') q: string,
+    @Param('id') id: string,
+    @Body('name') name: string,
+    @Req() req: Request,
+    @Res() res: Response
+  ) {
+    return { q, id, name };
+  }
+
+  @Post('/items')
+  createItem(@Body() body: any) {
+    return { created: true, ...body };
+  }
+}
+
+// Register controllers with your router (Express-like)
+const router = /* your router instance */;
+registerControllers(router, [ExampleController]);
+```
+
+## Notes
+
+- Decorated methods **must** use standard method syntax, not arrow functions or property initializers.
+- All parameter decorators (`@Query`, `@Param`, etc.) are optional and can be used in any order.
+- `registerControllers(router, controllers)` will register all routes and apply middlewares, hooks, status codes, and headers as defined.
 
 ## 🏁 Usage
 

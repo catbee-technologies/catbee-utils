@@ -24,7 +24,9 @@
     "useUnknownInCatchVariables": false,
     "resolveJsonModule": true,
     "esModuleInterop": true,
-    "noImplicitAny": false
+    "noImplicitAny": false,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true
   },
   "exclude": [
     "node_modules"
