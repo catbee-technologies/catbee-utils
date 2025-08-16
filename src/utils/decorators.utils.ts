@@ -3,24 +3,20 @@
 import "reflect-metadata";
 
 // --- Sample Express interfaces for type safety ---
-export interface Request {
+interface Request {
   query: any;
   params: any;
   body?: any;
   [key: string]: any;
 }
-export interface Response {
+interface Response {
   json: (body: any) => void;
   headersSent: boolean;
   [key: string]: any;
 }
-export type NextFunction = (err?: any) => void;
-export type RequestHandler = (
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) => any;
-export interface Router {
+type NextFunction = (err?: any) => void;
+type RequestHandler = (req: Request, res: Response, next: NextFunction) => any;
+interface Router {
   [method: string]: (path: string, ...handlers: RequestHandler[]) => void;
 }
 // --- End sample Express interfaces ---
@@ -29,7 +25,7 @@ const ROUTES_KEY = Symbol("routes");
 const MIDDLEWARE_KEY = Symbol("middlewares");
 const PARAMS_KEY = Symbol("params");
 
-export type HttpMethod =
+type HttpMethod =
   | "get"
   | "post"
   | "put"

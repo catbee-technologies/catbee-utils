@@ -1,5 +1,5 @@
 import pino, { LoggerOptions, stdTimeFunctions } from "pino";
-import type { Logger } from "pino"; // Type-only import
+import type { Logger as PinoLogger } from "pino"; // Type-only import
 import { Config } from "../config";
 import { ContextStore, StoreKeys } from "./context-store.utils";
 
@@ -9,10 +9,20 @@ import { ContextStore, StoreKeys } from "./context-store.utils";
 const GLOBAL_LOGGER_KEY = Symbol.for("logger");
 
 /**
+ * Logger type for application-wide logging.
+ */
+export type Logger = pino.Logger;
+
+/**
+ * Logger levels for application-wide logging.
+ */
+export type LoggerLevels = pino.Level;
+
+/**
  * Use an object compatible with either modern or legacy global scopes.
  */
 export const _globalThis = typeof globalThis === "object" ? globalThis : global;
-const _global = _globalThis as unknown as { [GLOBAL_LOGGER_KEY]: Logger };
+const _global = _globalThis as unknown as { [GLOBAL_LOGGER_KEY]: PinoLogger };
 
 /**
  * Initializes the global root logger according to app configuration.
@@ -56,8 +66,8 @@ function setupLogger(): void {
  *
  * @returns {Logger} The logger instance (request-bound or global root logger)
  */
-export function getLogger(): Logger {
-  const logger = ContextStore.get<Logger>(StoreKeys.LOGGER);
+export function getLogger(): PinoLogger {
+  const logger = ContextStore.get<PinoLogger>(StoreKeys.LOGGER);
   if (logger) return logger;
 
   if (!_global[GLOBAL_LOGGER_KEY]) {
@@ -76,8 +86,8 @@ export function getLogger(): Logger {
  */
 export function createChildLogger(
   bindings: Record<string, any>,
-  parentLogger?: Logger,
-): Logger {
+  parentLogger?: PinoLogger,
+): PinoLogger {
   const logger = parentLogger || getLogger();
   return logger.child(bindings);
 }
@@ -92,7 +102,7 @@ export function createChildLogger(
 export function createRequestLogger(
   requestId: string,
   additionalContext: Record<string, any> = {},
-): Logger {
+): PinoLogger {
   const logger = createChildLogger({
     requestId,
     ...additionalContext,

@@ -9,7 +9,7 @@ import { getLogger } from "./logger.utils";
 /**
  * Type definitions for Express-compatible middleware
  */
-export type Request = {
+type Request = {
   headers: Record<string, string | string[] | undefined>;
   method: string;
   url: string;
@@ -20,7 +20,7 @@ export type Request = {
   [key: string]: any;
 };
 
-export type Response = {
+type Response = {
   status: (code: number) => Response;
   json: (data: any) => void;
   send: (data: any) => void;
@@ -30,9 +30,9 @@ export type Response = {
   [key: string]: any;
 };
 
-export type NextFunction = (err?: Error | any) => void;
+type NextFunction = (err?: Error | any) => void;
 
-export type Middleware = (
+type Middleware = (
   req: Request,
   res: Response,
   next: NextFunction,

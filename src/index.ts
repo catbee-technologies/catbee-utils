@@ -3,6 +3,7 @@ export * from "./utils/async.utils";
 export * from "./utils/cache.utils";
 export * from "./utils/context-store.utils";
 export * from "./utils/crypto.utils";
+export * from "./utils/decorators.utils";
 export * from "./utils/dir.utils";
 export * from "./utils/env.utils";
 export * from "./utils/exception.utils";
