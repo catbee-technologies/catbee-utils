@@ -1,4 +1,4 @@
-import { AsyncLocalStorage } from "async_hooks";
+import { AsyncLocalStorage } from 'async_hooks';
 
 /**
  * Type representing the store object used in AsyncLocalStorage.
@@ -13,12 +13,12 @@ export interface Store {
  * Add new symbols here to avoid duplication.
  */
 export const StoreKeys = {
-  LOGGER: Symbol("logger"),
-  REQUEST_ID: Symbol("requestId"),
-  USER_ID: Symbol("userId"),
-  TENANT_ID: Symbol("tenantId"),
-  TRACE_ID: Symbol("traceId"),
-  CORRELATION_ID: Symbol("correlationId"),
+  LOGGER: Symbol('logger'),
+  REQUEST_ID: Symbol('requestId'),
+  USER_ID: Symbol('userId'),
+  TENANT_ID: Symbol('tenantId'),
+  TRACE_ID: Symbol('traceId'),
+  CORRELATION_ID: Symbol('correlationId')
 };
 
 /**
@@ -95,9 +95,7 @@ export class ContextStore {
   static set<T>(key: symbol, value: T): void {
     const store = this.storage.getStore();
     if (!store) {
-      throw new Error(
-        `Failed to set ${String(key)}: AsyncLocalStorage store is not initialized.`,
-      );
+      throw new Error(`Failed to set ${String(key)}: AsyncLocalStorage store is not initialized.`);
     }
     store[key] = value;
   }
@@ -145,9 +143,7 @@ export class ContextStore {
   static delete(key: symbol): boolean {
     const store = this.storage.getStore();
     if (!store) {
-      throw new Error(
-        `Failed to delete ${String(key)}: AsyncLocalStorage store is not initialized.`,
-      );
+      throw new Error(`Failed to delete ${String(key)}: AsyncLocalStorage store is not initialized.`);
     }
     return delete store[key];
   }
@@ -161,11 +157,9 @@ export class ContextStore {
   static patch(values: Partial<Record<symbol, unknown>>): void {
     const store = this.storage.getStore();
     if (!store) {
-      throw new Error(
-        "Failed to patch: AsyncLocalStorage store is not initialized.",
-      );
+      throw new Error('Failed to patch: AsyncLocalStorage store is not initialized.');
     }
-    Object.getOwnPropertySymbols(values).forEach((key) => {
+    Object.getOwnPropertySymbols(values).forEach(key => {
       store[key] = values[key];
     });
   }
@@ -183,9 +177,7 @@ export class ContextStore {
   static withValue<T>(key: symbol, value: unknown, callback: () => T): T {
     const store = this.storage.getStore();
     if (!store) {
-      throw new Error(
-        `Failed to set temporary value: AsyncLocalStorage store is not initialized.`,
-      );
+      throw new Error(`Failed to set temporary value: AsyncLocalStorage store is not initialized.`);
     }
 
     // Save original value
@@ -216,17 +208,14 @@ export class ContextStore {
    * @param {() => T} callback - The function to execute in the new context.
    * @returns {T} The result of the callback function.
    */
-  static extend<T>(
-    newValues: Partial<Record<symbol, unknown>>,
-    callback: () => T,
-  ): T {
+  static extend<T>(newValues: Partial<Record<symbol, unknown>>, callback: () => T): T {
     const currentStore = this.storage.getStore() || {};
 
     // Create new store with current values plus new ones
     const newStore: Store = { ...currentStore };
 
     // Add new values
-    Object.getOwnPropertySymbols(newValues).forEach((key) => {
+    Object.getOwnPropertySymbols(newValues).forEach(key => {
       newStore[key] = newValues[key];
     });
 
@@ -240,11 +229,7 @@ export class ContextStore {
    * @param {(req: any) => Partial<Record<symbol, unknown>>} initialValuesFactory - Function that returns initial context values.
    * @returns Express middleware function.
    */
-  static createExpressMiddleware(
-    initialValuesFactory: (
-      req: any,
-    ) => Partial<Record<symbol, unknown>> = () => ({}),
-  ) {
+  static createExpressMiddleware(initialValuesFactory: (req: any) => Partial<Record<symbol, unknown>> = () => ({})) {
     return (req: any, res: any, next: any) => {
       const initialValues = initialValuesFactory(req);
       ContextStore.run(initialValues as Store, next);
@@ -266,7 +251,7 @@ export class TypedContextKey<T> {
    */
   constructor(
     private symbol: symbol,
-    private defaultValue?: T,
+    private defaultValue?: T
   ) {}
 
   /**

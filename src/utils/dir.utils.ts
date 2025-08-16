@@ -1,9 +1,9 @@
-import os from "os";
-import fs from "fs";
-import fsp from "fs/promises";
-import path from "path";
-import { glob } from "glob";
-import { randomBytes } from "crypto";
+import os from 'os';
+import fs from 'fs';
+import fsp from 'fs/promises';
+import path from 'path';
+import { glob } from 'glob';
+import { randomBytes } from 'crypto';
 
 /**
  * Ensures that a directory exists, creating parent directories if needed (like `mkdir -p`).
@@ -24,10 +24,7 @@ export async function ensureDir(dirPath: string): Promise<void> {
  * @returns {Promise<string[]>} Array of absolute file paths.
  * @throws {Error} If the directory cannot be read.
  */
-export async function listFiles(
-  dirPath: string,
-  recursive = false,
-): Promise<string[]> {
+export async function listFiles(dirPath: string, recursive = false): Promise<string[]> {
   const entries = await fsp.readdir(dirPath, { withFileTypes: true });
   const files: string[] = [];
 
@@ -162,7 +159,7 @@ export async function getDirSize(dirPath: string): Promise<number> {
  */
 export function watchDir(
   dirPath: string,
-  callback: (eventType: "rename" | "change", filename: string | null) => void,
+  callback: (eventType: 'rename' | 'change', filename: string | null) => void
 ): () => void {
   const watcher = fs.watch(dirPath, (eventType, filename) => {
     callback(eventType, filename);
@@ -184,7 +181,7 @@ export function watchDir(
  */
 export async function findFilesByPattern(
   pattern: string,
-  options: { cwd?: string; dot?: boolean; nodir?: boolean } = {},
+  options: { cwd?: string; dot?: boolean; nodir?: boolean } = {}
 ): Promise<string[]> {
   const defaultOptions = { nodir: true, ...options };
   return glob(pattern, defaultOptions);
@@ -198,19 +195,12 @@ export async function findFilesByPattern(
  * @returns {Promise<string[]>} Array of absolute subdirectory paths.
  * @throws {Error} If directory cannot be read.
  */
-export async function getSubdirectories(
-  dirPath: string,
-  recursive = false,
-): Promise<string[]> {
+export async function getSubdirectories(dirPath: string, recursive = false): Promise<string[]> {
   const entries = await fsp.readdir(dirPath, { withFileTypes: true });
-  const dirs = entries
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => path.join(dirPath, entry.name));
+  const dirs = entries.filter(entry => entry.isDirectory()).map(entry => path.join(dirPath, entry.name));
 
   if (recursive && dirs.length > 0) {
-    const nestedDirs = await Promise.all(
-      dirs.map((dir) => getSubdirectories(dir, true)),
-    );
+    const nestedDirs = await Promise.all(dirs.map(dir => getSubdirectories(dir, true)));
     return [...dirs, ...nestedDirs.flat()];
   }
 
@@ -232,7 +222,7 @@ export async function ensureEmptyDir(dirPath: string): Promise<void> {
       await fsp.unlink(dirPath);
     } catch (error) {
       // Ignore if file doesn't exist
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
         throw error;
       }
     }
@@ -251,11 +241,11 @@ export async function ensureEmptyDir(dirPath: string): Promise<void> {
  * @throws {Error} If directory cannot be created.
  */
 export async function createTempDir(
-  options: { prefix?: string; parentDir?: string; cleanup?: boolean } = {},
+  options: { prefix?: string; parentDir?: string; cleanup?: boolean } = {}
 ): Promise<{ path: string; cleanup: () => Promise<void> }> {
-  const prefix = options.prefix || "tmp-";
+  const prefix = options.prefix || 'tmp-';
   const parentDir = options.parentDir || os.tmpdir();
-  const dirName = `${prefix}${randomBytes(6).toString("hex")}`;
+  const dirName = `${prefix}${randomBytes(6).toString('hex')}`;
   const tempDirPath = path.join(parentDir, dirName);
 
   await ensureDir(tempDirPath);
@@ -269,7 +259,7 @@ export async function createTempDir(
   };
 
   if (options.cleanup) {
-    process.once("exit", () => {
+    process.once('exit', () => {
       try {
         fs.rmSync(tempDirPath, { recursive: true, force: true });
       } catch {
@@ -278,7 +268,7 @@ export async function createTempDir(
     });
 
     // Handle signals for better cleanup
-    ["SIGINT", "SIGTERM", "SIGUSR1", "SIGUSR2"].forEach((signal) => {
+    ['SIGINT', 'SIGTERM', 'SIGUSR1', 'SIGUSR2'].forEach(signal => {
       process.once(signal as NodeJS.Signals, () => {
         cleanup().then(() => process.exit());
       });
@@ -296,18 +286,15 @@ export async function createTempDir(
  * @returns {Promise<string | null>} Path to the newest file or null if no files.
  * @throws {Error} If directory cannot be read.
  */
-export async function findNewestFile(
-  dirPath: string,
-  recursive = false,
-): Promise<string | null> {
+export async function findNewestFile(dirPath: string, recursive = false): Promise<string | null> {
   const files = await listFiles(dirPath, recursive);
   if (files.length === 0) return null;
 
   const stats = await Promise.all(
-    files.map(async (file) => ({
+    files.map(async file => ({
       path: file,
-      mtime: (await fsp.stat(file)).mtime,
-    })),
+      mtime: (await fsp.stat(file)).mtime
+    }))
   );
 
   return stats.sort((a, b) => b.mtime.getTime() - a.mtime.getTime())[0].path;
@@ -321,18 +308,15 @@ export async function findNewestFile(
  * @returns {Promise<string | null>} Path to the oldest file or null if no files.
  * @throws {Error} If directory cannot be read.
  */
-export async function findOldestFile(
-  dirPath: string,
-  recursive = false,
-): Promise<string | null> {
+export async function findOldestFile(dirPath: string, recursive = false): Promise<string | null> {
   const files = await listFiles(dirPath, recursive);
   if (files.length === 0) return null;
 
   const stats = await Promise.all(
-    files.map(async (file) => ({
+    files.map(async file => ({
       path: file,
-      mtime: (await fsp.stat(file)).mtime,
-    })),
+      mtime: (await fsp.stat(file)).mtime
+    }))
   );
 
   return stats.sort((a, b) => a.mtime.getTime() - b.mtime.getTime())[0].path;
@@ -350,7 +334,7 @@ export async function findOldestFile(
 export async function findInDir(
   dirPath: string,
   predicate: (path: string, stat: fs.Stats) => boolean | Promise<boolean>,
-  recursive = false,
+  recursive = false
 ): Promise<string[]> {
   const entries = await fsp.readdir(dirPath, { withFileTypes: true });
   const results: string[] = [];
@@ -383,8 +367,8 @@ export async function findInDir(
  */
 export async function watchDirRecursive(
   dirPath: string,
-  callback: (eventType: "rename" | "change", filename: string) => void,
-  includeSubdirs = true,
+  callback: (eventType: 'rename' | 'change', filename: string) => void,
+  includeSubdirs = true
 ): Promise<() => void> {
   // Normalize the path to ensure consistent path separators
   const normalizedBasePath = path.normalize(dirPath);
@@ -404,7 +388,7 @@ export async function watchDirRecursive(
         callback(eventType, relativePath);
 
         // If a new directory is created, we should watch it
-        if (eventType === "rename" && includeSubdirs) {
+        if (eventType === 'rename' && includeSubdirs) {
           setTimeout(async () => {
             try {
               if (await isDirectory(fullPath)) {
@@ -435,7 +419,7 @@ export async function watchDirRecursive(
 
   // Return a function to close all watchers
   return () => {
-    watchers.forEach((watcher) => watcher.close());
+    watchers.forEach(watcher => watcher.close());
   };
 }
 
@@ -447,7 +431,7 @@ export async function watchDirRecursive(
  * @throws {Error} If directory cannot be read.
  */
 export async function getDirStats(
-  dirPath: string,
+  dirPath: string
 ): Promise<{ fileCount: number; dirCount: number; totalSize: number }> {
   let fileCount = 0;
   let dirCount = 0;
@@ -494,10 +478,10 @@ export async function walkDir(
       isDirectory: boolean;
       stats: fs.Stats;
     }) => boolean | void | Promise<boolean | void>;
-    traversalOrder?: "pre" | "post";
-  },
+    traversalOrder?: 'pre' | 'post';
+  }
 ): Promise<void> {
-  const traversalOrder = options.traversalOrder || "pre";
+  const traversalOrder = options.traversalOrder || 'pre';
   const entries = await fsp.readdir(dirPath, { withFileTypes: true });
 
   for (const entry of entries) {
@@ -507,12 +491,12 @@ export async function walkDir(
       path: entryPath,
       name: entry.name,
       isDirectory: entry.isDirectory(),
-      stats,
+      stats
     };
 
     if (entry.isDirectory()) {
       // Pre-order: visit directory before its contents
-      if (traversalOrder === "pre") {
+      if (traversalOrder === 'pre') {
         const shouldContinue = await options.visitorFn(entryInfo);
         // If the visitor returns false, don't recurse into this directory
         if (shouldContinue !== false) {
@@ -529,7 +513,7 @@ export async function walkDir(
     }
   }
 
-  if (traversalOrder === "post") {
+  if (traversalOrder === 'post') {
     // Only visit the root if this is the top-level call (not for subdirectories)
     // But since this function is always called recursively, always visit after children
     const stats = await fsp.stat(dirPath);
@@ -537,7 +521,7 @@ export async function walkDir(
       path: dirPath,
       name: path.basename(dirPath),
       isDirectory: true,
-      stats,
+      stats
     };
     await options.visitorFn(entryInfo);
   }

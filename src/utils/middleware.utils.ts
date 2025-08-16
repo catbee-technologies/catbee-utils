@@ -1,10 +1,10 @@
-import { randomUUID } from "crypto";
-import { Config } from "../config";
-import { uuid } from "./id.utils";
-import { HttpStatusCodes } from "./http-status-codes";
-import { ErrorResponse } from "./response.utils";
-import { Env } from "./env.utils";
-import { getLogger } from "./logger.utils";
+import { randomUUID } from 'crypto';
+import { Config } from '../config';
+import { uuid } from './id.utils';
+import { HttpStatusCodes } from './http-status-codes';
+import { ErrorResponse } from './response.utils';
+import { Env } from './env.utils';
+import { getLogger } from './logger.utils';
 
 /**
  * Type definitions for Express-compatible middleware
@@ -32,11 +32,7 @@ type Response = {
 
 type NextFunction = (err?: Error | any) => void;
 
-type Middleware = (
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) => void | Promise<void>;
+type Middleware = (req: Request, res: Response, next: NextFunction) => void | Promise<void>;
 
 /**
  * Attaches a unique request ID to each request.
@@ -47,11 +43,8 @@ type Middleware = (
  * @param {boolean} [options.exposeHeader=true] - Whether to expose the header in response
  * @returns {Middleware} Express-compatible middleware
  */
-export function requestId(options?: {
-  headerName?: string;
-  exposeHeader?: boolean;
-}): Middleware {
-  const headerName = options?.headerName || "X-Request-ID";
+export function requestId(options?: { headerName?: string; exposeHeader?: boolean }): Middleware {
+  const headerName = options?.headerName || 'X-Request-ID';
   const exposeHeader = options?.exposeHeader !== false;
 
   return (req, res, next) => {
@@ -79,10 +72,7 @@ export function requestId(options?: {
  * @param {boolean} [options.logOnComplete=false] - Whether to log timing info
  * @returns {Middleware} Express-compatible middleware
  */
-export function responseTime(options?: {
-  addHeader?: boolean;
-  logOnComplete?: boolean;
-}): Middleware {
+export function responseTime(options?: { addHeader?: boolean; logOnComplete?: boolean }): Middleware {
   const addHeader = options?.addHeader !== false;
   const logOnComplete = options?.logOnComplete === true;
 
@@ -96,11 +86,11 @@ export function responseTime(options?: {
     };
 
     // Handle response completion
-    res.on("finish", () => {
+    res.on('finish', () => {
       const duration = calculateDuration();
 
       if (addHeader) {
-        res.setHeader("X-Response-Time", `${duration.toFixed(2)}ms`);
+        res.setHeader('X-Response-Time', `${duration.toFixed(2)}ms`);
       }
 
       if (logOnComplete) {
@@ -126,14 +116,14 @@ export function timeout(timeoutMs: number = Config.Http.timeout): Middleware {
     const timer = setTimeout(() => {
       res.status(408).json({
         error: true,
-        message: "Request timeout",
+        message: 'Request timeout',
         status: 408,
-        timestamp: new Date().toISOString(),
+        timestamp: new Date().toISOString()
       });
     }, timeoutMs);
 
     // Clear timeout when response is sent
-    res.on("finish", () => {
+    res.on('finish', () => {
       clearTimeout(timer);
     });
 
@@ -151,12 +141,7 @@ export function timeout(timeoutMs: number = Config.Http.timeout): Middleware {
  * @param {boolean} [options.includeDetails=false] - Whether to include error details in non-production
  * @returns {object} Formatted error response
  */
-const createErrorResponse = (
-  message: string,
-  req: Request,
-  error: any,
-  options?: { includeDetails?: boolean },
-) => {
+const createErrorResponse = (message: string, req: Request, error: any, options?: { includeDetails?: boolean }) => {
   const isDev = Env.isDev();
   const includeDetails = options?.includeDetails && isDev;
 
@@ -165,7 +150,7 @@ const createErrorResponse = (
     message,
     timestamp: new Date().toISOString(),
     requestId: error?.requestId || req.id || uuid(),
-    path: req.originalUrl || req.url,
+    path: req.originalUrl || req.url
   };
 
   // Include error code if present
@@ -175,7 +160,7 @@ const createErrorResponse = (
 
   // Include stack trace in development mode if requested
   if (includeDetails && error?.stack) {
-    response.stack = error.stack.split("\n").map((line: string) => line.trim());
+    response.stack = error.stack.split('\n').map((line: string) => line.trim());
   }
 
   return response;
@@ -201,12 +186,11 @@ export function errorHandler(options?: {
 
   return (err: any, req: Request, res: Response, _next: NextFunction) => {
     // Determine status code
-    const status =
-      err?.status || err?.statusCode || HttpStatusCodes.INTERNAL_SERVER_ERROR;
+    const status = err?.status || err?.statusCode || HttpStatusCodes.INTERNAL_SERVER_ERROR;
 
     // Log error if enabled
     if (logErrors) {
-      const logMessage = `[ERROR] ${req.method} ${req.originalUrl || req.url}: ${err.message || "Unknown error"}`;
+      const logMessage = `[ERROR] ${req.method} ${req.originalUrl || req.url}: ${err.message || 'Unknown error'}`;
       logger(logMessage, err);
     }
 
@@ -217,15 +201,15 @@ export function errorHandler(options?: {
         message: err.message,
         timestamp: err.timestamp,
         requestId: err.requestId || req.id || uuid(),
-        path: req.originalUrl || req.url,
+        path: req.originalUrl || req.url
       });
     }
 
     // Handle any other errors
     return res.status(status).json(
-      createErrorResponse(err?.message || "Internal Server Error", req, err, {
-        includeDetails,
-      }),
+      createErrorResponse(err?.message || 'Internal Server Error', req, err, {
+        includeDetails
+      })
     );
   };
 }

@@ -1,6 +1,6 @@
-import { HttpStatusCodes } from "./http-status-codes";
-import { getLogger } from "./logger.utils";
-import { ErrorResponse } from "./response.utils";
+import { HttpStatusCodes } from './http-status-codes';
+import { getLogger } from './logger.utils';
+import { ErrorResponse } from './response.utils';
 
 /**
  * Generic HTTP error class used for custom exceptions with any status code.
@@ -26,7 +26,7 @@ export class InternalServerErrorException extends ErrorResponse {
   /**
    * @param message - Optional custom message. Defaults to "Internal server error".
    */
-  constructor(message: string = "Internal server error") {
+  constructor(message: string = 'Internal server error') {
     super(message);
     this.status = HttpStatusCodes.INTERNAL_SERVER_ERROR;
   }
@@ -40,7 +40,7 @@ export class UnauthorizedException extends ErrorResponse {
   /**
    * @param message - Optional custom message. Defaults to "Unauthorized".
    */
-  constructor(message: string = "Unauthorized") {
+  constructor(message: string = 'Unauthorized') {
     super(message);
     this.status = HttpStatusCodes.UNAUTHORIZED;
   }
@@ -54,7 +54,7 @@ export class BadRequestException extends ErrorResponse {
   /**
    * @param message - Optional custom message. Defaults to "Bad request".
    */
-  constructor(message: string = "Bad request") {
+  constructor(message: string = 'Bad request') {
     super(message);
     this.status = HttpStatusCodes.BAD_REQUEST;
   }
@@ -68,7 +68,7 @@ export class NotFoundException extends ErrorResponse {
   /**
    * @param message - Optional custom message. Defaults to "Resource not found".
    */
-  constructor(message: string = "Resource not found") {
+  constructor(message: string = 'Resource not found') {
     super(message);
     this.status = HttpStatusCodes.NOT_FOUND;
   }
@@ -82,7 +82,7 @@ export class ForbiddenException extends ErrorResponse {
   /**
    * @param message - Optional custom message. Defaults to "Forbidden".
    */
-  constructor(message: string = "Forbidden") {
+  constructor(message: string = 'Forbidden') {
     super(message);
     this.status = HttpStatusCodes.FORBIDDEN;
   }
@@ -96,7 +96,7 @@ export class ConflictException extends ErrorResponse {
   /**
    * @param message - Optional custom message. Defaults to "Conflict".
    */
-  constructor(message: string = "Conflict") {
+  constructor(message: string = 'Conflict') {
     super(message);
     this.status = HttpStatusCodes.CONFLICT;
   }
@@ -110,7 +110,7 @@ export class BadGatewayException extends ErrorResponse {
   /**
    * @param message - Optional custom message. Defaults to "Bad Gateway".
    */
-  constructor(message: string = "Bad Gateway") {
+  constructor(message: string = 'Bad Gateway') {
     super(message);
     this.status = HttpStatusCodes.BAD_GATEWAY;
   }
@@ -124,7 +124,7 @@ export class TooManyRequestsException extends ErrorResponse {
   /**
    * @param message - Optional custom message. Defaults to "Too many requests".
    */
-  constructor(message: string = "Too many requests") {
+  constructor(message: string = 'Too many requests') {
     super(message);
     this.status = HttpStatusCodes.TOO_MANY_REQUESTS;
   }
@@ -138,7 +138,7 @@ export class ServiceUnavailableException extends ErrorResponse {
   /**
    * @param message - Optional custom message. Defaults to "Service Unavailable".
    */
-  constructor(message: string = "Service Unavailable") {
+  constructor(message: string = 'Service Unavailable') {
     super(message);
     this.status = HttpStatusCodes.SERVICE_UNAVAILABLE;
   }
@@ -152,7 +152,7 @@ export class GatewayTimeoutException extends ErrorResponse {
   /**
    * @param message - Optional custom message. Defaults to "Gateway Timeout".
    */
-  constructor(message: string = "Gateway Timeout") {
+  constructor(message: string = 'Gateway Timeout') {
     super(message);
     this.status = HttpStatusCodes.GATEWAY_TIMEOUT;
   }
@@ -168,8 +168,8 @@ export class UnprocessableEntityException extends ErrorResponse {
    * @param details - Optional validation details or additional error context.
    */
   constructor(
-    message: string = "Unprocessable Entity",
-    public details?: Record<string, any>,
+    message: string = 'Unprocessable Entity',
+    public details?: Record<string, any>
   ) {
     super(message);
     this.status = HttpStatusCodes.UNPROCESSABLE_ENTITY;
@@ -186,8 +186,8 @@ export class MethodNotAllowedException extends ErrorResponse {
    * @param allowedMethods - Optional array of allowed HTTP methods.
    */
   constructor(
-    message: string = "Method Not Allowed",
-    public allowedMethods?: string[],
+    message: string = 'Method Not Allowed',
+    public allowedMethods?: string[]
   ) {
     super(message);
     this.status = HttpStatusCodes.METHOD_NOT_ALLOWED;
@@ -202,7 +202,7 @@ export class NotAcceptableException extends ErrorResponse {
   /**
    * @param message - Optional custom message. Defaults to "Not Acceptable".
    */
-  constructor(message: string = "Not Acceptable") {
+  constructor(message: string = 'Not Acceptable') {
     super(message);
     this.status = HttpStatusCodes.NOT_ACCEPTABLE;
   }
@@ -216,7 +216,7 @@ export class RequestTimeoutException extends ErrorResponse {
   /**
    * @param message - Optional custom message. Defaults to "Request Timeout".
    */
-  constructor(message: string = "Request Timeout") {
+  constructor(message: string = 'Request Timeout') {
     super(message);
     this.status = HttpStatusCodes.REQUEST_TIMEOUT;
   }
@@ -230,7 +230,7 @@ export class UnsupportedMediaTypeException extends ErrorResponse {
   /**
    * @param message - Optional custom message. Defaults to "Unsupported Media Type".
    */
-  constructor(message: string = "Unsupported Media Type") {
+  constructor(message: string = 'Unsupported Media Type') {
     super(message);
     this.status = HttpStatusCodes.UNSUPPORTED_MEDIA_TYPE;
   }
@@ -244,7 +244,7 @@ export class PayloadTooLargeException extends ErrorResponse {
   /**
    * @param message - Optional custom message. Defaults to "Payload Too Large".
    */
-  constructor(message: string = "Payload Too Large") {
+  constructor(message: string = 'Payload Too Large') {
     super(message);
     this.status = HttpStatusCodes.PAYLOAD_TOO_LARGE;
   }
@@ -258,7 +258,7 @@ export class InsufficientStorageException extends ErrorResponse {
   /**
    * @param message - Optional custom message. Defaults to "Insufficient Storage".
    */
-  constructor(message: string = "Insufficient Storage") {
+  constructor(message: string = 'Insufficient Storage') {
     super(message);
     this.status = HttpStatusCodes.INSUFFICIENT_STORAGE;
   }
@@ -282,10 +282,7 @@ export function isHttpError(error: unknown): error is ErrorResponse {
  * @param message - Optional custom error message.
  * @returns An instance of the appropriate HTTP error class.
  */
-export function createHttpError(
-  status: number,
-  message?: string,
-): ErrorResponse {
+export function createHttpError(status: number, message?: string): ErrorResponse {
   switch (status) {
     case HttpStatusCodes.BAD_REQUEST:
       return new BadRequestException(message);
@@ -304,7 +301,7 @@ export function createHttpError(
     case HttpStatusCodes.CONFLICT:
       return new ConflictException(message);
     case HttpStatusCodes.GONE:
-      return new HttpError(HttpStatusCodes.GONE, message || "Gone");
+      return new HttpError(HttpStatusCodes.GONE, message || 'Gone');
     case HttpStatusCodes.PAYLOAD_TOO_LARGE:
       return new PayloadTooLargeException(message);
     case HttpStatusCodes.UNSUPPORTED_MEDIA_TYPE:
@@ -334,14 +331,9 @@ export function createHttpError(
  * @param error - The object to check.
  * @returns True if object has error-like structure.
  */
-export function hasErrorShape(
-  error: unknown,
-): error is { message: string; status?: number; code?: string } {
+export function hasErrorShape(error: unknown): error is { message: string; status?: number; code?: string } {
   return (
-    typeof error === "object" &&
-    error !== null &&
-    "message" in error &&
-    typeof (error as any).message === "string"
+    typeof error === 'object' && error !== null && 'message' in error && typeof (error as any).message === 'string'
   );
 }
 
@@ -352,7 +344,7 @@ export function hasErrorShape(
  * @returns A string error message.
  */
 export function getErrorMessage(error: unknown): string {
-  if (typeof error === "string") {
+  if (typeof error === 'string') {
     return error;
   }
 
@@ -364,7 +356,7 @@ export function getErrorMessage(error: unknown): string {
     return error.message;
   }
 
-  return "Unknown error occurred";
+  return 'Unknown error occurred';
 }
 
 /**
@@ -375,7 +367,7 @@ export function getErrorMessage(error: unknown): string {
  * @returns A function that always returns or throws an HTTP error.
  */
 export function withErrorHandling<T extends (...args: any[]) => Promise<any>>(
-  handler: T,
+  handler: T
 ): (...args: Parameters<T>) => Promise<Awaited<ReturnType<T>>> {
   return async (...args: Parameters<T>) => {
     try {
@@ -386,11 +378,11 @@ export function withErrorHandling<T extends (...args: any[]) => Promise<any>>(
       }
 
       // Log the original error (consider using a proper logger)
-      getLogger().error("Caught error in handler:", error);
+      getLogger().error('Caught error in handler:', error);
 
       // Extract status code if it exists, otherwise use 500
       let status = HttpStatusCodes.INTERNAL_SERVER_ERROR;
-      if (hasErrorShape(error) && typeof error.status === "number") {
+      if (hasErrorShape(error) && typeof error.status === 'number') {
         status = error.status;
       }
 

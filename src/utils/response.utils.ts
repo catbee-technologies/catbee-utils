@@ -1,6 +1,6 @@
-import { randomUUID } from "crypto";
-import { ApiResponse } from "../types/api-response";
-import { getRequestId } from "./context-store.utils";
+import { randomUUID } from 'crypto';
+import { ApiResponse } from '../types/api-response';
+import { getRequestId } from './context-store.utils';
 
 /**
  * Standard HTTP response wrapper for successful responses.
@@ -10,7 +10,7 @@ import { getRequestId } from "./context-store.utils";
  */
 export class SuccessResponse<T> implements ApiResponse<T> {
   /** Message describing the result of the operation. */
-  message: string = "Success";
+  message: string = 'Success';
 
   /** Whether the response is an error. Always false in success responses. */
   error: boolean = false;
@@ -40,10 +40,7 @@ export class SuccessResponse<T> implements ApiResponse<T> {
  * Wrapper for error responses that extends the native `Error` object.
  * Implements `ApiResponse` but omits the `data` field (which should not be present in errors).
  */
-export class ErrorResponse
-  extends Error
-  implements Omit<ApiResponse<never>, "data">
-{
+export class ErrorResponse extends Error implements Omit<ApiResponse<never>, 'data'> {
   /** HTTP status code associated with the error (e.g., 404, 500). */
   status: number;
 
@@ -105,11 +102,7 @@ export class PaginatedResponse<T> extends SuccessResponse<T[]> {
    * @param {number} pagination.pageSize - Number of items per page.
    * @param {string} [message="Success"] - Optional custom message.
    */
-  constructor(
-    items: T[],
-    pagination: { total: number; page: number; pageSize: number },
-    message: string = "Success",
-  ) {
+  constructor(items: T[], pagination: { total: number; page: number; pageSize: number }, message: string = 'Success') {
     super(message, items);
 
     this.total = pagination.total;
@@ -131,7 +124,7 @@ export class NoContentResponse extends SuccessResponse<null> {
    *
    * @param {string} [message="Operation completed successfully"] - Optional custom message.
    */
-  constructor(message: string = "Operation completed successfully") {
+  constructor(message: string = 'Operation completed successfully') {
     super(message, null);
   }
 }
@@ -172,10 +165,7 @@ export class RedirectResponse {
  * @param {string} [message="Success"] - Optional custom message.
  * @returns {SuccessResponse<T>} A properly formatted success response.
  */
-export function createSuccessResponse<T>(
-  data: T,
-  message: string = "Success",
-): SuccessResponse<T> {
+export function createSuccessResponse<T>(data: T, message: string = 'Success'): SuccessResponse<T> {
   return new SuccessResponse<T>(message, data);
 }
 
@@ -186,10 +176,7 @@ export function createSuccessResponse<T>(
  * @param {number} [statusCode=500] - HTTP status code for the error.
  * @returns {ErrorResponse} A properly formatted error response.
  */
-export function createErrorResponse(
-  message: string,
-  statusCode: number = 500,
-): ErrorResponse {
+export function createErrorResponse(message: string, statusCode: number = 500): ErrorResponse {
   return new ErrorResponse(message, statusCode);
 }
 
@@ -207,7 +194,7 @@ export function createPaginatedResponse<T>(
   allItems: T[],
   page: number,
   pageSize: number,
-  message: string = "Success",
+  message: string = 'Success'
 ): PaginatedResponse<T> {
   // Ensure valid pagination parameters
   const validPage = Math.max(1, page);
@@ -225,9 +212,9 @@ export function createPaginatedResponse<T>(
     {
       total: allItems.length,
       page: validPage,
-      pageSize: validPageSize,
+      pageSize: validPageSize
     },
-    message,
+    message
   );
 }
 
@@ -237,24 +224,21 @@ export function createPaginatedResponse<T>(
  * @param {any} res - Express response object.
  * @param {SuccessResponse<any> | ErrorResponse | RedirectResponse} apiResponse - API response instance.
  */
-export function sendResponse(
-  res: any,
-  apiResponse: SuccessResponse<any> | ErrorResponse | RedirectResponse,
-): void {
+export function sendResponse(res: any, apiResponse: SuccessResponse<any> | ErrorResponse | RedirectResponse): void {
   // Handle redirects
-  if ("redirectUrl" in apiResponse) {
+  if ('redirectUrl' in apiResponse) {
     res.redirect(apiResponse.statusCode, apiResponse.redirectUrl);
     return;
   }
 
   // Handle errors
-  if ("error" in apiResponse && apiResponse.error) {
+  if ('error' in apiResponse && apiResponse.error) {
     const errorResponse = apiResponse as ErrorResponse;
     res.status(errorResponse.status).json({
       error: true,
       message: errorResponse.message,
       timestamp: errorResponse.timestamp,
-      requestId: errorResponse.requestId,
+      requestId: errorResponse.requestId
     });
     return;
   }

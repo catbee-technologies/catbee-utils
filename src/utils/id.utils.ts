@@ -1,4 +1,4 @@
-import { randomUUID, randomBytes } from "crypto";
+import { randomUUID, randomBytes } from 'crypto';
 
 /**
  * Generates a UUID v4 string (RFC 4122).
@@ -16,12 +16,12 @@ export function uuid(): string {
  * @returns {string} Nanoid-style random string.
  */
 export function nanoId(length: number = 21): string {
-  if (length <= 0) return "";
-  let id = "";
+  if (length <= 0) return '';
+  let id = '';
   while (id.length < length) {
     id += randomBytes(Math.ceil((length * 3) / 4))
-      .toString("base64url")
-      .replace(/[+/=]/g, "");
+      .toString('base64url')
+      .replace(/[+/=]/g, '');
   }
   return id.slice(0, length);
 }
@@ -36,8 +36,8 @@ export function randomHex(byteLength: number = 16): string {
   // Use Node.js crypto for both Node and browser compatibility
   // Prefer randomBytes if available (Node), fallback to getRandomValues for browser (not used here)
   return randomBytes(byteLength)
-    .toString("hex")
-    .padStart(byteLength * 2, "0")
+    .toString('hex')
+    .padStart(byteLength * 2, '0')
     .slice(0, byteLength * 2);
 }
 
@@ -60,5 +60,5 @@ export function randomInt(min: number, max: number): number {
  * @returns {string} Random base64 string (URL-safe, no padding).
  */
 export function randomBase64(byteLength: number = 16): string {
-  return randomBytes(byteLength).toString("base64url");
+  return randomBytes(byteLength).toString('base64url');
 }

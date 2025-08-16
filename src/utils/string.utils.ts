@@ -5,7 +5,7 @@
  * @returns {string} The string with the first character in uppercase.
  */
 export function capitalize(str: string): string {
-  return str.length === 0 ? "" : str.charAt(0).toUpperCase() + str.slice(1);
+  return str.length === 0 ? '' : str.charAt(0).toUpperCase() + str.slice(1);
 }
 
 /**
@@ -16,9 +16,9 @@ export function capitalize(str: string): string {
  */
 export function toKebabCase(str: string): string {
   return str
-    .replace(/([a-z])([A-Z])/g, "$1-$2") // camelCase -> camel-Case
-    .replace(/\s+/g, "-") // spaces to dash
-    .replace(/_+/g, "-") // underscores to dash
+    .replace(/([a-z])([A-Z])/g, '$1-$2') // camelCase -> camel-Case
+    .replace(/\s+/g, '-') // spaces to dash
+    .replace(/_+/g, '-') // underscores to dash
     .toLowerCase();
 }
 
@@ -41,10 +41,10 @@ export function toCamelCase(str: string): string {
 export function slugify(str: string): string {
   return str
     .toLowerCase()
-    .replace(/[^\w\s-]/g, "") // remove non-word
-    .replace(/\s+/g, "-") // spaces to dash
-    .replace(/-+/g, "-") // multiple dashes to one
-    .replace(/^-+|-+$/g, ""); // trim leading/trailing dashes
+    .replace(/[^\w\s-]/g, '') // remove non-word
+    .replace(/\s+/g, '-') // spaces to dash
+    .replace(/-+/g, '-') // multiple dashes to one
+    .replace(/^-+|-+$/g, ''); // trim leading/trailing dashes
 }
 
 /**
@@ -55,7 +55,7 @@ export function slugify(str: string): string {
  * @returns {string} The truncated string.
  */
 export function truncate(str: string, len: number): string {
-  return str.length > len ? str.slice(0, len) + "..." : str;
+  return str.length > len ? str.slice(0, len) + '...' : str;
 }
 
 /**
@@ -77,9 +77,9 @@ export function toPascalCase(str: string): string {
 export function toSnakeCase(str: string): string {
   return str
     .trim()
-    .replace(/([a-z])([A-Z])/g, "$1_$2") // camelCase -> camel_Case
-    .replace(/\s+/g, "_") // spaces to underscore
-    .replace(/-+/g, "_") // dashes to underscore
+    .replace(/([a-z])([A-Z])/g, '$1_$2') // camelCase -> camel_Case
+    .replace(/\s+/g, '_') // spaces to underscore
+    .replace(/-+/g, '_') // dashes to underscore
     .toLowerCase();
 }
 
@@ -93,20 +93,13 @@ export function toSnakeCase(str: string): string {
  * @param {string} [maskChar="*"] - Character to use for masking.
  * @returns {string} The masked string.
  */
-export function mask(
-  str: string,
-  visibleStart: number = 0,
-  visibleEnd: number = 0,
-  maskChar: string = "*",
-): string {
-  if (!str || str.length === 0) return "";
+export function mask(str: string, visibleStart: number = 0, visibleEnd: number = 0, maskChar: string = '*'): string {
+  if (!str || str.length === 0) return '';
   if (visibleStart >= str.length) return str;
 
   const start = str.slice(0, visibleStart);
-  const end = visibleEnd > 0 ? str.slice(-visibleEnd) : "";
-  const masked = maskChar.repeat(
-    Math.max(0, str.length - visibleStart - visibleEnd),
-  );
+  const end = visibleEnd > 0 ? str.slice(-visibleEnd) : '';
+  const masked = maskChar.repeat(Math.max(0, str.length - visibleStart - visibleEnd));
 
   return start + masked + end;
 }
@@ -118,7 +111,7 @@ export function mask(
  * @returns {string} The string with HTML tags removed.
  */
 export function stripHtml(str: string): string {
-  return str.replace(/<[^>]*>/g, "");
+  return str.replace(/<[^>]*>/g, '');
 }
 
 /**
@@ -139,7 +132,7 @@ export function equalsIgnoreCase(a: string, b: string): boolean {
  * @returns {string} The reversed string.
  */
 export function reverse(str: string): string {
-  return str.split("").reverse().join("");
+  return str.split('').reverse().join('');
 }
 
 /**
@@ -150,11 +143,7 @@ export function reverse(str: string): string {
  * @param {boolean} [caseSensitive=true] - Whether to perform case-sensitive counting.
  * @returns {number} Number of occurrences.
  */
-export function countOccurrences(
-  str: string,
-  substring: string,
-  caseSensitive: boolean = true,
-): number {
+export function countOccurrences(str: string, substring: string, caseSensitive: boolean = true): number {
   if (!caseSensitive) {
     str = str.toLowerCase();
     substring = substring.toLowerCase();

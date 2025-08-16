@@ -8,23 +8,23 @@ import {
   createDecipheriv,
   scrypt,
   timingSafeEqual,
-  CipherGCMTypes,
-} from "crypto";
-import { promisify } from "util";
+  CipherGCMTypes
+} from 'crypto';
+import { promisify } from 'util';
 
 export type BufferEncoding =
-  | "ascii"
-  | "utf8"
-  | "utf-8"
-  | "utf16le"
-  | "utf-16le"
-  | "ucs2"
-  | "ucs-2"
-  | "base64"
-  | "base64url"
-  | "latin1"
-  | "binary"
-  | "hex";
+  | 'ascii'
+  | 'utf8'
+  | 'utf-8'
+  | 'utf16le'
+  | 'utf-16le'
+  | 'ucs2'
+  | 'ucs-2'
+  | 'base64'
+  | 'base64url'
+  | 'latin1'
+  | 'binary'
+  | 'hex';
 
 /**
  * Generates an HMAC digest using the specified algorithm and secret key.
@@ -35,12 +35,7 @@ export type BufferEncoding =
  * @param {BinaryToTextEncoding} [encoding='hex'] - Output encoding ('hex', 'base64', etc).
  * @returns {string} HMAC digest as a string.
  */
-export function hmac(
-  algorithm: string,
-  input: string,
-  secret: string,
-  encoding: BinaryToTextEncoding = "hex",
-): string {
+export function hmac(algorithm: string, input: string, secret: string, encoding: BinaryToTextEncoding = 'hex'): string {
   return createHmac(algorithm, secret).update(input).digest(encoding);
 }
 
@@ -52,11 +47,7 @@ export function hmac(
  * @param {BinaryToTextEncoding} [encoding='hex'] - Output encoding ('hex', 'base64', etc).
  * @returns {string} Hash digest as a string.
  */
-export function hash(
-  algorithm: string,
-  input: string,
-  encoding: BinaryToTextEncoding = "hex",
-): string {
+export function hash(algorithm: string, input: string, encoding: BinaryToTextEncoding = 'hex'): string {
   return createHash(algorithm).update(input).digest(encoding);
 }
 
@@ -68,7 +59,7 @@ export function hash(
  * @returns {string} SHA-256 HMAC digest as a string.
  */
 export function sha256Hmac(input: string, secret: string): string {
-  return hmac("sha256", input, secret);
+  return hmac('sha256', input, secret);
 }
 
 /**
@@ -78,11 +69,8 @@ export function sha256Hmac(input: string, secret: string): string {
  * @param {BinaryToTextEncoding} [encoding='hex'] - Output encoding.
  * @returns {string} SHA-1 hash as a string.
  */
-export function sha1(
-  input: string,
-  encoding: BinaryToTextEncoding = "hex",
-): string {
-  return hash("sha1", input, encoding);
+export function sha1(input: string, encoding: BinaryToTextEncoding = 'hex'): string {
+  return hash('sha1', input, encoding);
 }
 
 /**
@@ -92,11 +80,8 @@ export function sha1(
  * @param {BinaryToTextEncoding} [encoding='hex'] - Output encoding.
  * @returns {string} SHA-256 hash as a string.
  */
-export function sha256(
-  input: string,
-  encoding: BinaryToTextEncoding = "hex",
-): string {
-  return hash("sha256", input, encoding);
+export function sha256(input: string, encoding: BinaryToTextEncoding = 'hex'): string {
+  return hash('sha256', input, encoding);
 }
 
 /**
@@ -106,7 +91,7 @@ export function sha256(
  * @returns {string} MD5 hash as a string.
  */
 export function md5(input: string): string {
-  return hash("md5", input);
+  return hash('md5', input);
 }
 
 /**
@@ -135,10 +120,7 @@ export function generateRandomBytes(byteLength: number = 32): Buffer {
  * @param {BinaryToTextEncoding} [encoding='hex'] - Output encoding.
  * @returns {string} Random string in specified encoding.
  */
-export function generateRandomBytesAsString(
-  byteLength: number = 32,
-  encoding: BinaryToTextEncoding = "hex",
-): string {
+export function generateRandomBytesAsString(byteLength: number = 32, encoding: BinaryToTextEncoding = 'hex'): string {
   return randomBytes(byteLength).toString(encoding);
 }
 
@@ -149,13 +131,10 @@ export function generateRandomBytesAsString(
  * @param {number} [byteLength=24] - Number of random bytes to generate.
  * @returns {string} Formatted API key.
  */
-export function generateApiKey(
-  prefix: string = "",
-  byteLength: number = 24,
-): string {
-  const randomString = generateRandomBytesAsString(byteLength, "base64");
+export function generateApiKey(prefix: string = '', byteLength: number = 24): string {
+  const randomString = generateRandomBytesAsString(byteLength, 'base64');
   const key = randomString
-    .replace(/[+/=]/g, "") // Remove non-URL-safe characters
+    .replace(/[+/=]/g, '') // Remove non-URL-safe characters
     .substring(0, 32); // Limit length
 
   return prefix ? `${prefix}_${key}` : key;
@@ -168,11 +147,8 @@ export function generateApiKey(
  * @param {string | Buffer | Uint8Array} b - Second value to compare
  * @returns {boolean} True if values are equal
  */
-export function safeCompare(
-  a: string | Buffer | Uint8Array,
-  b: string | Buffer | Uint8Array,
-): boolean {
-  if (typeof a === "string" && typeof b === "string") {
+export function safeCompare(a: string | Buffer | Uint8Array, b: string | Buffer | Uint8Array): boolean {
+  if (typeof a === 'string' && typeof b === 'string') {
     // Convert strings to buffers
     const bufA = Buffer.from(a);
     const bufB = Buffer.from(b);
@@ -181,22 +157,14 @@ export function safeCompare(
     if (bufA.length !== bufB.length) return false;
 
     return timingSafeEqual(bufA, bufB);
-  } else if (
-    (a instanceof Buffer || a instanceof Uint8Array) &&
-    (b instanceof Buffer || b instanceof Uint8Array)
-  ) {
+  } else if ((a instanceof Buffer || a instanceof Uint8Array) && (b instanceof Buffer || b instanceof Uint8Array)) {
     // Compare lengths first
     if (a.length !== b.length) return false;
 
-    return timingSafeEqual(
-      a instanceof Buffer ? a : Buffer.from(a),
-      b instanceof Buffer ? b : Buffer.from(b),
-    );
+    return timingSafeEqual(a instanceof Buffer ? a : Buffer.from(a), b instanceof Buffer ? b : Buffer.from(b));
   }
 
-  throw new Error(
-    "Cannot compare: inputs must be strings, Buffers, or Uint8Arrays",
-  );
+  throw new Error('Cannot compare: inputs must be strings, Buffers, or Uint8Arrays');
 }
 
 /**
@@ -238,9 +206,7 @@ export interface EncryptionResult {
 }
 
 // Promisified version of scrypt for key derivation
-const scryptAsync = promisify<string | Buffer, string | Buffer, number, Buffer>(
-  scrypt,
-);
+const scryptAsync = promisify<string | Buffer, string | Buffer, number, Buffer>(scrypt);
 
 /**
  * Encrypts data using a symmetric key with secure defaults (AES-256-GCM).
@@ -253,18 +219,17 @@ const scryptAsync = promisify<string | Buffer, string | Buffer, number, Buffer>(
 export async function encrypt(
   data: string | Buffer,
   key: string | Buffer,
-  options: EncryptionOptions = {},
+  options: EncryptionOptions = {}
 ): Promise<EncryptionResult> {
-  const algorithm = options.algorithm || "aes-256-gcm";
-  const inputEncoding = options.inputEncoding || "utf8";
-  const outputEncoding = options.outputEncoding || "hex";
+  const algorithm = options.algorithm || 'aes-256-gcm';
+  const inputEncoding = options.inputEncoding || 'utf8';
+  const outputEncoding = options.outputEncoding || 'hex';
 
   // Generate a random IV
   const iv = randomBytes(16);
 
   // Derive key using scrypt if key is a string (passphrase)
-  const derivedKey =
-    typeof key === "string" ? await scryptAsync(key, iv.slice(0, 8), 32) : key;
+  const derivedKey = typeof key === 'string' ? await scryptAsync(key, iv.slice(0, 8), 32) : key;
 
   // Create cipher
   const cipher = createCipheriv(algorithm, derivedKey, iv);
@@ -272,30 +237,22 @@ export async function encrypt(
   // Encrypt the data
   let ciphertext: string | Buffer;
 
-  if (typeof data === "string") {
-    ciphertext = cipher.update(
-      data,
-      inputEncoding,
-      outputEncoding as BufferEncoding,
-    );
+  if (typeof data === 'string') {
+    ciphertext = cipher.update(data, inputEncoding, outputEncoding as BufferEncoding);
     ciphertext += cipher.final(outputEncoding as BufferEncoding);
   } else {
     const encrypted = Buffer.concat([cipher.update(data), cipher.final()]);
-    ciphertext = outputEncoding
-      ? encrypted.toString(outputEncoding)
-      : encrypted;
+    ciphertext = outputEncoding ? encrypted.toString(outputEncoding) : encrypted;
   }
 
   // Get authentication tag if using GCM mode
-  const authTag = algorithm.includes("gcm")
-    ? (cipher as any).getAuthTag()
-    : undefined;
+  const authTag = algorithm.includes('gcm') ? (cipher as any).getAuthTag() : undefined;
 
   return {
     ciphertext,
     iv,
     authTag,
-    algorithm,
+    algorithm
   };
 }
 
@@ -310,42 +267,31 @@ export async function encrypt(
 export async function decrypt(
   encryptedData: EncryptionResult,
   key: string | Buffer,
-  options: DecryptionOptions = {},
+  options: DecryptionOptions = {}
 ): Promise<string | Buffer> {
-  const algorithm =
-    options.algorithm || encryptedData.algorithm || "aes-256-gcm";
-  const inputEncoding = options.inputEncoding || "hex";
-  const outputEncoding = options.outputEncoding || "utf8";
+  const algorithm = options.algorithm || encryptedData.algorithm || 'aes-256-gcm';
+  const inputEncoding = options.inputEncoding || 'hex';
+  const outputEncoding = options.outputEncoding || 'utf8';
 
   // Derive key using scrypt if key is a string (passphrase)
-  const derivedKey =
-    typeof key === "string"
-      ? await scryptAsync(key, encryptedData.iv.slice(0, 8), 32)
-      : key;
+  const derivedKey = typeof key === 'string' ? await scryptAsync(key, encryptedData.iv.slice(0, 8), 32) : key;
 
   // Create decipher
   const decipher = createDecipheriv(algorithm, derivedKey, encryptedData.iv);
 
   // Set auth tag if using GCM mode
-  if (encryptedData.authTag && algorithm.includes("gcm")) {
+  if (encryptedData.authTag && algorithm.includes('gcm')) {
     (decipher as any).setAuthTag(encryptedData.authTag);
   }
 
   // Decrypt the data
   let decrypted: string | Buffer;
 
-  if (typeof encryptedData.ciphertext === "string") {
-    decrypted = decipher.update(
-      encryptedData.ciphertext,
-      inputEncoding as BufferEncoding,
-      outputEncoding,
-    );
+  if (typeof encryptedData.ciphertext === 'string') {
+    decrypted = decipher.update(encryptedData.ciphertext, inputEncoding as BufferEncoding, outputEncoding);
     decrypted += decipher.final(outputEncoding);
   } else {
-    const result = Buffer.concat([
-      decipher.update(encryptedData.ciphertext),
-      decipher.final(),
-    ]);
+    const result = Buffer.concat([decipher.update(encryptedData.ciphertext), decipher.final()]);
     decrypted = outputEncoding ? result.toString(outputEncoding) : result;
   }
 
@@ -363,22 +309,22 @@ export async function decrypt(
 export function createSignedToken(
   payload: Record<string, any>,
   secret: string,
-  expiresInSeconds: number = 3600,
+  expiresInSeconds: number = 3600
 ): string {
   // Create payload with expiration
   const tokenPayload = {
     ...payload,
-    exp: Math.floor(Date.now() / 1000) + expiresInSeconds,
+    exp: Math.floor(Date.now() / 1000) + expiresInSeconds
   };
 
   // Convert to string
   const payloadStr = JSON.stringify(tokenPayload);
 
   // Base64 encode the payload
-  const base64Payload = Buffer.from(payloadStr).toString("base64url");
+  const base64Payload = Buffer.from(payloadStr).toString('base64url');
 
   // Create signature
-  const signature = hmac("sha256", base64Payload, secret, "base64url");
+  const signature = hmac('sha256', base64Payload, secret, 'base64url');
 
   // Combine payload and signature
   return `${base64Payload}.${signature}`;
@@ -391,22 +337,19 @@ export function createSignedToken(
  * @param {string} secret - Secret key for verification
  * @returns {object | null} Decoded payload if valid, null if invalid
  */
-export function verifySignedToken(
-  token: string,
-  secret: string,
-): Record<string, any> | null {
+export function verifySignedToken(token: string, secret: string): Record<string, any> | null {
   try {
     // Split token into parts
-    const [payloadB64, signature] = token.split(".");
+    const [payloadB64, signature] = token.split('.');
 
     if (!payloadB64 || !signature) return null;
 
     // Verify signature
-    const expectedSignature = hmac("sha256", payloadB64, secret, "base64url");
+    const expectedSignature = hmac('sha256', payloadB64, secret, 'base64url');
     if (!safeCompare(signature, expectedSignature)) return null;
 
     // Decode payload
-    const payloadStr = Buffer.from(payloadB64, "base64url").toString("utf8");
+    const payloadStr = Buffer.from(payloadB64, 'base64url').toString('utf8');
     const payload = JSON.parse(payloadStr);
 
     // Check expiration

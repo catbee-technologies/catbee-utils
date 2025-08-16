@@ -12,11 +12,11 @@ export function isEmail(str: string): boolean {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str)) return false;
 
   // Additional checks
-  const [local, domain] = str.split("@");
+  const [local, domain] = str.split('@');
   if (!local || !domain) return false;
 
   // Disallow consecutive dots in local or domain part
-  if (local.includes("..") || domain.includes("..")) return false;
+  if (local.includes('..') || domain.includes('..')) return false;
 
   return true;
 }
@@ -28,9 +28,7 @@ export function isEmail(str: string): boolean {
  * @returns {boolean} True if valid UUID, else false.
  */
 export function isUUID(str: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-    str,
-  );
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
 }
 
 /**
@@ -55,10 +53,10 @@ export function isURL(str: string): boolean {
  * @returns {boolean} True if looks like a phone number.
  */
 export function isPhone(str: string): boolean {
-  if (typeof str !== "string") return false;
+  if (typeof str !== 'string') return false;
 
   // Strip non-digit characters to count total digits
-  const digitsOnly = str.replace(/\D/g, "");
+  const digitsOnly = str.replace(/\D/g, '');
   if (digitsOnly.length < 6 || digitsOnly.length > 15) return false;
 
   // Accept typical phone characters: +, digits, space, -, (, )
@@ -82,9 +80,9 @@ export function isAlphanumeric(str: string): boolean {
  * @returns {boolean} True if the value is numeric.
  */
 export function isNumeric(value: string | number): boolean {
-  if (typeof value === "string" && value.trim() === "") return false;
-  const num = typeof value === "number" ? value : Number(value);
-  return typeof num === "number" && isFinite(num);
+  if (typeof value === 'string' && value.trim() === '') return false;
+  const num = typeof value === 'number' ? value : Number(value);
+  return typeof num === 'number' && isFinite(num);
 }
 
 /**
@@ -104,15 +102,12 @@ export function isHexColor(str: string): boolean {
  * @returns {boolean}
  */
 export function isISODate(str: string): boolean {
-  const isoRegex =
-    /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?)?$/;
+  const isoRegex = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?)?$/;
 
   if (!isoRegex.test(str)) return false;
 
   const date = new Date(str);
-  return (
-    !isNaN(date.getTime()) && date.toISOString().startsWith(str.slice(0, 10))
-  );
+  return !isNaN(date.getTime()) && date.toISOString().startsWith(str.slice(0, 10));
 }
 
 /**
@@ -123,11 +118,7 @@ export function isISODate(str: string): boolean {
  * @param {number} max - Maximum length (inclusive).
  * @returns {boolean} True if string length is within range.
  */
-export function isLengthBetween(
-  str: string,
-  min: number,
-  max: number,
-): boolean {
+export function isLengthBetween(str: string, min: number, max: number): boolean {
   return str.length >= min && str.length <= max;
 }
 
@@ -139,11 +130,7 @@ export function isLengthBetween(
  * @param {number} max - Maximum value.
  * @returns {boolean} True if number is within range.
  */
-export function isNumberBetween(
-  value: number,
-  min: number,
-  max: number,
-): boolean {
+export function isNumberBetween(value: number, min: number, max: number): boolean {
   return value >= min && value <= max;
 }
 
@@ -180,10 +167,10 @@ export function isStrongPassword(str: string): boolean {
  * @returns {boolean} True if valid IPv4 address.
  */
 export function isIPv4(str: string): boolean {
-  const parts = str.split(".");
+  const parts = str.split('.');
   if (parts.length !== 4) return false;
 
-  return parts.every((part) => {
+  return parts.every(part => {
     const num = parseInt(part, 10);
     return part === num.toString() && num >= 0 && num <= 255;
   });
@@ -198,7 +185,7 @@ export function isIPv4(str: string): boolean {
 export function isIPv6(str: string): boolean {
   // Simple but effective check for common IPv6 formats
   return /^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]+|::(ffff(:0{1,4})?:)?((25[0-5]|(2[0-4]|1?[0-9])?[0-9])\.){3}(25[0-5]|(2[0-4]|1?[0-9])?[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1?[0-9])?[0-9])\.){3}(25[0-5]|(2[0-4]|1?[0-9])?[0-9]))$/.test(
-    str,
+    str
   );
 }
 
@@ -210,7 +197,7 @@ export function isIPv6(str: string): boolean {
  */
 export function isCreditCard(str: string): boolean {
   // Remove non-digit characters
-  const cardNumber = str.replace(/\D/g, "");
+  const cardNumber = str.replace(/\D/g, '');
   if (cardNumber.length < 13 || cardNumber.length > 19) return false;
 
   // Luhn algorithm implementation
@@ -255,12 +242,9 @@ export function isValidJSON(str: string): boolean {
  * @param {(item: unknown) => boolean} [itemGuard] - Optional function to validate each item.
  * @returns {boolean} True if value is an array (with optional item validation).
  */
-export function isArray<T = unknown>(
-  value: unknown,
-  itemGuard?: (item: unknown) => item is T,
-): value is T[] {
+export function isArray<T = unknown>(value: unknown, itemGuard?: (item: unknown) => item is T): value is T[] {
   if (!Array.isArray(value)) return false;
-  return !itemGuard || value.every((item) => itemGuard(item));
+  return !itemGuard || value.every(item => itemGuard(item));
 }
 
 /**
@@ -270,9 +254,7 @@ export function isArray<T = unknown>(
  * @returns {boolean} True if valid base64.
  */
 export function isBase64(str: string): boolean {
-  return /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(
-    str,
-  );
+  return /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(str);
 }
 
 /**
@@ -282,15 +264,9 @@ export function isBase64(str: string): boolean {
  * @param {string[]} requiredProps - Array of required property names.
  * @returns {boolean} True if all required properties exist.
  */
-export function hasRequiredProps(
-  obj: Record<string, unknown>,
-  requiredProps: string[],
-): boolean {
+export function hasRequiredProps(obj: Record<string, unknown>, requiredProps: string[]): boolean {
   return requiredProps.every(
-    (prop) =>
-      Object.prototype.hasOwnProperty.call(obj, prop) &&
-      obj[prop] !== undefined &&
-      obj[prop] !== null,
+    prop => Object.prototype.hasOwnProperty.call(obj, prop) && obj[prop] !== undefined && obj[prop] !== null
   );
 }
 
@@ -302,11 +278,7 @@ export function hasRequiredProps(
  * @param {Date} [maxDate] - Optional maximum date (inclusive).
  * @returns {boolean} True if date is within range.
  */
-export function isDateInRange(
-  date: Date,
-  minDate?: Date,
-  maxDate?: Date,
-): boolean {
+export function isDateInRange(date: Date, minDate?: Date, maxDate?: Date): boolean {
   if (!(date instanceof Date) || isNaN(date.getTime())) return false;
 
   if (minDate && date < minDate) return false;
@@ -333,9 +305,6 @@ export function matchesPattern(str: string, pattern: RegExp): boolean {
  * @param {Array<(value: unknown) => boolean>} validators - Array of validation functions.
  * @returns {boolean} True if value passes all validations.
  */
-export function validateAll(
-  value: unknown,
-  validators: Array<(value: unknown) => boolean>,
-): boolean {
-  return validators.every((validator) => validator(value));
+export function validateAll(value: unknown, validators: Array<(value: unknown) => boolean>): boolean {
+  return validators.every(validator => validator(value));
 }

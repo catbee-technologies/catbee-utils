@@ -1,12 +1,12 @@
-import pino, { LoggerOptions, stdTimeFunctions } from "pino";
-import type { Logger as PinoLogger } from "pino"; // Type-only import
-import { Config } from "../config";
-import { ContextStore, StoreKeys } from "./context-store.utils";
+import pino, { LoggerOptions, stdTimeFunctions } from 'pino';
+import type { Logger as PinoLogger } from 'pino'; // Type-only import
+import { Config } from '../config';
+import { ContextStore, StoreKeys } from './context-store.utils';
 
 /**
  * Symbol used to store the root logger in the Node.js global object.
  */
-const GLOBAL_LOGGER_KEY = Symbol.for("logger");
+const GLOBAL_LOGGER_KEY = Symbol.for('logger');
 
 /**
  * Logger type for application-wide logging.
@@ -21,7 +21,7 @@ export type LoggerLevels = pino.Level;
 /**
  * Use an object compatible with either modern or legacy global scopes.
  */
-export const _globalThis = typeof globalThis === "object" ? globalThis : global;
+export const _globalThis = typeof globalThis === 'object' ? globalThis : global;
 const _global = _globalThis as unknown as { [GLOBAL_LOGGER_KEY]: PinoLogger };
 
 /**
@@ -35,19 +35,16 @@ function setupLogger(): void {
     name: Config.Logger.name,
     level: Config.Logger.level,
     redact: {
-      paths: ["req.authorization", "url"],
+      paths: ['req.authorization', 'url'],
       censor(value, path) {
-        if (path[0] === "url") {
-          return value.replace(
-            /access_token=[a-zA-Z0-9_-]*/,
-            "access_token=***",
-          );
-        } else if (path[1] === "authorization") {
-          return value.replace(/\s+(\S+)$/, " ***");
+        if (path[0] === 'url') {
+          return value.replace(/access_token=[a-zA-Z0-9_-]*/, 'access_token=***');
+        } else if (path[1] === 'authorization') {
+          return value.replace(/\s+(\S+)$/, ' ***');
         }
-        return "***";
-      },
-    },
+        return '***';
+      }
+    }
   };
 
   if (Config.Logger.isoTimestamp) {
@@ -55,7 +52,7 @@ function setupLogger(): void {
   }
 
   _global[GLOBAL_LOGGER_KEY] = pino(logParams);
-  _global[GLOBAL_LOGGER_KEY].debug("Logger initialized");
+  _global[GLOBAL_LOGGER_KEY].debug('Logger initialized');
 }
 
 /**
@@ -84,10 +81,7 @@ export function getLogger(): PinoLogger {
  * @param {Logger} [parentLogger] - Parent logger (defaults to current context logger or global)
  * @returns {Logger} Child logger with merged context
  */
-export function createChildLogger(
-  bindings: Record<string, any>,
-  parentLogger?: PinoLogger,
-): PinoLogger {
+export function createChildLogger(bindings: Record<string, any>, parentLogger?: PinoLogger): PinoLogger {
   const logger = parentLogger || getLogger();
   return logger.child(bindings);
 }
@@ -99,22 +93,17 @@ export function createChildLogger(
  * @param {object} [additionalContext] - Additional context to include in logs
  * @returns {Logger} Request-scoped logger instance
  */
-export function createRequestLogger(
-  requestId: string,
-  additionalContext: Record<string, any> = {},
-): PinoLogger {
+export function createRequestLogger(requestId: string, additionalContext: Record<string, any> = {}): PinoLogger {
   const logger = createChildLogger({
     requestId,
-    ...additionalContext,
+    ...additionalContext
   });
 
   try {
     ContextStore.set(StoreKeys.LOGGER, logger);
   } catch {
     // Context not initialized, can't store logger
-    logger.debug(
-      "Failed to store logger in context - AsyncLocalStorage not initialized",
-    );
+    logger.debug('Failed to store logger in context - AsyncLocalStorage not initialized');
   }
 
   return logger;
@@ -127,17 +116,13 @@ export function createRequestLogger(
  * @param {string} [message] - Optional message to include
  * @param {Record<string, any>} [context] - Additional context properties
  */
-export function logError(
-  error: Error | unknown,
-  message?: string,
-  context?: Record<string, any>,
-): void {
+export function logError(error: Error | unknown, message?: string, context?: Record<string, any>): void {
   const logger = getLogger();
 
   const errObj = error instanceof Error ? error : new Error(String(error));
   const logContext = {
     ...context,
-    err: errObj,
+    err: errObj
   };
 
   logger.error(logContext, message || errObj.message);

@@ -44,7 +44,7 @@ export interface Pagination<T = any> {
     sortBy: string;
 
     /** Sort order: ascending or descending. */
-    sortOrder: "asc" | "desc";
+    sortOrder: 'asc' | 'desc';
   };
 }
 
@@ -58,7 +58,7 @@ export type PaginationResponse<T = any> = Pagination<T>;
  * Error response structure with additional metadata.
  * Used for providing richer error information to clients.
  */
-export interface ApiErrorResponse extends Omit<ApiResponse<never>, "data"> {
+export interface ApiErrorResponse extends Omit<ApiResponse<never>, 'data'> {
   /** Error always true for error responses */
   error: true;
 

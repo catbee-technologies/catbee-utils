@@ -1,14 +1,14 @@
 /* eslint-disable n/no-process-env */
-import { existsSync } from "fs";
-import { isAbsolute, resolve } from "path";
+import { existsSync } from 'fs';
+import { isAbsolute, resolve } from 'path';
 /**
  * Enum representing valid application environments.
  */
 export enum Environment {
-  PRODUCTION = "production",
-  DEVELOPMENT = "development",
-  STAGING = "staging",
-  TESTING = "testing",
+  PRODUCTION = 'production',
+  DEVELOPMENT = 'development',
+  STAGING = 'staging',
+  TESTING = 'testing'
 }
 
 /**
@@ -22,9 +22,7 @@ export class Env {
    * @returns {boolean} `true` if NODE_ENV is 'development', else `false`.
    */
   static isDev(): boolean {
-    return (
-      Env.get("NODE_ENV", Environment.DEVELOPMENT) === Environment.DEVELOPMENT
-    );
+    return Env.get('NODE_ENV', Environment.DEVELOPMENT) === Environment.DEVELOPMENT;
   }
 
   /**
@@ -33,7 +31,7 @@ export class Env {
    * @returns {boolean} `true` if NODE_ENV is 'production', else `false`.
    */
   static isProd(): boolean {
-    return Env.get("NODE_ENV") === Environment.PRODUCTION;
+    return Env.get('NODE_ENV') === Environment.PRODUCTION;
   }
 
   /**
@@ -42,7 +40,7 @@ export class Env {
    * @returns {boolean} `true` if NODE_ENV is 'testing', else `false`.
    */
   static isTest(): boolean {
-    return Env.get("NODE_ENV") === Environment.TESTING;
+    return Env.get('NODE_ENV') === Environment.TESTING;
   }
 
   /**
@@ -51,7 +49,7 @@ export class Env {
    * @returns {boolean} `true` if NODE_ENV is 'staging', else `false`.
    */
   static isStaging(): boolean {
-    return Env.get("NODE_ENV") === Environment.STAGING;
+    return Env.get('NODE_ENV') === Environment.STAGING;
   }
 
   /**
@@ -146,8 +144,8 @@ export class Env {
    */
   static getBoolean(key: string, defaultValue = false): boolean {
     const value = (process.env[key] ?? defaultValue).toString().toLowerCase();
-    if (["true", "1", "yes", "on"].includes(value)) return true;
-    if (["false", "0", "no", "off"].includes(value)) return false;
+    if (['true', '1', 'yes', 'on'].includes(value)) return true;
+    if (['false', '0', 'no', 'off'].includes(value)) return false;
     throw new Error(`Env variable ${key} is not a boolean`);
   }
 
@@ -196,19 +194,15 @@ export class Env {
    * @param {string} [splitter=','] - Delimiter to split on.
    * @returns {string[] | T[]} An array of strings.
    */
-  static getArray<T = string>(
-    key: string,
-    defaultValue: T[] = [],
-    splitter = ",",
-  ): string[] | T[] {
+  static getArray<T = string>(key: string, defaultValue: T[] = [], splitter = ','): string[] | T[] {
     const value = process.env[key];
-    if (!value || value.trim() === "") {
+    if (!value || value.trim() === '') {
       return defaultValue;
     }
     return value
       .split(splitter)
-      .map((item) => item.trim())
-      .filter((item) => item.length > 0);
+      .map(item => item.trim())
+      .filter(item => item.length > 0);
   }
 
   /**
@@ -221,16 +215,10 @@ export class Env {
    * @returns {T} The validated environment value.
    * @throws {Error} If missing or invalid.
    */
-  static getEnum<T extends string>(
-    key: string,
-    allowedValues: T[],
-    defaultValue?: T,
-  ): T {
+  static getEnum<T extends string>(key: string, allowedValues: T[], defaultValue?: T): T {
     const value = process.env[key] ?? defaultValue;
     if (!value || !allowedValues.includes(value as T)) {
-      throw new Error(
-        `Env ${key} must be one of ${allowedValues.join(", ")}. Received: ${value}`,
-      );
+      throw new Error(`Env ${key} must be one of ${allowedValues.join(', ')}. Received: ${value}`);
     }
     return value as T;
   }
@@ -249,7 +237,7 @@ export class Env {
   static getUrl(
     key: string,
     defaultValue?: string,
-    options: { protocols?: string[]; requireTld?: boolean } = {},
+    options: { protocols?: string[]; requireTld?: boolean } = {}
   ): string {
     const value = Env.get(key, defaultValue);
     if (!value) {
@@ -264,11 +252,9 @@ export class Env {
     }
 
     if (options.protocols && options.protocols.length > 0) {
-      const protocol = url.protocol.replace(":", "");
+      const protocol = url.protocol.replace(':', '');
       if (!options.protocols.includes(protocol)) {
-        throw new Error(
-          `Env ${key} must use one of the protocols: ${options.protocols.join(", ")}`,
-        );
+        throw new Error(`Env ${key} must use one of the protocols: ${options.protocols.join(', ')}`);
       }
     }
 
@@ -277,10 +263,10 @@ export class Env {
       // localhost, 127.0.0.1, etc. don't have TLDs
       const hostname = url.hostname;
       if (
-        !hostname.includes(".") ||
-        hostname === "localhost" ||
+        !hostname.includes('.') ||
+        hostname === 'localhost' ||
         /^[\d.]+$/.test(hostname) || // IP address
-        hostname.endsWith(".")
+        hostname.endsWith('.')
       ) {
         throw new Error(`Env ${key} must have a valid host with TLD`);
       }
@@ -330,7 +316,7 @@ export class Env {
   static getPath(
     key: string,
     defaultValue?: string,
-    options: { mustExist?: boolean; makeAbsolute?: boolean } = {},
+    options: { mustExist?: boolean; makeAbsolute?: boolean } = {}
   ): string {
     const value = Env.get(key, defaultValue);
 
@@ -341,10 +327,7 @@ export class Env {
       return defaultValue;
     }
 
-    const path =
-      options.makeAbsolute !== false && !isAbsolute(value)
-        ? resolve(process.cwd(), value)
-        : value;
+    const path = options.makeAbsolute !== false && !isAbsolute(value) ? resolve(process.cwd(), value) : value;
 
     if (options.mustExist && !existsSync(path)) {
       throw new Error(`Path in env ${key} does not exist: ${path}`);
@@ -380,7 +363,7 @@ export class Env {
    * @returns {number} The duration in milliseconds.
    * @throws {Error} If duration format is invalid.
    */
-  static getDuration(key: string, defaultValue: string | number = "0"): number {
+  static getDuration(key: string, defaultValue: string | number = '0'): number {
     const value = Env.get(key, String(defaultValue));
 
     if (!value) return 0;
@@ -394,10 +377,8 @@ export class Env {
     const durationRegex = /(\d+d)?(\d+h)?(\d+m)?(\d+s)?(\d+ms)?/;
     const matches = value.match(durationRegex);
 
-    if (!matches || matches[0] === "") {
-      throw new Error(
-        `Env ${key} has invalid duration format. Use 1d, 2h, 30m, 45s, or 100ms.`,
-      );
+    if (!matches || matches[0] === '') {
+      throw new Error(`Env ${key} has invalid duration format. Use 1d, 2h, 30m, 45s, or 100ms.`);
     }
 
     let ms = 0;
@@ -417,19 +398,15 @@ export class Env {
    * @param {string[]} [sensitiveKeys=['password', 'secret', 'key', 'token', 'auth']] - Keys to mask.
    * @returns {Record<string, string>} Environment variables with sensitive values masked.
    */
-  static getSafeEnv(
-    sensitiveKeys: string[] = ["password", "secret", "key", "token", "auth"],
-  ): Record<string, string> {
+  static getSafeEnv(sensitiveKeys: string[] = ['password', 'secret', 'key', 'token', 'auth']): Record<string, string> {
     const safeEnv: Record<string, string> = {};
 
     for (const [key, value] of Object.entries(process.env)) {
       if (!value) continue;
 
-      const isSensitive = sensitiveKeys.some((sensitiveKey) =>
-        key.toLowerCase().includes(sensitiveKey.toLowerCase()),
-      );
+      const isSensitive = sensitiveKeys.some(sensitiveKey => key.toLowerCase().includes(sensitiveKey.toLowerCase()));
 
-      safeEnv[key] = isSensitive ? "******" : value;
+      safeEnv[key] = isSensitive ? '******' : value;
     }
 
     return safeEnv;

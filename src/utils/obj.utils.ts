@@ -5,7 +5,7 @@
  * @returns {boolean} True if the object is empty, false otherwise.
  */
 export function isObjEmpty(obj: Record<any, any>): boolean {
-  return !!obj && typeof obj === "object" && Object.keys(obj).length === 0;
+  return !!obj && typeof obj === 'object' && Object.keys(obj).length === 0;
 }
 
 /**
@@ -17,11 +17,8 @@ export function isObjEmpty(obj: Record<any, any>): boolean {
  * @param {K[]} keys - Keys to pick from the object.
  * @returns {Pick<T, K>} New object with picked keys.
  */
-export function pick<T extends object, K extends keyof T>(
-  obj: T,
-  keys: K[],
-): Pick<T, K> {
-  return Object.fromEntries(keys.map((key) => [key, obj[key]])) as Pick<T, K>;
+export function pick<T extends object, K extends keyof T>(obj: T, keys: K[]): Pick<T, K> {
+  return Object.fromEntries(keys.map(key => [key, obj[key]])) as Pick<T, K>;
 }
 
 /**
@@ -33,13 +30,8 @@ export function pick<T extends object, K extends keyof T>(
  * @param {K[]} keys - Keys to omit from the object.
  * @returns {Omit<T, K>} New object without omitted keys.
  */
-export function omit<T extends object, K extends keyof T>(
-  obj: T,
-  keys: K[],
-): Omit<T, K> {
-  return Object.fromEntries(
-    Object.entries(obj).filter(([key]) => !keys.includes(key as K)),
-  ) as Omit<T, K>;
+export function omit<T extends object, K extends keyof T>(obj: T, keys: K[]): Omit<T, K> {
+  return Object.fromEntries(Object.entries(obj).filter(([key]) => !keys.includes(key as K))) as Omit<T, K>;
 }
 
 /**
@@ -50,24 +42,13 @@ export function omit<T extends object, K extends keyof T>(
  * @param {Partial<T>} source - The object to merge from.
  * @returns {T} The merged object (same as target).
  */
-export function deepObjMerge<T extends Record<string, any>>(
-  target: T,
-  source: Partial<T>,
-): T {
+export function deepObjMerge<T extends Record<string, any>>(target: T, source: Partial<T>): T {
   for (const key in source) {
     const sourceVal = source[key];
     const targetVal = target[key];
 
-    if (
-      sourceVal &&
-      typeof sourceVal === "object" &&
-      !Array.isArray(sourceVal)
-    ) {
-      if (
-        !targetVal ||
-        typeof targetVal !== "object" ||
-        Array.isArray(targetVal)
-      ) {
+    if (sourceVal && typeof sourceVal === 'object' && !Array.isArray(sourceVal)) {
+      if (!targetVal || typeof targetVal !== 'object' || Array.isArray(targetVal)) {
         target[key] = {} as any;
       }
       deepObjMerge(target[key], sourceVal as any);
@@ -86,24 +67,18 @@ export function deepObjMerge<T extends Record<string, any>>(
  * @param {string} [prefix=""] - Optional prefix for nested keys (used internally).
  * @returns {Record<string, any>} A new object with flattened keys.
  */
-export function flattenObject<T extends Record<string, any>>(
-  obj: T,
-  prefix = "",
-): Record<string, any> {
-  return Object.entries(obj).reduce(
-    (acc: Record<string, any>, [key, value]) => {
-      const newKey = prefix ? `${prefix}.${key}` : key;
+export function flattenObject<T extends Record<string, any>>(obj: T, prefix = ''): Record<string, any> {
+  return Object.entries(obj).reduce((acc: Record<string, any>, [key, value]) => {
+    const newKey = prefix ? `${prefix}.${key}` : key;
 
-      if (value && typeof value === "object" && !Array.isArray(value)) {
-        Object.assign(acc, flattenObject(value, newKey));
-      } else {
-        acc[newKey] = value;
-      }
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      Object.assign(acc, flattenObject(value, newKey));
+    } else {
+      acc[newKey] = value;
+    }
 
-      return acc;
-    },
-    {},
-  );
+    return acc;
+  }, {});
 }
 
 /**
@@ -115,12 +90,12 @@ export function flattenObject<T extends Record<string, any>>(
  * @returns {any} The value at the given path, or undefined if not found.
  */
 export function getValueByPath<T extends object>(obj: T, path: string) {
-  if (!obj || typeof obj !== "object") return undefined;
+  if (!obj || typeof obj !== 'object') return undefined;
 
   // Convert path like "a.b[0].c" into ["a", "b", "0", "c"]
   const parts = path
-    .replace(/\[(\d+)\]/g, ".$1") // convert [0] to .0
-    .split(".")
+    .replace(/\[(\d+)\]/g, '.$1') // convert [0] to .0
+    .split('.')
     .filter(Boolean); // remove empty strings
 
   return parts.reduce((acc: any, key: string) => acc?.[key], obj);
@@ -136,17 +111,13 @@ export function getValueByPath<T extends object>(obj: T, path: string) {
  * @param {any} value - The value to set at the path.
  * @returns {T} The modified object.
  */
-export function setValueByPath<T extends object>(
-  obj: T,
-  path: string,
-  value: any,
-): T {
-  if (!obj || typeof obj !== "object") return obj;
+export function setValueByPath<T extends object>(obj: T, path: string, value: any): T {
+  if (!obj || typeof obj !== 'object') return obj;
 
   // Convert path like "a.b[0].c" into ["a", "b", "0", "c"]
   const parts = path
-    .replace(/\[(\d+)\]/g, ".$1") // convert [0] to .0
-    .split(".")
+    .replace(/\[(\d+)\]/g, '.$1') // convert [0] to .0
+    .split('.')
     .filter(Boolean); // remove empty strings
 
   // Handle empty path
@@ -186,12 +157,7 @@ export function isEqual(a: any, b: any): boolean {
   if (a === b) return true;
 
   // Check if either is null/undefined or not an object
-  if (
-    a == null ||
-    b == null ||
-    typeof a !== "object" ||
-    typeof b !== "object"
-  ) {
+  if (a == null || b == null || typeof a !== 'object' || typeof b !== 'object') {
     return false;
   }
 
@@ -229,10 +195,7 @@ export function isEqual(a: any, b: any): boolean {
   if (keysA.length !== keysB.length) return false;
 
   // Check if every key in A exists in B and has the same value
-  return keysA.every(
-    (key) =>
-      Object.prototype.hasOwnProperty.call(b, key) && isEqual(a[key], b[key]),
-  );
+  return keysA.every(key => Object.prototype.hasOwnProperty.call(b, key) && isEqual(a[key], b[key]));
 }
 
 /**
@@ -245,11 +208,9 @@ export function isEqual(a: any, b: any): boolean {
  */
 export function filterObject<T extends object>(
   obj: T,
-  predicate: (value: any, key: string, obj: T) => boolean,
+  predicate: (value: any, key: string, obj: T) => boolean
 ): Partial<T> {
-  return Object.fromEntries(
-    Object.entries(obj).filter(([key, value]) => predicate(value, key, obj)),
-  ) as Partial<T>;
+  return Object.fromEntries(Object.entries(obj).filter(([key, value]) => predicate(value, key, obj))) as Partial<T>;
 }
 
 /**
@@ -263,11 +224,12 @@ export function filterObject<T extends object>(
  */
 export function mapObject<T extends object, U>(
   obj: T,
-  mapFn: (value: any, key: string, obj: T) => U,
+  mapFn: (value: any, key: string, obj: T) => U
 ): Record<keyof T, U> {
-  return Object.fromEntries(
-    Object.entries(obj).map(([key, value]) => [key, mapFn(value, key, obj)]),
-  ) as Record<keyof T, U>;
+  return Object.fromEntries(Object.entries(obj).map(([key, value]) => [key, mapFn(value, key, obj)])) as Record<
+    keyof T,
+    U
+  >;
 }
 
 /**
@@ -285,11 +247,7 @@ export function deepFreeze<T extends object>(obj: T): Readonly<T> {
   // Recursively freeze nested objects
   for (const prop of Object.getOwnPropertyNames(obj)) {
     const value = (obj as any)[prop];
-    if (
-      value !== null &&
-      typeof value === "object" &&
-      !Object.isFrozen(value)
-    ) {
+    if (value !== null && typeof value === 'object' && !Object.isFrozen(value)) {
       deepFreeze(value);
     }
   }
@@ -304,7 +262,7 @@ export function deepFreeze<T extends object>(obj: T): Readonly<T> {
  * @returns {boolean} True if value is a non-null, non-array object.
  */
 export function isObject(value: unknown): value is Record<string, any> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
 /**
@@ -314,10 +272,7 @@ export function isObject(value: unknown): value is Record<string, any> {
  * @param {string} [parentPath=""] - Internal param for recursion.
  * @returns {string[]} Array of all paths in dot notation.
  */
-export function getAllPaths(
-  obj: Record<string, any>,
-  parentPath: string = "",
-): string[] {
+export function getAllPaths(obj: Record<string, any>, parentPath: string = ''): string[] {
   if (!isObject(obj)) return [];
 
   return Object.entries(obj).flatMap(([key, value]) => {

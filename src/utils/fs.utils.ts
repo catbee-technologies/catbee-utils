@@ -1,10 +1,10 @@
-import { BufferEncoding } from "./crypto.utils";
-import fs from "fs/promises";
-import { createReadStream, createWriteStream, Stats } from "fs";
-import { tmpdir } from "os";
-import path from "path";
-import { pipeline } from "stream/promises";
-import { randomUUID } from "crypto";
+import { BufferEncoding } from './crypto.utils';
+import fs from 'fs/promises';
+import { createReadStream, createWriteStream, Stats } from 'fs';
+import { tmpdir } from 'os';
+import path from 'path';
+import { pipeline } from 'stream/promises';
+import { randomUUID } from 'crypto';
 
 /**
  * Checks whether a file or directory exists at the given path.
@@ -30,7 +30,7 @@ export async function fileExists(path: string): Promise<boolean> {
  */
 export async function readJsonFile<T = any>(path: string): Promise<T | null> {
   try {
-    const data = await fs.readFile(path, "utf-8");
+    const data = await fs.readFile(path, 'utf-8');
     return JSON.parse(data) as T;
   } catch {
     return null;
@@ -45,13 +45,9 @@ export async function readJsonFile<T = any>(path: string): Promise<T | null> {
  * @param {number} [space=2] - Number of spaces for JSON formatting.
  * @returns {Promise<void>} Resolves when writing is complete.
  */
-export async function writeJsonFile(
-  path: string,
-  data: any,
-  space = 2,
-): Promise<void> {
+export async function writeJsonFile(path: string, data: any, space = 2): Promise<void> {
   const json = JSON.stringify(data, null, space);
-  await fs.writeFile(path, json, "utf-8");
+  await fs.writeFile(path, json, 'utf-8');
 }
 
 /**
@@ -65,7 +61,7 @@ export async function deleteFileIfExists(path: string): Promise<boolean> {
     await fs.unlink(path);
     return true;
   } catch (err: any) {
-    if (err.code === "ENOENT") return true;
+    if (err.code === 'ENOENT') return true;
     return false;
   }
 }
@@ -77,10 +73,7 @@ export async function deleteFileIfExists(path: string): Promise<boolean> {
  * @param {BufferEncoding} [encoding="utf-8"] - The encoding to use.
  * @returns {Promise<string | null>} The file contents, or `null` if reading fails.
  */
-export async function readTextFile(
-  path: string,
-  encoding: BufferEncoding = "utf-8",
-): Promise<string | null> {
+export async function readTextFile(path: string, encoding: BufferEncoding = 'utf-8'): Promise<string | null> {
   try {
     return await fs.readFile(path, encoding);
   } catch {
@@ -99,7 +92,7 @@ export async function readTextFile(
 export async function writeTextFile(
   path: string,
   content: string,
-  encoding: BufferEncoding = "utf-8",
+  encoding: BufferEncoding = 'utf-8'
 ): Promise<boolean> {
   try {
     await fs.writeFile(path, content, encoding);
@@ -120,7 +113,7 @@ export async function writeTextFile(
 export async function appendTextFile(
   path: string,
   content: string,
-  encoding: BufferEncoding = "utf-8",
+  encoding: BufferEncoding = 'utf-8'
 ): Promise<boolean> {
   try {
     await fs.appendFile(path, content, encoding);
@@ -138,11 +131,7 @@ export async function appendTextFile(
  * @param {boolean} [overwrite=false] - Whether to overwrite if destination exists.
  * @returns {Promise<boolean>} Resolves to `true` if successful, `false` otherwise.
  */
-export async function copyFile(
-  source: string,
-  destination: string,
-  overwrite = false,
-): Promise<boolean> {
+export async function copyFile(source: string, destination: string, overwrite = false): Promise<boolean> {
   try {
     const flags = overwrite ? 0 : fs.constants.COPYFILE_EXCL;
     await fs.copyFile(source, destination, flags);
@@ -159,10 +148,7 @@ export async function copyFile(
  * @param {string} newPath - New file path.
  * @returns {Promise<boolean>} Resolves to `true` if successful, `false` otherwise.
  */
-export async function moveFile(
-  oldPath: string,
-  newPath: string,
-): Promise<boolean> {
+export async function moveFile(oldPath: string, newPath: string): Promise<boolean> {
   try {
     await fs.rename(oldPath, newPath);
     return true;
@@ -203,28 +189,24 @@ export async function getFileStats(path: string): Promise<Stats | null> {
  * @returns {Promise<string>} Path to the created temporary file.
  */
 export async function createTempFile({
-  prefix = "tmp-",
-  extension = "",
+  prefix = 'tmp-',
+  extension = '',
   dir = tmpdir(),
-  content,
+  content
 }: {
   prefix?: string;
   extension?: string;
   dir?: string;
   content?: string | Buffer;
 } = {}): Promise<string> {
-  const ext = extension
-    ? extension.startsWith(".")
-      ? extension
-      : `.${extension}`
-    : "";
+  const ext = extension ? (extension.startsWith('.') ? extension : `.${extension}`) : '';
   const filename = `${prefix}${randomUUID()}${ext}`;
   const filepath = path.join(dir, filename);
 
   if (content) {
     await fs.writeFile(filepath, content);
   } else {
-    await fs.writeFile(filepath, "");
+    await fs.writeFile(filepath, '');
   }
 
   return filepath;
@@ -239,10 +221,7 @@ export async function createTempFile({
  * @returns {Promise<void>} Resolves when streaming completes.
  * @throws {Error} If streaming fails.
  */
-export async function streamFile(
-  source: string,
-  destination: string,
-): Promise<void> {
+export async function streamFile(source: string, destination: string): Promise<void> {
   const readStream = createReadStream(source);
   const writeStream = createWriteStream(destination);
 
@@ -268,18 +247,18 @@ export async function streamFile(
  */
 export async function readDirectory(
   dirPath: string,
-  options: { fullPaths?: boolean; filter?: RegExp } = {},
+  options: { fullPaths?: boolean; filter?: RegExp } = {}
 ): Promise<string[]> {
   const files = await fs.readdir(dirPath);
 
   let result = files;
 
   if (options.filter) {
-    result = result.filter((file) => options.filter!.test(file));
+    result = result.filter(file => options.filter!.test(file));
   }
 
   if (options.fullPaths) {
-    result = result.map((file) => path.join(dirPath, file));
+    result = result.map(file => path.join(dirPath, file));
   }
 
   return result;
@@ -292,16 +271,13 @@ export async function readDirectory(
  * @param {boolean} [recursive=true] - Whether to create parent directories.
  * @returns {Promise<boolean>} Resolves to `true` if successful, `false` otherwise.
  */
-export async function createDirectory(
-  dirPath: string,
-  recursive = true,
-): Promise<boolean> {
+export async function createDirectory(dirPath: string, recursive = true): Promise<boolean> {
   try {
     await fs.mkdir(dirPath, { recursive });
     return true;
   } catch (err: any) {
     // Consider it success if directory already exists
-    return err.code === "EEXIST";
+    return err.code === 'EEXIST';
   }
 }
 
@@ -312,24 +288,22 @@ export async function createDirectory(
  * @param {string} path - The path to the JSON file.
  * @returns {Promise<{ data: T | null; error: Error | null }>} Object with data and error properties.
  */
-export async function safeReadJsonFile<T = any>(
-  path: string,
-): Promise<{ data: T | null; error: Error | null }> {
+export async function safeReadJsonFile<T = any>(path: string): Promise<{ data: T | null; error: Error | null }> {
   try {
-    const content = await fs.readFile(path, "utf-8");
+    const content = await fs.readFile(path, 'utf-8');
     try {
       const data = JSON.parse(content) as T;
       return { data, error: null };
     } catch (error: any) {
       return {
         data: null,
-        error: new Error(`Invalid JSON in file ${path}: ${error.message}`),
+        error: new Error(`Invalid JSON in file ${path}: ${error.message}`)
       };
     }
   } catch (error: any) {
     return {
       data: null,
-      error: new Error(`Failed to read file ${path}: ${error.message}`),
+      error: new Error(`Failed to read file ${path}: ${error.message}`)
     };
   }
 }

@@ -1,28 +1,28 @@
-import * as loggerUtils from "../../src/utils/logger.utils";
-import { ContextStore, StoreKeys } from "../../src/utils/context-store.utils";
-import pino from "pino";
+import * as loggerUtils from '../../src/utils/logger.utils';
+import { ContextStore, StoreKeys } from '../../src/utils/context-store.utils';
+import pino from 'pino';
 
-jest.mock("pino");
-jest.mock("../../src/config", () => ({
+jest.mock('pino');
+jest.mock('../../src/config', () => ({
   Config: {
     Logger: {
-      name: "TestLogger",
-      level: "info",
-      isoTimestamp: false,
-    },
-  },
+      name: 'TestLogger',
+      level: 'info',
+      isoTimestamp: false
+    }
+  }
 }));
-jest.mock("../../src/utils/context-store.utils", () => ({
+jest.mock('../../src/utils/context-store.utils', () => ({
   ContextStore: {
     get: jest.fn(),
-    set: jest.fn(),
+    set: jest.fn()
   },
   StoreKeys: {
-    LOGGER: Symbol("MOCK_LOGGER_KEY"),
-  },
+    LOGGER: Symbol('MOCK_LOGGER_KEY')
+  }
 }));
 
-describe("LoggerUtils", () => {
+describe('LoggerUtils', () => {
   let mockLogger: any;
 
   beforeEach(() => {
@@ -30,41 +30,39 @@ describe("LoggerUtils", () => {
     mockLogger = {
       child: jest.fn().mockReturnThis(),
       debug: jest.fn(),
-      error: jest.fn(),
+      error: jest.fn()
     };
     (pino as unknown as jest.Mock).mockReturnValue(mockLogger);
     // Clear global logger
-    delete (loggerUtils._globalThis as any)[Symbol.for("logger")];
+    delete (loggerUtils._globalThis as any)[Symbol.for('logger')];
   });
 
-  describe("getLogger", () => {
-    it("returns logger from context if available", () => {
+  describe('getLogger', () => {
+    it('returns logger from context if available', () => {
       (ContextStore.get as jest.Mock).mockReturnValue(mockLogger);
       const logger = loggerUtils.getLogger();
       expect(logger).toBe(mockLogger);
       expect(ContextStore.get).toHaveBeenCalledWith(StoreKeys.LOGGER);
     });
 
-    it("creates and returns global logger if not in context", () => {
+    it('creates and returns global logger if not in context', () => {
       (ContextStore.get as jest.Mock).mockReturnValue(undefined);
       const logger = loggerUtils.getLogger();
       expect(logger).toBe(mockLogger);
       expect(pino).toHaveBeenCalled();
       // Should cache in global
-      expect((loggerUtils._globalThis as any)[Symbol.for("logger")]).toBe(
-        mockLogger,
-      );
+      expect((loggerUtils._globalThis as any)[Symbol.for('logger')]).toBe(mockLogger);
     });
 
-    it("does not recreate global logger if already set", () => {
+    it('does not recreate global logger if already set', () => {
       (ContextStore.get as jest.Mock).mockReturnValue(undefined);
-      (loggerUtils._globalThis as any)[Symbol.for("logger")] = mockLogger;
+      (loggerUtils._globalThis as any)[Symbol.for('logger')] = mockLogger;
       const logger = loggerUtils.getLogger();
       expect(logger).toBe(mockLogger);
       expect(pino).not.toHaveBeenCalled();
     });
 
-    it("returns request-scoped logger if in ContextStore", () => {
+    it('returns request-scoped logger if in ContextStore', () => {
       const reqLogger = { log: jest.fn() };
       (ContextStore.get as jest.Mock).mockReturnValue(reqLogger);
 
@@ -76,15 +74,15 @@ describe("LoggerUtils", () => {
     });
   });
 
-  describe("createChildLogger", () => {
-    it("creates a child logger with bindings", () => {
-      mockLogger.child = jest.fn().mockReturnValue({ foo: "bar" });
-      const child = loggerUtils.createChildLogger({ foo: "bar" }, mockLogger);
-      expect(mockLogger.child).toHaveBeenCalledWith({ foo: "bar" });
-      expect(child).toEqual({ foo: "bar" });
+  describe('createChildLogger', () => {
+    it('creates a child logger with bindings', () => {
+      mockLogger.child = jest.fn().mockReturnValue({ foo: 'bar' });
+      const child = loggerUtils.createChildLogger({ foo: 'bar' }, mockLogger);
+      expect(mockLogger.child).toHaveBeenCalledWith({ foo: 'bar' });
+      expect(child).toEqual({ foo: 'bar' });
     });
 
-    it("uses getLogger if parentLogger not provided", () => {
+    it('uses getLogger if parentLogger not provided', () => {
       (ContextStore.get as jest.Mock).mockReturnValue(undefined);
       (pino as unknown as jest.Mock).mockReturnValue(mockLogger);
       mockLogger.child = jest.fn().mockReturnValue({ baz: 1 });
@@ -94,57 +92,54 @@ describe("LoggerUtils", () => {
     });
   });
 
-  describe("createRequestLogger", () => {
-    it("creates a child logger with requestId and stores in context", () => {
+  describe('createRequestLogger', () => {
+    it('creates a child logger with requestId and stores in context', () => {
       mockLogger.child = jest.fn().mockReturnValue(mockLogger);
-      const logger = loggerUtils.createRequestLogger("req-123", {
-        user: "alice",
+      const logger = loggerUtils.createRequestLogger('req-123', {
+        user: 'alice'
       });
       expect(mockLogger.child).toHaveBeenCalledWith({
-        requestId: "req-123",
-        user: "alice",
+        requestId: 'req-123',
+        user: 'alice'
       });
-      expect(ContextStore.set).toHaveBeenCalledWith(
-        StoreKeys.LOGGER,
-        mockLogger,
-      );
+      expect(ContextStore.set).toHaveBeenCalledWith(StoreKeys.LOGGER, mockLogger);
       expect(logger).toBe(mockLogger);
     });
 
-    it("logs debug if context store set fails", () => {
+    it('logs debug if context store set fails', () => {
       mockLogger.child = jest.fn().mockReturnValue(mockLogger);
       (ContextStore.set as jest.Mock).mockImplementation(() => {
-        throw new Error("fail");
+        throw new Error('fail');
       });
-      loggerUtils.createRequestLogger("req-456");
+      loggerUtils.createRequestLogger('req-456');
       expect(mockLogger.debug).toHaveBeenCalledWith(
-        "Failed to store logger in context - AsyncLocalStorage not initialized",
+        'Failed to store logger in context - AsyncLocalStorage not initialized'
       );
     });
   });
 
-  describe("logError", () => {
-    it("logs error with Error object", () => {
+  describe('logError', () => {
+    it('logs error with Error object', () => {
       (ContextStore.get as jest.Mock).mockReturnValue(mockLogger);
-      const err = new Error("fail!");
-      loggerUtils.logError(err, "msg", { foo: 1 });
-      expect(mockLogger.error).toHaveBeenCalledWith({ foo: 1, err }, "msg");
+      const err = new Error('fail!');
+      loggerUtils.logError(err, 'msg', { foo: 1 });
+      expect(mockLogger.error).toHaveBeenCalledWith({ foo: 1, err }, 'msg');
     });
 
-    it("logs error with non-Error object", () => {
+    it('logs error with non-Error object', () => {
       (ContextStore.get as jest.Mock).mockReturnValue(mockLogger);
-      loggerUtils.logError("fail!", undefined, { bar: 2 });
+      loggerUtils.logError('fail!', undefined, { bar: 2 });
       expect(mockLogger.error).toHaveBeenCalledWith(
         expect.objectContaining({ bar: 2, err: expect.any(Error) }),
-        "fail!",
+        'fail!'
       );
     });
 
-    it("logs error with no context", () => {
+    it('logs error with no context', () => {
       (ContextStore.get as jest.Mock).mockReturnValue(mockLogger);
-      const err = new Error("oops");
+      const err = new Error('oops');
       loggerUtils.logError(err);
-      expect(mockLogger.error).toHaveBeenCalledWith({ err }, "oops");
+      expect(mockLogger.error).toHaveBeenCalledWith({ err }, 'oops');
     });
   });
 });

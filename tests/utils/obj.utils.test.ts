@@ -11,102 +11,102 @@ import {
   mapObject,
   deepFreeze,
   isObject,
-  getAllPaths,
-} from "../../src/utils/obj.utils";
+  getAllPaths
+} from '../../src/utils/obj.utils';
 
-describe("ObjUtils", () => {
-  describe("isObjEmpty", () => {
-    it("returns true for empty objects", () => {
+describe('ObjUtils', () => {
+  describe('isObjEmpty', () => {
+    it('returns true for empty objects', () => {
       expect(isObjEmpty({})).toBe(true);
     });
-    it("returns false for non-empty objects", () => {
+    it('returns false for non-empty objects', () => {
       expect(isObjEmpty({ a: 1 })).toBe(false);
     });
-    it("returns false for non-object values", () => {
+    it('returns false for non-object values', () => {
       expect(isObjEmpty(null as any)).toBe(false);
       expect(isObjEmpty(undefined as any)).toBe(false);
-      expect(isObjEmpty("" as any)).toBe(false);
+      expect(isObjEmpty('' as any)).toBe(false);
       expect(isObjEmpty(5 as any)).toBe(false);
     });
-    it("returns false for arrays", () => {
+    it('returns false for arrays', () => {
       expect(isObjEmpty([])).toBe(true); // [] is typeof object and has no keys
       expect(isObjEmpty([1])).toBe(false);
     });
   });
 
-  describe("pick", () => {
-    it("picks only specified keys", () => {
+  describe('pick', () => {
+    it('picks only specified keys', () => {
       const o = { a: 1, b: 2, c: 3 };
-      expect(pick(o, ["a", "c"])).toEqual({ a: 1, c: 3 });
+      expect(pick(o, ['a', 'c'])).toEqual({ a: 1, c: 3 });
     });
-    it("returns undefined for missing keys", () => {
+    it('returns undefined for missing keys', () => {
       const o = { a: 1 };
-      expect(pick(o, ["b" as any, "a"])).toEqual({ b: undefined, a: 1 });
+      expect(pick(o, ['b' as any, 'a'])).toEqual({ b: undefined, a: 1 });
     });
-    it("works with empty key list", () => {
-      expect(pick({ foo: "bar" }, [])).toEqual({});
+    it('works with empty key list', () => {
+      expect(pick({ foo: 'bar' }, [])).toEqual({});
     });
-    it("works with empty object", () => {
-      expect(pick({}, ["x"] as any)).toEqual({ x: undefined });
+    it('works with empty object', () => {
+      expect(pick({}, ['x'] as any)).toEqual({ x: undefined });
     });
   });
 
-  describe("omit", () => {
-    it("omits specified keys only", () => {
+  describe('omit', () => {
+    it('omits specified keys only', () => {
       const o = { a: 1, b: 2, c: 3 };
-      expect(omit(o, ["b"])).toEqual({ a: 1, c: 3 });
+      expect(omit(o, ['b'])).toEqual({ a: 1, c: 3 });
     });
-    it("returns full object if keys not found", () => {
+    it('returns full object if keys not found', () => {
       const o = { x: 1, y: 2 };
-      expect(omit(o, ["z" as any])).toEqual({ x: 1, y: 2 });
+      expect(omit(o, ['z' as any])).toEqual({ x: 1, y: 2 });
     });
-    it("works with empty key list", () => {
+    it('works with empty key list', () => {
       expect(omit({ a: 1 }, [])).toEqual({ a: 1 });
     });
-    it("returns empty object if all keys are omitted", () => {
-      expect(omit({ x: 1, y: 2 }, ["x", "y"])).toEqual({});
+    it('returns empty object if all keys are omitted', () => {
+      expect(omit({ x: 1, y: 2 }, ['x', 'y'])).toEqual({});
     });
-    it("does not mutate source object", () => {
+    it('does not mutate source object', () => {
       const o = { a: 1 };
-      omit(o, ["a"]);
+      omit(o, ['a']);
       expect(o).toEqual({ a: 1 });
     });
   });
 
-  describe("deepObjMerge", () => {
-    it("merges simple objects shallowly", () => {
+  describe('deepObjMerge', () => {
+    it('merges simple objects shallowly', () => {
       const a = { x: 1, y: 2 };
       const b = { y: 5, z: 8 };
       expect(deepObjMerge({ ...a }, b)).toEqual({ x: 1, y: 5, z: 8 });
     });
-    it("merges deeply nested objects", () => {
+    it('merges deeply nested objects', () => {
       const a = { x: 1, inner: { y: 2, z: 1 } };
       const b = { inner: { y: 9 } };
       expect(deepObjMerge({ ...a, inner: { ...a.inner } }, b as any)).toEqual({
         x: 1,
-        inner: { y: 9, z: 1 },
+        inner: { y: 9, z: 1 }
       });
     });
-    it("creates nested objects if target is missing", () => {
+    it('creates nested objects if target is missing', () => {
       const a = { a: 1 };
       const b = { b: { x: { c: 2 } } };
       expect(deepObjMerge({ ...a }, b as any)).toEqual({
         a: 1,
-        b: { x: { c: 2 } },
+        b: { x: { c: 2 } }
       });
     });
-    it("replaces arrays, does not merge them", () => {
+    it('replaces arrays, does not merge them', () => {
       const a = { arr: [1, 2] };
       const b = { arr: [3] };
       expect(deepObjMerge({ ...a }, b)).toEqual({ arr: [3] });
     });
-    it("does not change keys present only in target", () => {
+    it('does not change keys present only in target', () => {
       const a = { a: 1, keep: 2 };
       const b = { a: 2 };
       const out = deepObjMerge({ ...a }, b);
       expect(out).toEqual({ a: 2, keep: 2 });
     });
-    it("mutates and returns the target object", () => {
+    it('mutates and returns the target object', () => {
       const target = { foo: 1 };
       const result = deepObjMerge(target, { bar: 2 } as any);
       expect(target).toBe(result);
@@ -114,133 +114,129 @@ describe("ObjUtils", () => {
     });
   });
 
-  describe("flattenObject", () => {
-    it("flattens nested objects using dot notation", () => {
+  describe('flattenObject', () => {
+    it('flattens nested objects using dot notation', () => {
       const o = { a: { b: 1, c: { d: 2 } }, e: 3 };
-      expect(flattenObject(o)).toEqual({ "a.b": 1, "a.c.d": 2, e: 3 });
+      expect(flattenObject(o)).toEqual({ 'a.b': 1, 'a.c.d': 2, e: 3 });
     });
-    it("does not flatten arrays", () => {
+    it('does not flatten arrays', () => {
       expect(flattenObject({ x: [1, 2], y: { z: 3 } })).toEqual({
         x: [1, 2],
-        "y.z": 3,
+        'y.z': 3
       });
     });
-    it("returns empty object when passed {}", () => {
+    it('returns empty object when passed {}', () => {
       expect(flattenObject({})).toEqual({});
     });
-    it("handles keys at root and at nested", () => {
-      expect(flattenObject({ a: 1, b: { c: 2 } })).toEqual({ a: 1, "b.c": 2 });
+    it('handles keys at root and at nested', () => {
+      expect(flattenObject({ a: 1, b: { c: 2 } })).toEqual({ a: 1, 'b.c': 2 });
     });
-    it("works with deep nesting", () => {
+    it('works with deep nesting', () => {
       expect(flattenObject({ a: { b: { c: { d: 1 } } }, z: 2 })).toEqual({
-        "a.b.c.d": 1,
-        z: 2,
+        'a.b.c.d': 1,
+        z: 2
       });
     });
   });
 
-  describe("getValueByPath", () => {
+  describe('getValueByPath', () => {
     const example = {
       a: { b: { c: 5 } },
       arr: [{ x: 1 }, { x: 2 }],
-      "k.dot": { y: 9 },
+      'k.dot': { y: 9 }
     };
 
-    it("gets value by dot notation", () => {
-      expect(getValueByPath(example, "a.b.c")).toBe(5);
+    it('gets value by dot notation', () => {
+      expect(getValueByPath(example, 'a.b.c')).toBe(5);
     });
-    it("gets value from array index (using bracket)", () => {
-      expect(getValueByPath(example, "arr[1].x")).toBe(2);
-      expect(getValueByPath(example, "arr[0].x")).toBe(1);
+    it('gets value from array index (using bracket)', () => {
+      expect(getValueByPath(example, 'arr[1].x')).toBe(2);
+      expect(getValueByPath(example, 'arr[0].x')).toBe(1);
     });
-    it("returns undefined when path is missing", () => {
-      expect(getValueByPath(example, "a.b.q")).toBeUndefined();
-      expect(getValueByPath(example, "arr[2].x")).toBeUndefined();
+    it('returns undefined when path is missing', () => {
+      expect(getValueByPath(example, 'a.b.q')).toBeUndefined();
+      expect(getValueByPath(example, 'arr[2].x')).toBeUndefined();
     });
-    it("returns undefined for empty, null or non-object root", () => {
-      expect(getValueByPath(undefined as any, "a.b")).toBeUndefined();
-      expect(getValueByPath(null as any, "a.b")).toBeUndefined();
-      expect(getValueByPath("str" as any, "a")).toBeUndefined();
+    it('returns undefined for empty, null or non-object root', () => {
+      expect(getValueByPath(undefined as any, 'a.b')).toBeUndefined();
+      expect(getValueByPath(null as any, 'a.b')).toBeUndefined();
+      expect(getValueByPath('str' as any, 'a')).toBeUndefined();
     });
-    it("works with root key (no dot)", () => {
-      expect(getValueByPath(example, "a")).toEqual({ b: { c: 5 } });
-      expect(getValueByPath({ foo: 9 }, "foo")).toBe(9);
+    it('works with root key (no dot)', () => {
+      expect(getValueByPath(example, 'a')).toEqual({ b: { c: 5 } });
+      expect(getValueByPath({ foo: 9 }, 'foo')).toBe(9);
     });
   });
 
-  describe("setValueByPath", () => {
-    it("sets value at nested path (dot/bracket)", () => {
+  describe('setValueByPath', () => {
+    it('sets value at nested path (dot/bracket)', () => {
       const obj: any = { a: { b: [{ c: 1 }] } };
-      expect(setValueByPath(obj, "a.b[0].c", 42)).toBe(obj);
+      expect(setValueByPath(obj, 'a.b[0].c', 42)).toBe(obj);
       expect(obj.a.b[0].c).toBe(42);
     });
-    it("creates intermediate objects/arrays as needed", () => {
+    it('creates intermediate objects/arrays as needed', () => {
       const obj: any = {};
-      setValueByPath(obj, "x.y[0].z", 5);
+      setValueByPath(obj, 'x.y[0].z', 5);
       expect(obj.x.y[0].z).toBe(5);
     });
-    it("returns original object if not object", () => {
-      expect(setValueByPath(null as any, "a.b", 1)).toBe(null);
-      expect(setValueByPath("str" as any, "a", 1)).toBe("str");
+    it('returns original object if not object', () => {
+      expect(setValueByPath(null as any, 'a.b', 1)).toBe(null);
+      expect(setValueByPath('str' as any, 'a', 1)).toBe('str');
     });
-    it("handles empty path", () => {
+    it('handles empty path', () => {
       const obj = { a: 1 };
-      expect(setValueByPath(obj, "", 2)).toBe(obj);
+      expect(setValueByPath(obj, '', 2)).toBe(obj);
     });
   });
 
-  describe("isEqual", () => {
-    it("returns true for deeply equal objects", () => {
+  describe('isEqual', () => {
+    it('returns true for deeply equal objects', () => {
       expect(isEqual({ a: 1, b: [2, 3] }, { a: 1, b: [2, 3] })).toBe(true);
     });
-    it("returns false for different objects", () => {
+    it('returns false for different objects', () => {
       expect(isEqual({ a: 1 }, { a: 2 })).toBe(false);
       expect(isEqual({ a: 1 }, { a: 1, b: 2 })).toBe(false);
     });
-    it("handles arrays and primitives", () => {
+    it('handles arrays and primitives', () => {
       expect(isEqual([1, 2], [1, 2])).toBe(true);
       expect(isEqual([1, 2], [2, 1])).toBe(false);
       expect(isEqual(1, 1)).toBe(true);
-      expect(isEqual(1, "1")).toBe(false);
+      expect(isEqual(1, '1')).toBe(false);
     });
-    it("handles Date objects", () => {
-      expect(isEqual(new Date("2020-01-01"), new Date("2020-01-01"))).toBe(
-        true,
-      );
-      expect(isEqual(new Date("2020-01-01"), new Date("2021-01-01"))).toBe(
-        false,
-      );
+    it('handles Date objects', () => {
+      expect(isEqual(new Date('2020-01-01'), new Date('2020-01-01'))).toBe(true);
+      expect(isEqual(new Date('2020-01-01'), new Date('2021-01-01'))).toBe(false);
     });
-    it("returns false for null/undefined", () => {
+    it('returns false for null/undefined', () => {
       expect(isEqual(null, {})).toBe(false);
       expect(isEqual(undefined, {})).toBe(false);
       expect(isEqual(null, null)).toBe(true);
     });
   });
 
-  describe("filterObject", () => {
-    it("filters properties by predicate", () => {
+  describe('filterObject', () => {
+    it('filters properties by predicate', () => {
       const obj = { a: 1, b: 2, c: 3 };
-      expect(filterObject(obj, (v) => v > 1)).toEqual({ b: 2, c: 3 });
+      expect(filterObject(obj, v => v > 1)).toEqual({ b: 2, c: 3 });
     });
-    it("returns empty object if none match", () => {
+    it('returns empty object if none match', () => {
       expect(filterObject({ a: 1 }, () => false)).toEqual({});
     });
   });
 
-  describe("mapObject", () => {
-    it("maps values using mapFn", () => {
+  describe('mapObject', () => {
+    it('maps values using mapFn', () => {
       const obj = { a: 1, b: 2 };
-      expect(mapObject(obj, (v) => v * 10)).toEqual({ a: 10, b: 20 });
+      expect(mapObject(obj, v => v * 10)).toEqual({ a: 10, b: 20 });
     });
-    it("passes key and obj to mapFn", () => {
+    it('passes key and obj to mapFn', () => {
       const obj = { x: 2 };
-      expect(mapObject(obj, (v, k, _o) => k + v)).toEqual({ x: "x2" });
+      expect(mapObject(obj, (v, k, _o) => k + v)).toEqual({ x: 'x2' });
     });
   });
 
-  describe("deepFreeze", () => {
-    it("freezes object and nested objects", () => {
+  describe('deepFreeze', () => {
+    it('freezes object and nested objects', () => {
       const obj = { a: { b: 2 } };
       const frozen = deepFreeze(obj);
       expect(Object.isFrozen(frozen)).toBe(true);
@@ -250,27 +246,25 @@ describe("ObjUtils", () => {
     });
   });
 
-  describe("isObject", () => {
-    it("returns true for plain objects", () => {
+  describe('isObject', () => {
+    it('returns true for plain objects', () => {
       expect(isObject({})).toBe(true);
       expect(isObject({ a: 1 })).toBe(true);
     });
-    it("returns false for arrays, null, non-objects", () => {
+    it('returns false for arrays, null, non-objects', () => {
       expect(isObject([])).toBe(false);
       expect(isObject(null)).toBe(false);
       expect(isObject(1)).toBe(false);
-      expect(isObject("x")).toBe(false);
+      expect(isObject('x')).toBe(false);
     });
   });
 
-  describe("getAllPaths", () => {
-    it("returns all dot notation paths", () => {
+  describe('getAllPaths', () => {
+    it('returns all dot notation paths', () => {
       const obj = { a: { b: { c: 1 } }, d: 2 };
-      expect(getAllPaths(obj).sort()).toEqual(
-        ["a", "a.b", "a.b.c", "d"].sort(),
-      );
+      expect(getAllPaths(obj).sort()).toEqual(['a', 'a.b', 'a.b.c', 'd'].sort());
     });
-    it("returns empty array for non-object", () => {
+    it('returns empty array for non-object', () => {
       expect(getAllPaths(null as any)).toEqual([]);
       expect(getAllPaths(1 as any)).toEqual([]);
     });

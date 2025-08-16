@@ -1,4 +1,4 @@
-import { getValueByPath } from "./obj.utils";
+import { getValueByPath } from './obj.utils';
 
 /**
  * Splits an array into chunks of the specified size.
@@ -11,13 +11,10 @@ import { getValueByPath } from "./obj.utils";
  * @throws {Error} If chunk size is not a positive integer.
  */
 export function chunk<T>(array: T[], size: number): T[][] {
-  if (!Array.isArray(array)) throw new TypeError("Expected an array");
+  if (!Array.isArray(array)) throw new TypeError('Expected an array');
   if (!array.length) return [];
-  if (!Number.isInteger(size) || size <= 0)
-    throw new Error("Chunk size must be a positive integer");
-  return Array.from({ length: Math.ceil(array.length / size) }, (_, i) =>
-    array.slice(i * size, i * size + size),
-  );
+  if (!Number.isInteger(size) || size <= 0) throw new Error('Chunk size must be a positive integer');
+  return Array.from({ length: Math.ceil(array.length / size) }, (_, i) => array.slice(i * size, i * size + size));
 }
 
 /**
@@ -33,7 +30,7 @@ export function unique<T>(array: T[], keyFn?: (item: T) => unknown): T[] {
   if (!Array.isArray(array) || array.length === 0) return [];
   if (!keyFn) return Array.from(new Set(array));
   const seen = new Set<unknown>();
-  return array.filter((item) => {
+  return array.filter(item => {
     const key = keyFn(item);
     if (seen.has(key)) return false;
     seen.add(key);
@@ -90,19 +87,13 @@ export function random<T>(array: T[]): T | undefined {
  * @returns {Record<string | number | symbol, T[]>} An object mapping group keys to item arrays.
  */
 export function groupBy<T>(array: T[], key: keyof T): Record<string, T[]>;
-export function groupBy<T, K extends string | number | symbol>(
-  array: T[],
-  keyFn: (item: T) => K,
-): Record<K, T[]>;
+export function groupBy<T, K extends string | number | symbol>(array: T[], keyFn: (item: T) => K): Record<K, T[]>;
 export function groupBy<T>(
   array: T[],
-  keyOrFn: keyof T | ((item: T) => string | number | symbol),
+  keyOrFn: keyof T | ((item: T) => string | number | symbol)
 ): Record<string | number | symbol, T[]> {
   if (!Array.isArray(array) || array.length === 0) return {};
-  const keyFn =
-    typeof keyOrFn === "function"
-      ? keyOrFn
-      : (item: T) => item[keyOrFn as keyof T];
+  const keyFn = typeof keyOrFn === 'function' ? keyOrFn : (item: T) => item[keyOrFn as keyof T];
   return array.reduce(
     (acc, item) => {
       const key = keyFn(item) as string | number | symbol;
@@ -110,7 +101,7 @@ export function groupBy<T>(
       acc[key].push(item);
       return acc;
     },
-    {} as Record<string | number | symbol, T[]>,
+    {} as Record<string | number | symbol, T[]>
   );
 }
 /* eslint-enable no-redeclare */
@@ -124,7 +115,7 @@ export function groupBy<T>(
  * @throws {TypeError} If array is not an array.
  */
 export function shuffle<T>(array: T[]): T[] {
-  if (!Array.isArray(array)) throw new TypeError("Expected an array");
+  if (!Array.isArray(array)) throw new TypeError('Expected an array');
   const copy = array.slice();
   for (let i = copy.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -144,7 +135,7 @@ export function shuffle<T>(array: T[]): T[] {
  */
 export function pluck<T, K extends keyof T>(array: T[], key: K): T[K][] {
   if (!Array.isArray(array)) return [];
-  return array.map((item) => item[key]);
+  return array.map(item => item[key]);
 }
 
 /**
@@ -158,7 +149,7 @@ export function pluck<T, K extends keyof T>(array: T[], key: K): T[K][] {
 export function difference<T>(a: T[], b: T[]): T[] {
   if (!Array.isArray(a) || !Array.isArray(b)) return [];
   const setB = new Set(b);
-  return a.filter((item) => !setB.has(item));
+  return a.filter(item => !setB.has(item));
 }
 
 /**
@@ -172,7 +163,7 @@ export function difference<T>(a: T[], b: T[]): T[] {
 export function intersect<T>(a: T[], b: T[]): T[] {
   if (!Array.isArray(a) || !Array.isArray(b)) return [];
   const setB = new Set(b);
-  return a.filter((item) => setB.has(item));
+  return a.filter(item => setB.has(item));
 }
 
 /**
@@ -186,27 +177,20 @@ export function intersect<T>(a: T[], b: T[]): T[] {
  * @returns {T[]} A new sorted array.
  * @throws {TypeError} If array is not an array.
  */
-export function mergeSort<T>(
-  array: T[],
-  key: string | ((item: T) => any),
-  direction: "asc" | "desc" = "asc",
-): T[] {
-  if (!Array.isArray(array)) throw new TypeError("Expected array");
+export function mergeSort<T>(array: T[], key: string | ((item: T) => any), direction: 'asc' | 'desc' = 'asc'): T[] {
+  if (!Array.isArray(array)) throw new TypeError('Expected array');
   if (array.length <= 1) return array.slice();
 
-  const keyFn =
-    typeof key === "function"
-      ? key
-      : (item: T) => getValueByPath(item as object, key);
+  const keyFn = typeof key === 'function' ? key : (item: T) => getValueByPath(item as object, key);
 
   const compare = (a: T, b: T) => {
     const aVal = keyFn(a);
     const bVal = keyFn(b);
     // Sorts undefined/null last for "asc", first for "desc"
     if (aVal === bVal) return 0;
-    if (aVal == null) return direction === "asc" ? 1 : -1;
-    if (bVal == null) return direction === "asc" ? -1 : 1;
-    return direction === "asc" ? (aVal < bVal ? -1 : 1) : aVal > bVal ? -1 : 1;
+    if (aVal == null) return direction === 'asc' ? 1 : -1;
+    if (bVal == null) return direction === 'asc' ? -1 : 1;
+    return direction === 'asc' ? (aVal < bVal ? -1 : 1) : aVal > bVal ? -1 : 1;
   };
 
   const merge = (left: T[], right: T[]): T[] => {
@@ -240,15 +224,15 @@ export function mergeSort<T>(
  */
 export function zip<T>(...arrays: T[][]): T[][] {
   if (arrays.length === 0) return [];
-  if (arrays.some((arr) => !Array.isArray(arr))) {
-    throw new TypeError("All arguments must be arrays");
+  if (arrays.some(arr => !Array.isArray(arr))) {
+    throw new TypeError('All arguments must be arrays');
   }
 
-  const minLength = Math.min(...arrays.map((arr) => arr.length));
+  const minLength = Math.min(...arrays.map(arr => arr.length));
   const result: T[][] = [];
 
   for (let i = 0; i < minLength; i++) {
-    result.push(arrays.map((arr) => arr[i]));
+    result.push(arrays.map(arr => arr[i]));
   }
 
   return result;
@@ -262,19 +246,14 @@ export function zip<T>(...arrays: T[][]): T[][] {
  * @param {(item: T, index: number, array: T[]) => boolean} predicate - Function to test each element.
  * @returns {[T[], T[]]} A tuple of two arrays: [matched, unmatched].
  */
-export function partition<T>(
-  array: T[],
-  predicate: (item: T, index: number, array: T[]) => boolean,
-): [T[], T[]] {
+export function partition<T>(array: T[], predicate: (item: T, index: number, array: T[]) => boolean): [T[], T[]] {
   if (!Array.isArray(array)) return [[], []];
 
   return array.reduce(
     ([pass, fail], item, index) => {
-      return predicate(item, index, array)
-        ? [[...pass, item], fail]
-        : [pass, [...fail, item]];
+      return predicate(item, index, array) ? [[...pass, item], fail] : [pass, [...fail, item]];
     },
-    [[] as T[], [] as T[]],
+    [[] as T[], [] as T[]]
   );
 }
 
@@ -287,14 +266,10 @@ export function partition<T>(
  * @returns {number[]} Array of numbers in range.
  */
 export function range(start: number, end: number, step: number = 1): number[] {
-  if (
-    !Number.isFinite(start) ||
-    !Number.isFinite(end) ||
-    !Number.isFinite(step)
-  ) {
-    throw new TypeError("Arguments must be finite numbers");
+  if (!Number.isFinite(start) || !Number.isFinite(end) || !Number.isFinite(step)) {
+    throw new TypeError('Arguments must be finite numbers');
   }
-  if (step === 0) throw new Error("Step cannot be zero");
+  if (step === 0) throw new Error('Step cannot be zero');
 
   const isAscending = step > 0;
   if ((isAscending && start >= end) || (!isAscending && start <= end)) {
@@ -332,10 +307,7 @@ export function take<T>(array: T[], n: number = 1): T[] {
  * @param {(item: T, index: number) => boolean} predicate - Function to test each element.
  * @returns {T[]} New array with taken elements.
  */
-export function takeWhile<T>(
-  array: T[],
-  predicate: (item: T, index: number) => boolean,
-): T[] {
+export function takeWhile<T>(array: T[], predicate: (item: T, index: number) => boolean): T[] {
   if (!Array.isArray(array)) return [];
 
   const result: T[] = [];
@@ -368,10 +340,7 @@ export function compact<T>(array: T[]): NonNullable<T>[] {
  * @param {(item: T) => string | number | symbol} keyFn - Function to generate count key.
  * @returns {Record<string, number>} Object with counts by key.
  */
-export function countBy<T>(
-  array: T[],
-  keyFn: (item: T) => string | number | symbol,
-): Record<string, number> {
+export function countBy<T>(array: T[], keyFn: (item: T) => string | number | symbol): Record<string, number> {
   if (!Array.isArray(array)) return {};
 
   return array.reduce(
@@ -380,6 +349,6 @@ export function countBy<T>(
       acc[key] = (acc[key] || 0) + 1;
       return acc;
     },
-    {} as Record<string, number>,
+    {} as Record<string, number>
   );
 }

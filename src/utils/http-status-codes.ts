@@ -329,5 +329,5 @@ export enum HttpStatusCodes {
   /**
    * The client needs to authenticate to gain network access.
    */
-  NETWORK_AUTHENTICATION_REQUIRED = 511,
+  NETWORK_AUTHENTICATION_REQUIRED = 511
 }

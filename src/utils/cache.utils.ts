@@ -1,4 +1,4 @@
-import { Config } from "../config";
+import { Config } from '../config';
 
 /**
  * Represents a cached entry with a value and an expiration timestamp.
@@ -111,11 +111,7 @@ export class TTLCache<K, V> {
    * @param ttlMs - Optional custom TTL for the computed value
    * @returns The cached or computed value
    */
-  async getOrCompute(
-    key: K,
-    producer: () => Promise<V>,
-    ttlMs?: number,
-  ): Promise<V> {
+  async getOrCompute(key: K, producer: () => Promise<V>, ttlMs?: number): Promise<V> {
     const value = this.get(key);
     if (value !== undefined) return value;
 
@@ -178,7 +174,7 @@ export class TTLCache<K, V> {
    * @returns Array of values (undefined for keys that don't exist or expired)
    */
   getMany(keys: K[]): (V | undefined)[] {
-    return keys.map((key) => this.get(key));
+    return keys.map(key => this.get(key));
   }
 
   /**
@@ -281,7 +277,7 @@ export class TTLCache<K, V> {
       size: this.cache.size,
       validEntries: valid,
       expiredEntries: expired,
-      maxSize: this.maxSize,
+      maxSize: this.maxSize
     };
   }
 

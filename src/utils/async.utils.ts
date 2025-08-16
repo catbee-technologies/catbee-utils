@@ -5,7 +5,7 @@
  * @returns {Promise<void>} A Promise that resolves after the given time.
  */
 export function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 /**
@@ -17,10 +17,7 @@ export function sleep(ms: number): Promise<void> {
  * @param {number} delay - Delay in milliseconds.
  * @returns {T & { cancel: () => void; flush: () => void }} A debounced function.
  */
-export function debounce<T extends (...args: any[]) => void>(
-  fn: T,
-  delay: number,
-) {
+export function debounce<T extends (...args: any[]) => void>(fn: T, delay: number) {
   let timer: NodeJS.Timeout | null = null;
   let pendingArgs: Parameters<T> | null = null;
 
@@ -69,8 +66,8 @@ export function throttle<T extends (...args: any[]) => void>(
   limit: number,
   opts: { leading?: boolean; trailing?: boolean } = {
     leading: true,
-    trailing: false,
-  },
+    trailing: false
+  }
 ): (...args: Parameters<T>) => void {
   let lastCall = 0;
   let timer: NodeJS.Timeout | null = null;
@@ -121,7 +118,7 @@ export async function retry<T>(
   retries = 3,
   delay = 500,
   backoff = false,
-  onRetry?: (error: unknown, attempt: number) => void,
+  onRetry?: (error: unknown, attempt: number) => void
 ): Promise<T> {
   for (let i = 0; i < retries; i++) {
     try {
@@ -132,7 +129,7 @@ export async function retry<T>(
       await sleep(backoff ? delay * Math.pow(2, i) : delay);
     }
   }
-  throw new Error("Retry failed"); // should never reach here
+  throw new Error('Retry failed'); // should never reach here
 }
 
 /**
@@ -144,19 +141,15 @@ export async function retry<T>(
  * @param {string} [message="Operation timed out"] - Optional timeout message.
  * @returns {Promise<T>} A promise that resolves or rejects within the timeout.
  */
-export function withTimeout<T>(
-  promise: Promise<T>,
-  ms: number,
-  message = "Operation timed out",
-): Promise<T> {
+export function withTimeout<T>(promise: Promise<T>, ms: number, message = 'Operation timed out'): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timeoutHandle = setTimeout(() => reject(new Error(message)), ms);
     promise
-      .then((result) => {
+      .then(result => {
         clearTimeout(timeoutHandle);
         resolve(result);
       })
-      .catch((err) => {
+      .catch(err => {
         clearTimeout(timeoutHandle);
         reject(err);
       });
@@ -174,14 +167,11 @@ export function withTimeout<T>(
  * @param {number} limit - Number of tasks to run in parallel per batch.
  * @returns {Promise<T[]>} A promise that resolves to an array of resolved values.
  */
-export async function runInBatches<T>(
-  tasks: (() => Promise<T>)[],
-  limit: number,
-): Promise<T[]> {
+export async function runInBatches<T>(tasks: (() => Promise<T>)[], limit: number): Promise<T[]> {
   const results: T[] = [];
   for (let i = 0; i < tasks.length; i += limit) {
     const batch = tasks.slice(i, i + limit);
-    const batchResults = await Promise.all(batch.map((fn) => fn()));
+    const batchResults = await Promise.all(batch.map(fn => fn()));
     results.push(...batchResults);
   }
   return results;
@@ -200,7 +190,7 @@ export async function runInBatches<T>(
  */
 export function singletonAsync<TArgs extends unknown[], TResult>(
   fn: (...args: TArgs) => Promise<TResult>,
-  drop: boolean = false,
+  drop: boolean = false
 ): (...args: TArgs) => Promise<TResult> {
   let promise: Promise<TResult> | null = null;
 
@@ -210,7 +200,7 @@ export function singletonAsync<TArgs extends unknown[], TResult>(
         promise = null;
       });
     } else if (drop) {
-      return Promise.reject(new Error("Busy: function already running"));
+      return Promise.reject(new Error('Busy: function already running'));
     }
     return promise;
   };
@@ -223,10 +213,8 @@ export function singletonAsync<TArgs extends unknown[], TResult>(
  * @param {Array<() => Promise<T>>} tasks - Array of promise-returning functions.
  * @returns {Promise<PromiseSettledResult<T>[]>} Results including status and value/reason.
  */
-export async function settleAll<T>(
-  tasks: (() => Promise<T>)[],
-): Promise<PromiseSettledResult<T>[]> {
-  return Promise.allSettled(tasks.map((task) => task()));
+export async function settleAll<T>(tasks: (() => Promise<T>)[]): Promise<PromiseSettledResult<T>[]> {
+  return Promise.allSettled(tasks.map(task => task()));
 }
 
 export interface TaskQueue {
@@ -277,7 +265,7 @@ export function createTaskQueue(limit: number): TaskQueue {
      */
     get isPaused() {
       return paused;
-    },
+    }
   };
 
   const next = () => {
@@ -313,11 +301,11 @@ export function createTaskQueue(limit: number): TaskQueue {
 
   enqueue.pause = state.pause;
   enqueue.resume = state.resume;
-  Object.defineProperty(enqueue, "length", {
-    get: () => queue.length,
+  Object.defineProperty(enqueue, 'length', {
+    get: () => queue.length
   });
-  Object.defineProperty(enqueue, "isPaused", {
-    get: () => paused,
+  Object.defineProperty(enqueue, 'isPaused', {
+    get: () => paused
   });
 
   return enqueue as TaskQueue;
@@ -331,9 +319,7 @@ export function createTaskQueue(limit: number): TaskQueue {
  * @param {Array<() => Promise<T>>} tasks - Array of promise-returning functions.
  * @returns {Promise<T[]>} Array of resolved values.
  */
-export async function runInSeries<T>(
-  tasks: (() => Promise<T>)[],
-): Promise<T[]> {
+export async function runInSeries<T>(tasks: (() => Promise<T>)[]): Promise<T[]> {
   const results: T[] = [];
   for (const task of tasks) {
     results.push(await task());
@@ -358,7 +344,7 @@ export function memoizeAsync<T, Args extends any[]>(
   options: {
     ttl?: number;
     keyFn?: (args: Args) => string;
-  } = {},
+  } = {}
 ): (...args: Args) => Promise<T> {
   const cache = new Map<string, { value: T; expires: number }>();
   const { ttl, keyFn = JSON.stringify } = options;
@@ -374,7 +360,7 @@ export function memoizeAsync<T, Args extends any[]>(
     const result = await fn(...args);
     cache.set(key, {
       value: result,
-      expires: ttl ? Date.now() + ttl : Infinity,
+      expires: ttl ? Date.now() + ttl : Infinity
     });
 
     return result;
@@ -393,7 +379,7 @@ export function memoizeAsync<T, Args extends any[]>(
 export function abortable<T>(
   promise: Promise<T>,
   signal: AbortSignal,
-  abortValue: any = new Error("Operation aborted"),
+  abortValue: any = new Error('Operation aborted')
 ): Promise<T> {
   if (signal.aborted) {
     return Promise.reject(abortValue);
@@ -403,9 +389,9 @@ export function abortable<T>(
     promise,
     new Promise<T>((_, reject) => {
       const abort = () => reject(abortValue);
-      signal.addEventListener("abort", abort, { once: true });
-      promise.finally(() => signal.removeEventListener("abort", abort));
-    }),
+      signal.addEventListener('abort', abort, { once: true });
+      promise.finally(() => signal.removeEventListener('abort', abort));
+    })
   ]);
 }
 
@@ -417,11 +403,7 @@ export function abortable<T>(
  * @returns {[Promise<T>, (value: T | PromiseLike<T>) => void, (reason?: any) => void]}
  *   Tuple of [promise, resolve, reject]
  */
-export function createDeferred<T>(): [
-  Promise<T>,
-  (value: T | PromiseLike<T>) => void,
-  (reason?: any) => void,
-] {
+export function createDeferred<T>(): [Promise<T>, (value: T | PromiseLike<T>) => void, (reason?: any) => void] {
   let resolve!: (value: T | PromiseLike<T>) => void;
   let reject!: (reason?: any) => void;
 
@@ -441,14 +423,9 @@ export function createDeferred<T>(): [
  * @param {Array<(input: any) => Promise<any>>} fns - Array of async functions to compose
  * @returns {(input: any) => Promise<T>} Composed function
  */
-export function waterfall<T>(
-  fns: Array<(input: any) => Promise<any>>,
-): (initialValue: any) => Promise<T> {
+export function waterfall<T>(fns: Array<(input: any) => Promise<any>>): (initialValue: any) => Promise<T> {
   return async (initialValue: any): Promise<T> => {
-    return fns.reduce(
-      async (acc, fn) => fn(await acc),
-      Promise.resolve(initialValue),
-    ) as Promise<T>;
+    return fns.reduce(async (acc, fn) => fn(await acc), Promise.resolve(initialValue)) as Promise<T>;
   };
 }
 
@@ -465,17 +442,13 @@ export function waterfall<T>(
 export function rateLimit<T>(
   fn: (...args: any[]) => Promise<T>,
   maxCalls: number,
-  interval: number,
+  interval: number
 ): (...args: any[]) => Promise<T> {
   const calls: number[] = [];
 
   return async function (...args: any[]): Promise<T> {
     const now = Date.now();
-    calls.splice(
-      0,
-      calls.length,
-      ...calls.filter((time) => now - time < interval),
-    );
+    calls.splice(0, calls.length, ...calls.filter(time => now - time < interval));
 
     if (calls.length >= maxCalls) {
       const oldestCall = calls[0];
@@ -483,21 +456,13 @@ export function rateLimit<T>(
       await sleep(Math.max(1, delay));
       // Remove potentially stale entries after sleep
       const currentTime = Date.now();
-      calls.splice(
-        0,
-        calls.length,
-        ...calls.filter((time) => currentTime - time < interval),
-      );
+      calls.splice(0, calls.length, ...calls.filter(time => currentTime - time < interval));
 
       // If still at limit after sleep, wait for another cycle
       if (calls.length >= maxCalls) {
         const nextDelay = interval - (currentTime - calls[0]);
         await sleep(Math.max(1, nextDelay));
-        calls.splice(
-          0,
-          calls.length,
-          ...calls.filter((time) => Date.now() - time < interval),
-        );
+        calls.splice(0, calls.length, ...calls.filter(time => Date.now() - time < interval));
       }
     }
 

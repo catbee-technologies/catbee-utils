@@ -1,6 +1,6 @@
-import fs from "fs/promises";
-import path from "path";
-import os from "os";
+import fs from 'fs/promises';
+import path from 'path';
+import os from 'os';
 
 import {
   fileExists,
@@ -20,14 +20,14 @@ import {
   safeReadJsonFile,
   isFile,
   getFileSize,
-  readFileBuffer,
-} from "../../src/utils/fs.utils";
+  readFileBuffer
+} from '../../src/utils/fs.utils';
 
-describe("FsUtils", () => {
+describe('FsUtils', () => {
   let tempDir: string;
 
   beforeEach(async () => {
-    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "futil-"));
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'futil-'));
   });
 
   afterEach(async () => {
@@ -35,285 +35,283 @@ describe("FsUtils", () => {
     await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
   });
 
-  function tmpfile(name = "test.json") {
+  function tmpfile(name = 'test.json') {
     return path.join(tempDir, name);
   }
 
-  describe("fileExists", () => {
-    it("returns true for an existing file", async () => {
+  describe('fileExists', () => {
+    it('returns true for an existing file', async () => {
       const file = tmpfile();
-      await fs.writeFile(file, "abc");
+      await fs.writeFile(file, 'abc');
       expect(await fileExists(file)).toBe(true);
     });
 
-    it("returns true for an existing directory", async () => {
+    it('returns true for an existing directory', async () => {
       expect(await fileExists(tempDir)).toBe(true);
     });
 
-    it("returns false for a missing path", async () => {
-      expect(await fileExists(tmpfile("missing.txt"))).toBe(false);
+    it('returns false for a missing path', async () => {
+      expect(await fileExists(tmpfile('missing.txt'))).toBe(false);
     });
   });
 
-  describe("readJsonFile", () => {
-    it("returns parsed object if file is valid JSON", async () => {
+  describe('readJsonFile', () => {
+    it('returns parsed object if file is valid JSON', async () => {
       const file = tmpfile();
-      const obj = { foo: 42, bar: "baz" };
+      const obj = { foo: 42, bar: 'baz' };
       await fs.writeFile(file, JSON.stringify(obj));
       expect(await readJsonFile<typeof obj>(file)).toEqual(obj);
     });
 
-    it("returns null if file does not exist", async () => {
-      expect(await readJsonFile(tmpfile("dne.json"))).toBeNull();
+    it('returns null if file does not exist', async () => {
+      expect(await readJsonFile(tmpfile('dne.json'))).toBeNull();
     });
 
-    it("returns null if file is not JSON", async () => {
+    it('returns null if file is not JSON', async () => {
       const file = tmpfile();
-      await fs.writeFile(file, "not { json: [");
+      await fs.writeFile(file, 'not { json: [');
       expect(await readJsonFile(file)).toBeNull();
     });
   });
 
-  describe("writeJsonFile", () => {
-    it("writes object as pretty JSON by default", async () => {
+  describe('writeJsonFile', () => {
+    it('writes object as pretty JSON by default', async () => {
       const file = tmpfile();
       const data = { a: 1, b: [2, 3] };
       await writeJsonFile(file, data);
       // Should be properly formatted (default 2-space indent)
-      const text = await fs.readFile(file, "utf-8");
-      expect(text.startsWith("{\n")).toBe(true);
+      const text = await fs.readFile(file, 'utf-8');
+      expect(text.startsWith('{\n')).toBe(true);
       expect(JSON.parse(text)).toEqual(data);
     });
 
-    it("writes compact JSON if space is 0", async () => {
+    it('writes compact JSON if space is 0', async () => {
       const file = tmpfile();
       await writeJsonFile(file, { x: 7 }, 0);
-      const text = await fs.readFile(file, "utf-8");
+      const text = await fs.readFile(file, 'utf-8');
       expect(text).toBe('{"x":7}');
     });
 
-    it("overwrites previous file content", async () => {
+    it('overwrites previous file content', async () => {
       const file = tmpfile();
       await fs.writeFile(file, '{"old":true}');
       await writeJsonFile(file, { n: 1 });
-      const text = await fs.readFile(file, "utf-8");
+      const text = await fs.readFile(file, 'utf-8');
       expect(JSON.parse(text)).toEqual({ n: 1 });
     });
   });
 
-  describe("deleteFileIfExists", () => {
-    it("deletes a file if it exists and returns true", async () => {
+  describe('deleteFileIfExists', () => {
+    it('deletes a file if it exists and returns true', async () => {
       const file = tmpfile();
-      await fs.writeFile(file, "to-delete");
+      await fs.writeFile(file, 'to-delete');
       expect(await fileExists(file)).toBe(true);
       expect(await deleteFileIfExists(file)).toBe(true);
       expect(await fileExists(file)).toBe(false);
     });
 
-    it("returns true if file does not exist", async () => {
-      const file = tmpfile("nothere.txt");
+    it('returns true if file does not exist', async () => {
+      const file = tmpfile('nothere.txt');
       expect(await deleteFileIfExists(file)).toBe(true);
     });
 
-    it("returns false if deletion fails for another reason", async () => {
+    it('returns false if deletion fails for another reason', async () => {
       // Try to delete a directory (should fail with EISDIR)
       expect(await deleteFileIfExists(tempDir)).toBe(false);
     });
   });
 
-  describe("readTextFile & writeTextFile", () => {
-    it("writes and reads text file", async () => {
-      const file = tmpfile("foo.txt");
-      await writeTextFile(file, "hello world");
-      expect(await readTextFile(file)).toBe("hello world");
+  describe('readTextFile & writeTextFile', () => {
+    it('writes and reads text file', async () => {
+      const file = tmpfile('foo.txt');
+      await writeTextFile(file, 'hello world');
+      expect(await readTextFile(file)).toBe('hello world');
     });
-    it("returns null for missing file", async () => {
-      expect(await readTextFile(tmpfile("none.txt"))).toBeNull();
+    it('returns null for missing file', async () => {
+      expect(await readTextFile(tmpfile('none.txt'))).toBeNull();
     });
-    it("writeTextFile returns true on success", async () => {
-      const file = tmpfile("bar.txt");
-      expect(await writeTextFile(file, "abc")).toBe(true);
-      expect(await readTextFile(file)).toBe("abc");
-    });
-  });
-
-  describe("appendTextFile", () => {
-    it("appends text to file", async () => {
-      const file = tmpfile("append.txt");
-      await writeTextFile(file, "a");
-      await appendTextFile(file, "b");
-      expect(await readTextFile(file)).toBe("ab");
-    });
-    it("returns false if file cannot be appended", async () => {
-      expect(
-        await appendTextFile(path.join(tempDir, "no-dir", "fail.txt"), "x"),
-      ).toBe(false);
+    it('writeTextFile returns true on success', async () => {
+      const file = tmpfile('bar.txt');
+      expect(await writeTextFile(file, 'abc')).toBe(true);
+      expect(await readTextFile(file)).toBe('abc');
     });
   });
 
-  describe("copyFile", () => {
-    it("copies file to new location", async () => {
-      const src = tmpfile("src.txt");
-      const dst = tmpfile("dst.txt");
-      await writeTextFile(src, "copyme");
+  describe('appendTextFile', () => {
+    it('appends text to file', async () => {
+      const file = tmpfile('append.txt');
+      await writeTextFile(file, 'a');
+      await appendTextFile(file, 'b');
+      expect(await readTextFile(file)).toBe('ab');
+    });
+    it('returns false if file cannot be appended', async () => {
+      expect(await appendTextFile(path.join(tempDir, 'no-dir', 'fail.txt'), 'x')).toBe(false);
+    });
+  });
+
+  describe('copyFile', () => {
+    it('copies file to new location', async () => {
+      const src = tmpfile('src.txt');
+      const dst = tmpfile('dst.txt');
+      await writeTextFile(src, 'copyme');
       expect(await copyFile(src, dst)).toBe(true);
-      expect(await readTextFile(dst)).toBe("copyme");
+      expect(await readTextFile(dst)).toBe('copyme');
     });
-    it("does not overwrite by default", async () => {
-      const src = tmpfile("src2.txt");
-      const dst = tmpfile("dst2.txt");
-      await writeTextFile(src, "x");
-      await writeTextFile(dst, "y");
+    it('does not overwrite by default', async () => {
+      const src = tmpfile('src2.txt');
+      const dst = tmpfile('dst2.txt');
+      await writeTextFile(src, 'x');
+      await writeTextFile(dst, 'y');
       expect(await copyFile(src, dst)).toBe(false);
-      expect(await readTextFile(dst)).toBe("y");
+      expect(await readTextFile(dst)).toBe('y');
     });
-    it("overwrites if flag set", async () => {
-      const src = tmpfile("src3.txt");
-      const dst = tmpfile("dst3.txt");
-      await writeTextFile(src, "x");
-      await writeTextFile(dst, "y");
+    it('overwrites if flag set', async () => {
+      const src = tmpfile('src3.txt');
+      const dst = tmpfile('dst3.txt');
+      await writeTextFile(src, 'x');
+      await writeTextFile(dst, 'y');
       expect(await copyFile(src, dst, true)).toBe(true);
-      expect(await readTextFile(dst)).toBe("x");
+      expect(await readTextFile(dst)).toBe('x');
     });
   });
 
-  describe("moveFile", () => {
-    it("moves file to new location", async () => {
-      const src = tmpfile("move.txt");
-      const dst = tmpfile("moved.txt");
-      await writeTextFile(src, "mv");
+  describe('moveFile', () => {
+    it('moves file to new location', async () => {
+      const src = tmpfile('move.txt');
+      const dst = tmpfile('moved.txt');
+      await writeTextFile(src, 'mv');
       expect(await moveFile(src, dst)).toBe(true);
       expect(await fileExists(dst)).toBe(true);
       expect(await fileExists(src)).toBe(false);
     });
   });
 
-  describe("getFileStats", () => {
-    it("returns stats for file", async () => {
-      const file = tmpfile("stat.txt");
-      await writeTextFile(file, "abc");
+  describe('getFileStats', () => {
+    it('returns stats for file', async () => {
+      const file = tmpfile('stat.txt');
+      await writeTextFile(file, 'abc');
       const stats = await getFileStats(file);
       expect(stats).toBeTruthy();
       expect(stats!.isFile()).toBe(true);
     });
-    it("returns null for missing file", async () => {
-      expect(await getFileStats(tmpfile("none.txt"))).toBeNull();
+    it('returns null for missing file', async () => {
+      expect(await getFileStats(tmpfile('none.txt'))).toBeNull();
     });
   });
 
-  describe("createTempFile", () => {
-    it("creates a temp file with content", async () => {
-      const file = await createTempFile({ dir: tempDir, content: "hi" });
-      expect(await readTextFile(file)).toBe("hi");
+  describe('createTempFile', () => {
+    it('creates a temp file with content', async () => {
+      const file = await createTempFile({ dir: tempDir, content: 'hi' });
+      expect(await readTextFile(file)).toBe('hi');
     });
-    it("creates a temp file with extension", async () => {
-      const file = await createTempFile({ dir: tempDir, extension: ".foo" });
-      expect(path.extname(file)).toBe(".foo");
+    it('creates a temp file with extension', async () => {
+      const file = await createTempFile({ dir: tempDir, extension: '.foo' });
+      expect(path.extname(file)).toBe('.foo');
     });
   });
 
-  describe("streamFile", () => {
-    it("streams file from source to destination", async () => {
-      const src = tmpfile("streamsrc.txt");
-      const dst = tmpfile("streamdst.txt");
-      await writeTextFile(src, "streamdata");
+  describe('streamFile', () => {
+    it('streams file from source to destination', async () => {
+      const src = tmpfile('streamsrc.txt');
+      const dst = tmpfile('streamdst.txt');
+      await writeTextFile(src, 'streamdata');
       await streamFile(src, dst);
-      expect(await readTextFile(dst)).toBe("streamdata");
+      expect(await readTextFile(dst)).toBe('streamdata');
     });
   });
 
-  describe("readDirectory", () => {
-    it("reads directory and returns file names", async () => {
-      const d = path.join(tempDir, "readdir");
+  describe('readDirectory', () => {
+    it('reads directory and returns file names', async () => {
+      const d = path.join(tempDir, 'readdir');
       await createDirectory(d);
-      await writeTextFile(path.join(d, "a.txt"), "1");
-      await writeTextFile(path.join(d, "b.md"), "2");
+      await writeTextFile(path.join(d, 'a.txt'), '1');
+      await writeTextFile(path.join(d, 'b.md'), '2');
       const files = await readDirectory(d);
-      expect(files.sort()).toEqual(["a.txt", "b.md"].sort());
+      expect(files.sort()).toEqual(['a.txt', 'b.md'].sort());
     });
-    it("returns full paths if option set", async () => {
-      const d = path.join(tempDir, "readdir2");
+    it('returns full paths if option set', async () => {
+      const d = path.join(tempDir, 'readdir2');
       await createDirectory(d);
-      await writeTextFile(path.join(d, "a.txt"), "1");
+      await writeTextFile(path.join(d, 'a.txt'), '1');
       const files = await readDirectory(d, { fullPaths: true });
       expect(files[0]).toContain(d);
     });
-    it("filters files by regex", async () => {
-      const d = path.join(tempDir, "readdir3");
+    it('filters files by regex', async () => {
+      const d = path.join(tempDir, 'readdir3');
       await createDirectory(d);
-      await writeTextFile(path.join(d, "a.txt"), "1");
-      await writeTextFile(path.join(d, "b.md"), "2");
+      await writeTextFile(path.join(d, 'a.txt'), '1');
+      await writeTextFile(path.join(d, 'b.md'), '2');
       const files = await readDirectory(d, { filter: /\.md$/ });
-      expect(files).toEqual(["b.md"]);
+      expect(files).toEqual(['b.md']);
     });
   });
 
-  describe("createDirectory", () => {
-    it("creates directory recursively", async () => {
-      const d = path.join(tempDir, "deep", "dir");
+  describe('createDirectory', () => {
+    it('creates directory recursively', async () => {
+      const d = path.join(tempDir, 'deep', 'dir');
       expect(await createDirectory(d)).toBe(true);
       expect(await fileExists(d)).toBe(true);
     });
-    it("returns true if already exists", async () => {
-      const d = path.join(tempDir, "exists");
+    it('returns true if already exists', async () => {
+      const d = path.join(tempDir, 'exists');
       await createDirectory(d);
       expect(await createDirectory(d)).toBe(true);
     });
   });
 
-  describe("safeReadJsonFile", () => {
-    it("returns data and null error for valid JSON", async () => {
-      const file = tmpfile("safe.json");
+  describe('safeReadJsonFile', () => {
+    it('returns data and null error for valid JSON', async () => {
+      const file = tmpfile('safe.json');
       await writeTextFile(file, '{"a":1}');
       const { data, error } = await safeReadJsonFile<{ a: number }>(file);
       expect(data).toEqual({ a: 1 });
       expect(error).toBeNull();
     });
-    it("returns null data and error for missing file", async () => {
-      const { data, error } = await safeReadJsonFile(tmpfile("none.json"));
+    it('returns null data and error for missing file', async () => {
+      const { data, error } = await safeReadJsonFile(tmpfile('none.json'));
       expect(data).toBeNull();
       expect(error).toBeInstanceOf(Error);
     });
-    it("returns null data and error for invalid JSON", async () => {
-      const file = tmpfile("bad.json");
-      await writeTextFile(file, "{not-json");
+    it('returns null data and error for invalid JSON', async () => {
+      const file = tmpfile('bad.json');
+      await writeTextFile(file, '{not-json');
       const { data, error } = await safeReadJsonFile(file);
       expect(data).toBeNull();
       expect(error).toBeInstanceOf(Error);
     });
   });
 
-  describe("isFile", () => {
-    it("returns true for files, false for dirs or missing", async () => {
-      const file = tmpfile("isf.txt");
-      await writeTextFile(file, "x");
+  describe('isFile', () => {
+    it('returns true for files, false for dirs or missing', async () => {
+      const file = tmpfile('isf.txt');
+      await writeTextFile(file, 'x');
       expect(await isFile(file)).toBe(true);
       expect(await isFile(tempDir)).toBe(false);
-      expect(await isFile(tmpfile("none.txt"))).toBe(false);
+      expect(await isFile(tmpfile('none.txt'))).toBe(false);
     });
   });
 
-  describe("getFileSize", () => {
-    it("returns file size in bytes", async () => {
-      const file = tmpfile("size.txt");
-      await writeTextFile(file, "abcde");
+  describe('getFileSize', () => {
+    it('returns file size in bytes', async () => {
+      const file = tmpfile('size.txt');
+      await writeTextFile(file, 'abcde');
       expect(await getFileSize(file)).toBe(5);
     });
-    it("returns -1 for missing file", async () => {
-      expect(await getFileSize(tmpfile("none.txt"))).toBe(-1);
+    it('returns -1 for missing file', async () => {
+      expect(await getFileSize(tmpfile('none.txt'))).toBe(-1);
     });
   });
 
-  describe("readFileBuffer", () => {
-    it("returns Buffer for file", async () => {
-      const file = tmpfile("buf.txt");
-      await writeTextFile(file, "buff");
+  describe('readFileBuffer', () => {
+    it('returns Buffer for file', async () => {
+      const file = tmpfile('buf.txt');
+      await writeTextFile(file, 'buff');
       const buf = await readFileBuffer(file);
       expect(Buffer.isBuffer(buf)).toBe(true);
-      expect(buf!.toString()).toBe("buff");
+      expect(buf!.toString()).toBe('buff');
     });
-    it("returns null for missing file", async () => {
-      expect(await readFileBuffer(tmpfile("none.txt"))).toBeNull();
+    it('returns null for missing file', async () => {
+      expect(await readFileBuffer(tmpfile('none.txt'))).toBeNull();
     });
   });
 });

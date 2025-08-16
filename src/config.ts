@@ -1,13 +1,6 @@
-import { Env } from "./utils/env.utils";
+import { Env } from './utils/env.utils';
 
-type LogLevel =
-  | "fatal"
-  | "error"
-  | "warn"
-  | "info"
-  | "debug"
-  | "trace"
-  | "silent";
+type LogLevel = 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace' | 'silent';
 
 /**
  * Application runtime configuration loaded from environment variables.
@@ -17,30 +10,30 @@ export const Config = {
     /**
      * Logging level (e.g., 'info', 'debug', 'warn', 'error').
      */
-    level: Env.get("LOGGER_LEVEL", "info") as LogLevel,
+    level: Env.get('LOGGER_LEVEL', 'info') as LogLevel,
 
     /**
      * Name of the logger instance (defaults to npm package name).
      */
-    name: Env.get("LOGGER_NAME", Env.get("npm_package_name", "@catbee/utils")),
+    name: Env.get('LOGGER_NAME', Env.get('npm_package_name', '@catbee/utils')),
 
     /**
      * Whether to use ISO 8601 timestamps in logs.
      */
-    isoTimestamp: Env.getBoolean("LOGGER_ISO_TIMESTAMP", false),
+    isoTimestamp: Env.getBoolean('LOGGER_ISO_TIMESTAMP', false)
   },
 
   Http: {
     /**
      * Timeout for HTTP requests in milliseconds
      */
-    timeout: Env.getNumber("HTTP_TIMEOUT", 30000),
+    timeout: Env.getNumber('HTTP_TIMEOUT', 30000)
   },
 
   Cache: {
     /**
      * Default TTL (time to live) for cache entries in seconds
      */
-    defaultTtl: Env.getNumber("CACHE_DEFAULT_TTL", 300),
-  },
+    defaultTtl: Env.getNumber('CACHE_DEFAULT_TTL', 300)
+  }
 };

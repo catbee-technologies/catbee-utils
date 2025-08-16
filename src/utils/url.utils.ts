@@ -1,4 +1,4 @@
-import { URL, URLSearchParams } from "url";
+import { URL, URLSearchParams } from 'url';
 
 /**
  * Appends query parameters to a given URL.
@@ -11,10 +11,7 @@ import { URL, URLSearchParams } from "url";
  * appendQueryParams('https://example.com', { page: 1, limit: 10 });
  * // → 'https://example.com/?page=1&limit=10'
  */
-export function appendQueryParams(
-  url: string,
-  params: Record<string, string | number>,
-): string {
+export function appendQueryParams(url: string, params: Record<string, string | number>): string {
   const urlObj = new URL(url);
   for (const [key, value] of Object.entries(params)) {
     urlObj.searchParams.set(key, value.toString());
@@ -33,12 +30,9 @@ export function appendQueryParams(
  * // → { page: '1', limit: '10' }
  */
 export function parseQueryString(query: string): Record<string, string> {
-  const cleanQuery = query.startsWith("?") ? query.slice(1) : query;
+  const cleanQuery = query.startsWith('?') ? query.slice(1) : query;
   // Object.fromEntries guarantees string values in result
-  return Object.fromEntries(new URLSearchParams(cleanQuery)) as Record<
-    string,
-    string
-  >;
+  return Object.fromEntries(new URLSearchParams(cleanQuery)) as Record<string, string>;
 }
 
 /**
@@ -48,14 +42,11 @@ export function parseQueryString(query: string): Record<string, string> {
  * @param {boolean} [requireHttps=false] - If true, requires the URL to use HTTPS.
  * @returns {boolean} True if the URL is valid, false otherwise.
  */
-export function isValidUrl(
-  url: string,
-  requireHttps: boolean = false,
-): boolean {
+export function isValidUrl(url: string, requireHttps: boolean = false): boolean {
   try {
     const parsedUrl = new URL(url);
     if (!parsedUrl.protocol || !parsedUrl.hostname) return false;
-    if (requireHttps && parsedUrl.protocol !== "https:") return false;
+    if (requireHttps && parsedUrl.protocol !== 'https:') return false;
     return true;
   } catch {
     return false;
@@ -76,10 +67,7 @@ export function isValidUrl(
  * getDomain('https://api.example.com/path', true);
  * // → 'example.com'
  */
-export function getDomain(
-  url: string,
-  removeSubdomains: boolean = false,
-): string {
+export function getDomain(url: string, removeSubdomains: boolean = false): string {
   try {
     const { hostname } = new URL(url);
 
@@ -88,20 +76,20 @@ export function getDomain(
     }
 
     // Extract root domain (remove subdomains)
-    const parts = hostname.split(".");
+    const parts = hostname.split('.');
     if (parts.length <= 2) return hostname;
 
     // Handle special cases like co.in, com.au
-    const secondLevelDomains = ["co", "com", "org", "net", "gov", "edu", "ac"];
+    const secondLevelDomains = ['co', 'com', 'org', 'net', 'gov', 'edu', 'ac'];
     const sld = parts[parts.length - 2];
 
     if (secondLevelDomains.includes(sld) && parts.length > 2) {
-      return parts.slice(-3).join(".");
+      return parts.slice(-3).join('.');
     }
 
-    return parts.slice(-2).join(".");
+    return parts.slice(-2).join('.');
   } catch {
-    return "";
+    return '';
   }
 }
 
@@ -117,14 +105,14 @@ export function getDomain(
  */
 export function joinPaths(...segments: string[]): string {
   let result = segments
-    .filter((s) => s !== undefined && s !== null)
+    .filter(s => s !== undefined && s !== null)
     .map((segment, index) => {
-      if (index === 0) return segment.replace(/\/+$/, "");
-      return segment.replace(/^\/+|\/+$/g, "");
+      if (index === 0) return segment.replace(/\/+$/, '');
+      return segment.replace(/^\/+|\/+$/g, '');
     })
     .filter(Boolean)
-    .join("/");
-  if (segments[0] === "" && !result.startsWith("/")) result = "/" + result;
+    .join('/');
+  if (segments[0] === '' && !result.startsWith('/')) result = '/' + result;
   return result;
 }
 
@@ -142,7 +130,7 @@ export function joinPaths(...segments: string[]): string {
 export function normalizeUrl(url: string, base?: string): string {
   try {
     // Handle protocol-relative URLs
-    if (url.startsWith("//")) {
+    if (url.startsWith('//')) {
       url = `https:${url}`;
     }
 
@@ -150,8 +138,8 @@ export function normalizeUrl(url: string, base?: string): string {
     const parsedUrl = base ? new URL(url, base) : new URL(url);
 
     // Normalize
-    parsedUrl.pathname = parsedUrl.pathname.replace(/\/+/g, "/"); // Collapse multiple slashes
-    parsedUrl.pathname = parsedUrl.pathname.replace(/\/+$/, ""); // Remove trailing slash
+    parsedUrl.pathname = parsedUrl.pathname.replace(/\/+/g, '/'); // Collapse multiple slashes
+    parsedUrl.pathname = parsedUrl.pathname.replace(/\/+$/, ''); // Remove trailing slash
     parsedUrl.hostname = parsedUrl.hostname.toLowerCase();
 
     return parsedUrl.toString();
@@ -182,9 +170,7 @@ export function createUrlBuilder(baseUrl: string) {
      */
     path(path: string, params?: Record<string, any>): string {
       const url = joinPaths(baseUrl, path);
-      return params
-        ? appendQueryParams(url, params as Record<string, string | number>)
-        : url;
+      return params ? appendQueryParams(url, params as Record<string, string | number>) : url;
     },
 
     /**
@@ -194,11 +180,8 @@ export function createUrlBuilder(baseUrl: string) {
      * @returns {string} The complete URL with query parameters.
      */
     query(params: Record<string, any>): string {
-      return appendQueryParams(
-        baseUrl,
-        params as Record<string, string | number>,
-      );
-    },
+      return appendQueryParams(baseUrl, params as Record<string, string | number>);
+    }
   };
 }
 
@@ -209,10 +192,7 @@ export function createUrlBuilder(baseUrl: string) {
  * @param {string[]} paramNames - Names of parameters to extract.
  * @returns {Record<string, string>} Object containing the extracted parameters.
  */
-export function extractQueryParams(
-  url: string,
-  paramNames: string[],
-): Record<string, string> {
+export function extractQueryParams(url: string, paramNames: string[]): Record<string, string> {
   try {
     const parsedUrl = new URL(url);
     const result: Record<string, string> = {};
@@ -237,10 +217,7 @@ export function extractQueryParams(
  * @param {string[]} paramsToRemove - Names of parameters to remove.
  * @returns {string} URL with parameters removed.
  */
-export function removeQueryParams(
-  url: string,
-  paramsToRemove: string[],
-): string {
+export function removeQueryParams(url: string, paramsToRemove: string[]): string {
   try {
     const parsedUrl = new URL(url);
 
@@ -268,11 +245,11 @@ export function getExtension(url: string): string {
   try {
     const { pathname } = new URL(url);
     const match = pathname.match(/\.([^./\\?#]+)$/);
-    return match ? match[1].toLowerCase() : "";
+    return match ? match[1].toLowerCase() : '';
   } catch {
     // If URL parsing fails, try a simpler approach
     const match = url.match(/\.([^./\\?#]+)$/);
-    return match ? match[1].toLowerCase() : "";
+    return match ? match[1].toLowerCase() : '';
   }
 }
 
@@ -293,7 +270,7 @@ export function getExtension(url: string): string {
  */
 export function parseTypedQueryParams<T extends Record<string, any>>(
   url: string,
-  converters?: Record<keyof T, (val: string) => any>,
+  converters?: Record<keyof T, (val: string) => any>
 ): Partial<T> {
   try {
     const { searchParams } = new URL(url);
