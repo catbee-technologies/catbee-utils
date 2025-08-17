@@ -378,7 +378,7 @@ export function withErrorHandling<T extends (...args: any[]) => Promise<any>>(
       }
 
       // Log the original error (consider using a proper logger)
-      getLogger().error('Caught error in handler:', error);
+      getLogger().error({ error }, 'Caught error in handler');
 
       // Extract status code if it exists, otherwise use 500
       let status = HttpStatusCodes.INTERNAL_SERVER_ERROR;

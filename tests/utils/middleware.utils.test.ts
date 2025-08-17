@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import { requestId, responseTime, timeout, errorHandler } from '../../src/utils/middleware.utils';
+import { requestId, timeout, errorHandler, responseTime } from '../../src/utils/middleware.utils';
 import { HttpStatusCodes } from '../../src/utils/http-status-codes';
 import { ErrorResponse } from '../../src/utils/response.utils';
 import { Env } from '../../src/utils/env.utils';
@@ -8,8 +8,13 @@ import { getLogger } from '../../src/utils/logger.utils';
 jest.mock('crypto', () => ({
   randomUUID: jest.fn()
 }));
+const childLogger = { info: jest.fn(), error: jest.fn() };
 jest.mock('../../src/utils/logger.utils', () => ({
-  getLogger: jest.fn()
+  getLogger: jest.fn(() => ({
+    info: jest.fn(),
+    error: jest.fn(),
+    child: jest.fn(() => childLogger)
+  }))
 }));
 jest.mock('../../src/utils/env.utils', () => ({
   Env: { isDev: jest.fn() }
@@ -78,28 +83,6 @@ describe('Middleware tests', () => {
     });
   });
 
-  describe('responseTime', () => {
-    it('should add X-Response-Time header on finish', () => {
-      responseTime()(req, res, next);
-      res._finishCallback();
-      expect(res.setHeader).toHaveBeenCalledWith('X-Response-Time', expect.stringMatching(/ms$/));
-    });
-
-    it('should log on complete if logOnComplete=true', () => {
-      const logger = { info: jest.fn() };
-      (getLogger as jest.Mock).mockReturnValue(logger);
-      responseTime({ logOnComplete: true })(req, res, next);
-      res._finishCallback();
-      expect(logger.info).toHaveBeenCalledWith(expect.stringMatching(/GET \/test - \d+\.\d{2}ms/));
-    });
-
-    it('should not add header if addHeader=false', () => {
-      responseTime({ addHeader: false })(req, res, next);
-      res._finishCallback();
-      expect(res.setHeader).not.toHaveBeenCalled();
-    });
-  });
-
   describe('timeout', () => {
     it('should send 408 response after timeout', () => {
       timeout(1000)(req, res, next);
@@ -131,7 +114,7 @@ describe('Middleware tests', () => {
       const err = new Error('Test error');
       errorHandler()(err, req, res, next);
 
-      expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('[ERROR] GET /test: Test error'), err);
+      expect(logger.error).toHaveBeenCalledWith({ error: err }, 'Test error');
       expect(res.status).toHaveBeenCalledWith(HttpStatusCodes.INTERNAL_SERVER_ERROR);
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -175,12 +158,35 @@ describe('Middleware tests', () => {
       errorHandler({ logErrors: false })(err, req, res, next);
       expect(logger.error).not.toHaveBeenCalled();
     });
+  });
 
-    it('should use custom logger if provided', () => {
-      const customLogger = jest.fn();
-      const err = new Error('Custom log');
-      errorHandler({ logger: customLogger })(err, req, res, next);
-      expect(customLogger).toHaveBeenCalledWith(expect.stringContaining('[ERROR] GET /test: Custom log'), err);
+  describe('responseTime', () => {
+    it('should call next', () => {
+      const mw = responseTime();
+      mw(req, res, next);
+      expect(next).toHaveBeenCalled();
+    });
+
+    it('should add X-Response-Time header', () => {
+      const mw = responseTime({ addHeader: true });
+      mw(req, res, next);
+      res.end();
+      expect(res.setHeader).toHaveBeenCalledWith('X-Response-Time', expect.stringMatching(/\d+\.\d{2}ms/));
+    });
+
+    it('should log duration if logOnComplete is true', () => {
+      const mw = responseTime({ logOnComplete: true });
+      mw(req, res, next);
+      const logger = getLogger();
+      res._finishCallback?.();
+      expect(logger.info).toHaveBeenCalledWith(expect.stringMatching(/GET \/test - \d+\.\d{2}ms/));
+    });
+
+    it('should not set header if addHeader is false', () => {
+      const mw = responseTime({ addHeader: false });
+      mw(req, res, next);
+      res.end();
+      expect(res.setHeader).not.toHaveBeenCalled();
     });
   });
 });

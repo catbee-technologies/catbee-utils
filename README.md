@@ -291,12 +291,9 @@ res.status(HttpStatusCodes.BAD_REQUEST).send("Invalid payload");
 - `requestId(options?): Middleware`
 - `responseTime(options?): Middleware`
 - `timeout(timeoutMs?: number): Middleware`
+- `setupRequestContext: void`
 - `errorHandler(options?): Middleware`
-- `cors(options?): Middleware`
 - `validateRequest(schema, location?): Middleware`
-- `rateLimit(options?): Middleware`
-- `securityHeaders(options?): Middleware`
-- `basicAuth(validator, realm?): Middleware`
 
 **Example:**
 ```ts

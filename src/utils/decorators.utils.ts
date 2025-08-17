@@ -1,24 +1,8 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
+import type { RequestHandler, Router } from 'express';
 import 'reflect-metadata';
 
-// --- Sample Express interfaces for type safety ---
-interface Request {
-  query: any;
-  params: any;
-  body?: any;
-  [key: string]: any;
-}
-interface Response {
-  json: (body: any) => void;
-  headersSent: boolean;
-  [key: string]: any;
-}
-type NextFunction = (err?: any) => void;
-type RequestHandler = (req: Request, res: Response, next: NextFunction) => any;
-interface Router {
-  [method: string]: (path: string, ...handlers: RequestHandler[]) => void;
-}
 // --- End sample Express interfaces ---
 
 const ROUTES_KEY = Symbol('routes');

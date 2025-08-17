@@ -121,25 +121,25 @@ describe('LoggerUtils', () => {
   describe('logError', () => {
     it('logs error with Error object', () => {
       (ContextStore.get as jest.Mock).mockReturnValue(mockLogger);
-      const err = new Error('fail!');
-      loggerUtils.logError(err, 'msg', { foo: 1 });
-      expect(mockLogger.error).toHaveBeenCalledWith({ foo: 1, err }, 'msg');
+      const error = new Error('fail!');
+      loggerUtils.logError(error, 'msg', { foo: 1 });
+      expect(mockLogger.error).toHaveBeenCalledWith({ foo: 1, error }, 'msg');
     });
 
     it('logs error with non-Error object', () => {
       (ContextStore.get as jest.Mock).mockReturnValue(mockLogger);
       loggerUtils.logError('fail!', undefined, { bar: 2 });
       expect(mockLogger.error).toHaveBeenCalledWith(
-        expect.objectContaining({ bar: 2, err: expect.any(Error) }),
+        expect.objectContaining({ bar: 2, error: expect.any(Error) }),
         'fail!'
       );
     });
 
     it('logs error with no context', () => {
       (ContextStore.get as jest.Mock).mockReturnValue(mockLogger);
-      const err = new Error('oops');
-      loggerUtils.logError(err);
-      expect(mockLogger.error).toHaveBeenCalledWith({ err }, 'oops');
+      const error = new Error('oops');
+      loggerUtils.logError(error);
+      expect(mockLogger.error).toHaveBeenCalledWith({ error }, 'oops');
     });
   });
 });

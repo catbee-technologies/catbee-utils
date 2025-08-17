@@ -15,12 +15,7 @@ export const Config = {
     /**
      * Name of the logger instance (defaults to npm package name).
      */
-    name: Env.get('LOGGER_NAME', Env.get('npm_package_name', '@catbee/utils')),
-
-    /**
-     * Whether to use ISO 8601 timestamps in logs.
-     */
-    isoTimestamp: Env.getBoolean('LOGGER_ISO_TIMESTAMP', false)
+    name: Env.get('LOGGER_NAME', Env.get('npm_package_name', '@catbee/utils'))
   },
 
   Http: {

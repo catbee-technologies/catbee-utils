@@ -5,34 +5,10 @@ import { HttpStatusCodes } from './http-status-codes';
 import { ErrorResponse } from './response.utils';
 import { Env } from './env.utils';
 import { getLogger } from './logger.utils';
+import type { Request, Response, NextFunction } from 'express';
+import { ContextStore, StoreKeys } from './context-store.utils';
 
-/**
- * Type definitions for Express-compatible middleware
- */
-type Request = {
-  headers: Record<string, string | string[] | undefined>;
-  method: string;
-  url: string;
-  ip?: string;
-  body?: any;
-  query?: Record<string, any>;
-  params?: Record<string, any>;
-  [key: string]: any;
-};
-
-type Response = {
-  status: (code: number) => Response;
-  json: (data: any) => void;
-  send: (data: any) => void;
-  setHeader: (name: string, value: string | string[]) => void;
-  end: (data?: any) => void;
-  on: (event: string, callback: (...args: any[]) => void) => void;
-  [key: string]: any;
-};
-
-type NextFunction = (err?: Error | any) => void;
-
-type Middleware = (req: Request, res: Response, next: NextFunction) => void | Promise<void>;
+export type Middleware = (req: Request, res: Response, next: NextFunction) => void | Promise<void>;
 
 /**
  * Attaches a unique request ID to each request.
@@ -53,7 +29,7 @@ export function requestId(options?: { headerName?: string; exposeHeader?: boolea
     const id = (existingId as string) || randomUUID();
 
     // Attach ID to request object
-    req.id = id;
+    (req as any).id = id;
 
     // Add ID to response headers
     if (exposeHeader) {
@@ -72,32 +48,31 @@ export function requestId(options?: { headerName?: string; exposeHeader?: boolea
  * @param {boolean} [options.logOnComplete=false] - Whether to log timing info
  * @returns {Middleware} Express-compatible middleware
  */
-export function responseTime(options?: { addHeader?: boolean; logOnComplete?: boolean }): Middleware {
+export function responseTime(options?: { addHeader?: boolean; logOnComplete?: boolean }) {
   const addHeader = options?.addHeader !== false;
   const logOnComplete = options?.logOnComplete === true;
 
-  return (req, res, next) => {
+  return (req: Request, res: Response, next: NextFunction) => {
     const start = process.hrtime();
 
-    // Function to calculate elapsed time
-    const calculateDuration = (): number => {
-      const diff = process.hrtime(start);
-      return diff[0] * 1e3 + diff[1] * 1e-6; // Convert to ms
-    };
-
-    // Handle response completion
-    res.on('finish', () => {
-      const duration = calculateDuration();
-
-      if (addHeader) {
+    if (addHeader) {
+      // Wrap res.end to set header just before sending response
+      const originalEnd = res.end;
+      res.end = function (chunk?: any, encoding?: any, cb?: any) {
+        const diff = process.hrtime(start);
+        const duration = diff[0] * 1e3 + diff[1] * 1e-6;
         res.setHeader('X-Response-Time', `${duration.toFixed(2)}ms`);
-      }
+        return originalEnd.call(this, chunk, encoding, cb);
+      };
+    }
 
-      if (logOnComplete) {
-        const { method, url } = req;
-        getLogger().info(`${method} ${url} - ${duration.toFixed(2)}ms`);
-      }
-    });
+    if (logOnComplete) {
+      res.on('finish', () => {
+        const diff = process.hrtime(start);
+        const duration = diff[0] * 1e3 + diff[1] * 1e-6;
+        getLogger().info(`${req.method} ${req.url} - ${duration.toFixed(2)}ms`);
+      });
+    }
 
     next();
   };
@@ -132,39 +107,38 @@ export function timeout(timeoutMs: number = Config.Http.timeout): Middleware {
 }
 
 /**
- * Creates a standardized error response object for API errors.
+ * Creates an Express middleware that initializes a per-request context.
  *
- * @param {string} message - Error message
- * @param {Request} req - Express request object
- * @param {any} error - Original error object
- * @param {object} [options] - Additional options
- * @param {boolean} [options.includeDetails=false] - Whether to include error details in non-production
- * @returns {object} Formatted error response
+ * @param {object} [options] - Optional configuration
+ * @param {string} [options.headerName='x-request-id'] - Header to look for request ID
+ * @param {boolean} [options.autoLog=true] - Whether to log automatically when context is initialized
+ * @returns {(req: Request, res: Response, next: NextFunction) => void} Express middleware function
  */
-const createErrorResponse = (message: string, req: Request, error: any, options?: { includeDetails?: boolean }) => {
-  const isDev = Env.isDev();
-  const includeDetails = options?.includeDetails && isDev;
+export function setupRequestContext(options: { headerName?: string; autoLog?: boolean } = {}): Middleware {
+  const { headerName = 'x-request-id', autoLog = true } = options;
+  return (req, _res, next) => {
+    // Generate or use existing request ID
+    const requestId = (req.headers[headerName] as string) || req?.['id'] || crypto.randomUUID();
 
-  const response: Record<string, any> = {
-    error: true,
-    message,
-    timestamp: new Date().toISOString(),
-    requestId: error?.requestId || req.id || uuid(),
-    path: req.originalUrl || req.url
+    ContextStore.run({ [StoreKeys.REQUEST_ID]: requestId }, () => {
+      // Create a child logger for this request
+      const childLogger = getLogger().child({
+        reqId: requestId,
+        method: req.method,
+        url: req.originalUrl || req.url
+      });
+
+      // Store logger in context
+      ContextStore.set(StoreKeys.LOGGER, childLogger);
+
+      if (autoLog) {
+        childLogger.info('Request context initialized');
+      }
+
+      next();
+    });
   };
-
-  // Include error code if present
-  if (error?.code) {
-    response.code = error.code;
-  }
-
-  // Include stack trace in development mode if requested
-  if (includeDetails && error?.stack) {
-    response.stack = error.stack.split('\n').map((line: string) => line.trim());
-  }
-
-  return response;
-};
+}
 
 /**
  * Global error handling middleware with enhanced features.
@@ -175,14 +149,9 @@ const createErrorResponse = (message: string, req: Request, error: any, options?
  * @param {Function} [options.logger=getLogger().error] - Custom logging function
  * @returns {(err: any, req: Request, res: Response, next: NextFunction) => void} Error middleware
  */
-export function errorHandler(options?: {
-  logErrors?: boolean;
-  includeDetails?: boolean;
-  logger?: (message: string, error: any) => void;
-}) {
+export function errorHandler(options?: { logErrors?: boolean; includeDetails?: boolean }) {
   const logErrors = options?.logErrors !== false;
   const includeDetails = options?.includeDetails === true;
-  const logger = options?.logger || getLogger().error;
 
   return (err: any, req: Request, res: Response, _next: NextFunction) => {
     // Determine status code
@@ -190,8 +159,7 @@ export function errorHandler(options?: {
 
     // Log error if enabled
     if (logErrors) {
-      const logMessage = `[ERROR] ${req.method} ${req.originalUrl || req.url}: ${err.message || 'Unknown error'}`;
-      logger(logMessage, err);
+      getLogger().error({ error: err }, `${err.message || 'Unknown error'}`);
     }
 
     // Handle ErrorResponse instances (our custom error class)
@@ -200,10 +168,35 @@ export function errorHandler(options?: {
         error: err.error,
         message: err.message,
         timestamp: err.timestamp,
-        requestId: err.requestId || req.id || uuid(),
+        requestId: err.requestId || (req as any).id || uuid(),
         path: req.originalUrl || req.url
       });
     }
+
+    const createErrorResponse = (message: string, req: Request, error: any, options?: { includeDetails?: boolean }) => {
+      const isDev = Env.isDev();
+      const includeDetails = options?.includeDetails && isDev;
+
+      const response: Record<string, any> = {
+        error: true,
+        message,
+        timestamp: new Date().toISOString(),
+        requestId: error?.requestId || (req as any).id || uuid(),
+        path: req.originalUrl || req.url
+      };
+
+      // Include error code if present
+      if (error?.code) {
+        response.code = error.code;
+      }
+
+      // Include stack trace in development mode if requested
+      if (includeDetails && error?.stack) {
+        response.stack = error.stack.split('\n').map((line: string) => line.trim());
+      }
+
+      return response;
+    };
 
     // Handle any other errors
     return res.status(status).json(

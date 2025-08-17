@@ -44,12 +44,9 @@ function setupLogger(): void {
         }
         return '***';
       }
-    }
+    },
+    timestamp: stdTimeFunctions.isoTime
   };
-
-  if (Config.Logger.isoTimestamp) {
-    logParams.timestamp = stdTimeFunctions.isoTime;
-  }
 
   _global[GLOBAL_LOGGER_KEY] = pino(logParams);
   _global[GLOBAL_LOGGER_KEY].debug('Logger initialized');
@@ -122,7 +119,7 @@ export function logError(error: Error | unknown, message?: string, context?: Rec
   const errObj = error instanceof Error ? error : new Error(String(error));
   const logContext = {
     ...context,
-    err: errObj
+    error: errObj
   };
 
   logger.error(logContext, message || errObj.message);

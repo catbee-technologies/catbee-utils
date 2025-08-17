@@ -22,8 +22,7 @@
     "pretest": "npm run compile",
     "dryrun": "npm pack --dry-run",
     "test": "cross-env LOGGER_LEVEL=silent jest",
-    "test:coverage": "cross-env LOGGER_LEVEL=silent jest --coverage",
-    "ver": "echo $npm_package_version"
+    "test:coverage": "cross-env LOGGER_LEVEL=silent jest --coverage"
   },
   "keywords": [
     "utils",
@@ -46,6 +45,7 @@
     "catbee"
   ],
   "dependencies": {
+    "@types/express": "^5.0.3",
     "abort-controller": "^3.0.0",
     "pino": "^9.7.0",
     "reflect-metadata": "^0.2.2"

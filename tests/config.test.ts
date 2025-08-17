@@ -19,12 +19,10 @@ describe('Config', () => {
 
     expect(Config.Logger.level).toBe('info');
     expect(Config.Logger.name).toBe('@catbee/utils');
-    expect(Config.Logger.isoTimestamp).toBe(false);
 
     expect(Env.get).toHaveBeenCalledWith('LOGGER_LEVEL', 'info');
     expect(Env.get).toHaveBeenCalledWith('LOGGER_NAME', '@catbee/utils');
     expect(Env.get).toHaveBeenCalledWith('npm_package_name', '@catbee/utils');
-    expect(Env.getBoolean).toHaveBeenCalledWith('LOGGER_ISO_TIMESTAMP', false);
   });
 
   it('should load environment-provided logger values', () => {
@@ -46,7 +44,6 @@ describe('Config', () => {
 
     expect(Config.Logger.level).toBe('debug');
     expect(Config.Logger.name).toBe('custom-logger');
-    expect(Config.Logger.isoTimestamp).toBe(true);
   });
 
   it('should fallback to npm_package_name when LOGGER_NAME is not set', () => {
@@ -68,7 +65,6 @@ describe('Config', () => {
 
     expect(Config.Logger.level).toBe('warn');
     expect(Config.Logger.name).toBe('my-pkg');
-    expect(Config.Logger.isoTimestamp).toBe(false);
   });
 
   it('should still return string for level even if invalid', () => {
