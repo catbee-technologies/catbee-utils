@@ -54,7 +54,7 @@ console.log(isEmail("user@example.com")); // true
 - [**String Utilities**](#-string-utilities)
 - [**URL Utilities**](#-url-utilities)
 - [**Validate Utilities**](#-validate-utilities)
-- [**Decorators Utilities**](#decorators-utilities)
+- [**Decorators Utilities**](#-decorators-utilities)
 
 ---
 
@@ -146,7 +146,7 @@ import crypto from "crypto";
 export function setupRequestContext(req, res, next) {
   const requestId = req.headers["x-request-id"]?.toString() || crypto.randomUUID();
   ContextStore.run({ [StoreKeys.REQUEST_ID]: requestId }, () => {
-    const logger = getLogger().child({ reqId: requestId });
+    const logger = getLogger().child({ requestId });
     ContextStore.set(StoreKeys.LOGGER, logger);
     logger.info("Request context initialized");
     next();

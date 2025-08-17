@@ -50,7 +50,7 @@ export function getFromContext<T>(key: symbol): T | undefined {
  * app.use((req, res, next) => {
  *   const requestId = req.headers["x-request-id"]?.toString() || crypto.randomUUID();
  *   ContextStore.run({ [StoreKeys.REQUEST_ID]: requestId }, () => {
- *     ContextStore.set(StoreKeys.LOGGER, getLogger().child({ reqId: requestId }));
+ *     ContextStore.set(StoreKeys.LOGGER, getLogger().child({ requestId }));
  *     next();
  *   });
  * });

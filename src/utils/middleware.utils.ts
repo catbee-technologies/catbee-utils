@@ -123,7 +123,7 @@ export function setupRequestContext(options: { headerName?: string; autoLog?: bo
     ContextStore.run({ [StoreKeys.REQUEST_ID]: requestId }, () => {
       // Create a child logger for this request
       const childLogger = getLogger().child({
-        reqId: requestId,
+        requestId,
         method: req.method,
         url: req.originalUrl || req.url
       });
