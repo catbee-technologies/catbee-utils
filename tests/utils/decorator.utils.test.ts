@@ -14,12 +14,14 @@ import {
   Header,
   Before,
   After,
-  registerControllers,
-  Request,
-  Response,
-  NextFunction
+  Redirect,
+  Roles,
+  registerControllers
 } from '../../src/utils/decorators.utils';
-import { jest } from '@jest/globals'; // Add this import
+import { jest } from '@jest/globals';
+import { HttpStatusCodes } from '../../src/utils/http-status-codes';
+import { ForbiddenException } from '../../src/utils/exception.utils';
+import { NextFunction } from 'express';
 
 // Helper to create mock Router
 function createMockRouter() {
@@ -46,6 +48,8 @@ describe('Decorators and registerControllers', () => {
     } as any;
     mockRes = {
       json: jest.fn(),
+      send: jest.fn(),
+      redirect: jest.fn(),
       headersSent: false,
       status: jest.fn().mockReturnThis(),
       set: jest.fn().mockReturnThis()
@@ -144,5 +148,117 @@ describe('Decorators and registerControllers', () => {
     await routeHandler(mockReq, mockRes, mockNext);
 
     expect(mockNext).toHaveBeenCalledWith(error);
+  });
+
+  it('should handle static redirect with @Redirect decorator', async () => {
+    @Controller('/redirects')
+    class RedirectController {
+      @Get('/static')
+      @Redirect('/destination', 301)
+      staticRedirect() {
+        // This should not be called due to the decorator
+        return { shouldNotBeCalled: true };
+      }
+    }
+
+    registerControllers(mockRouter, [RedirectController]);
+    const [path, ...handlers] = mockRouter.get.mock.calls[0];
+    expect(path).toBe('/redirects/static');
+
+    const routeHandler = handlers[handlers.length - 1];
+    await routeHandler(mockReq, mockRes, mockNext);
+
+    expect(mockRes.redirect).toHaveBeenCalledWith(301, '/destination');
+    expect(mockRes.json).not.toHaveBeenCalled();
+  });
+
+  it('should handle dynamic redirect from handler return value', async () => {
+    @Controller('/redirects')
+    class DynamicRedirectController {
+      @Get('/dynamic')
+      @Redirect()
+      dynamicRedirect() {
+        return { url: '/dynamic-destination', statusCode: 307 };
+      }
+    }
+
+    registerControllers(mockRouter, [DynamicRedirectController]);
+    const [path, ...handlers] = mockRouter.get.mock.calls[0];
+    expect(path).toBe('/redirects/dynamic');
+
+    const routeHandler = handlers[handlers.length - 1];
+    await routeHandler(mockReq, mockRes, mockNext);
+
+    expect(mockRes.redirect).toHaveBeenCalledWith(307, '/dynamic-destination');
+  });
+
+  it('should allow access with matching roles', async () => {
+    mockReq.user = { roles: ['admin', 'editor'] };
+
+    @Controller('/protected')
+    class RolesController {
+      @Get('/admin')
+      @Roles('admin')
+      adminOnly() {
+        return { access: 'granted' };
+      }
+    }
+
+    registerControllers(mockRouter, [RolesController]);
+    const [path, ...handlers] = mockRouter.get.mock.calls[0];
+    expect(path).toBe('/protected/admin');
+
+    const routeHandler = handlers[handlers.length - 1];
+    await routeHandler(mockReq, mockRes, mockNext);
+
+    expect(mockRes.json).toHaveBeenCalledWith({ access: 'granted' });
+    expect(mockRes.status).not.toHaveBeenCalledWith(HttpStatusCodes.FORBIDDEN);
+  });
+
+  it('should deny access with insufficient roles', async () => {
+    mockReq.user = { roles: ['user'] };
+
+    @Controller('/protected')
+    class RolesController {
+      @Get('/admin')
+      @Roles('admin', 'superuser')
+      adminOnly() {
+        return { access: 'granted' };
+      }
+    }
+
+    registerControllers(mockRouter, [RolesController]);
+    const [path, ...handlers] = mockRouter.get.mock.calls[0];
+    expect(path).toBe('/protected/admin');
+
+    const routeHandler = handlers[handlers.length - 1];
+    await routeHandler(mockReq, mockRes, mockNext);
+
+    expect(mockRes.status).toHaveBeenCalledWith(HttpStatusCodes.FORBIDDEN);
+    expect(mockRes.json).toHaveBeenCalledWith(expect.any(ForbiddenException));
+    // The handler should not execute
+    expect(mockRes.json).not.toHaveBeenCalledWith({ access: 'granted' });
+  });
+
+  it('should handle missing user object gracefully', async () => {
+    // No user object on request
+    mockReq.user = undefined;
+
+    @Controller('/protected')
+    class RolesController {
+      @Get('/admin')
+      @Roles('admin')
+      adminOnly() {
+        return { access: 'granted' };
+      }
+    }
+
+    registerControllers(mockRouter, [RolesController]);
+    const [path, ...handlers] = mockRouter.get.mock.calls[0];
+    const routeHandler = handlers[handlers.length - 1];
+    await routeHandler(mockReq, mockRes, mockNext);
+
+    expect(mockRes.status).toHaveBeenCalledWith(HttpStatusCodes.FORBIDDEN);
+    expect(mockRes.json).toHaveBeenCalledWith(expect.any(ForbiddenException));
   });
 });

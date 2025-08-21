@@ -1,12 +1,13 @@
-import { randomUUID } from 'crypto';
-import { requestId, timeout, errorHandler, responseTime } from '../../src/utils/middleware.utils';
+import { requestId, timeout, errorHandler, responseTime, setupRequestContext } from '../../src/utils/middleware.utils';
 import { HttpStatusCodes } from '../../src/utils/http-status-codes';
 import { ErrorResponse } from '../../src/utils/response.utils';
 import { Env } from '../../src/utils/env.utils';
 import { getLogger } from '../../src/utils/logger.utils';
+import { ContextStore, StoreKeys } from '../../src/utils/context-store.utils';
+import { uuid } from '../../src/utils/id.utils';
 
-jest.mock('crypto', () => ({
-  randomUUID: jest.fn()
+jest.mock('../../src/utils/id.utils', () => ({
+  uuid: jest.fn()
 }));
 const childLogger = { info: jest.fn(), error: jest.fn() };
 jest.mock('../../src/utils/logger.utils', () => ({
@@ -20,8 +21,20 @@ jest.mock('../../src/utils/env.utils', () => ({
   Env: { isDev: jest.fn() }
 }));
 jest.mock('../../src/config', () => ({
-  Config: { Http: { timeout: 30000 } }
+  config: { http: { timeout: 30000 } }
 }));
+jest.mock('../../src/utils/context-store.utils', () => {
+  const original = jest.requireActual('../../src/utils/context-store.utils');
+  return {
+    ...original,
+    ContextStore: {
+      ...original.ContextStore,
+      run: jest.fn((store, cb) => cb()),
+      set: jest.fn()
+    },
+    getRequestId: jest.fn(() => undefined)
+  };
+});
 
 describe('Middleware tests', () => {
   let req: any;
@@ -41,7 +54,7 @@ describe('Middleware tests', () => {
       })
     };
     next = jest.fn();
-    (randomUUID as jest.Mock).mockReturnValue('generated-uuid');
+    (uuid as jest.Mock).mockReturnValue('generated-uuid');
     (getLogger as jest.Mock).mockReturnValue({
       info: jest.fn(),
       error: jest.fn()
@@ -187,6 +200,89 @@ describe('Middleware tests', () => {
       mw(req, res, next);
       res.end();
       expect(res.setHeader).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('setupRequestContext middleware', () => {
+    let req: any;
+    let res: any;
+    let next: jest.Mock;
+    let childLogger: any;
+
+    beforeEach(() => {
+      req = { headers: {}, method: 'GET', url: '/test', originalUrl: '/test' };
+      res = {};
+      next = jest.fn();
+
+      (uuid as jest.Mock).mockReturnValue('generated-uuid');
+
+      childLogger = { info: jest.fn(), error: jest.fn() };
+      (getLogger as jest.Mock).mockReturnValue({
+        child: jest.fn(() => childLogger)
+      });
+
+      (ContextStore.run as jest.Mock).mockImplementation((ctx, fn) => fn());
+    });
+
+    afterEach(() => {
+      jest.clearAllMocks();
+    });
+
+    it('should generate a new requestId if header is missing', () => {
+      const middleware = setupRequestContext();
+      middleware(req, res, next);
+
+      expect(ContextStore.run).toHaveBeenCalledWith({ [StoreKeys.REQUEST_ID]: 'generated-uuid' }, expect.any(Function));
+      expect(ContextStore.set).toHaveBeenCalledWith(StoreKeys.LOGGER, childLogger);
+      expect(childLogger.info).toHaveBeenCalledWith('Request context initialized');
+      expect(next).toHaveBeenCalled();
+    });
+
+    it('should use existing requestId from headers', () => {
+      req.headers['x-request-id'] = 'header-id';
+      const middleware = setupRequestContext();
+      middleware(req, res, next);
+
+      expect(ContextStore.run).toHaveBeenCalledWith({ [StoreKeys.REQUEST_ID]: 'header-id' }, expect.any(Function));
+      expect(next).toHaveBeenCalled();
+    });
+
+    it('should use req.id if present', () => {
+      req.id = 'req-id';
+      const middleware = setupRequestContext();
+      middleware(req, res, next);
+
+      expect(ContextStore.run).toHaveBeenCalledWith({ [StoreKeys.REQUEST_ID]: 'req-id' }, expect.any(Function));
+      expect(next).toHaveBeenCalled();
+    });
+
+    it('should respect custom headerName', () => {
+      req.headers['x-custom-id'] = 'custom-id';
+      const middleware = setupRequestContext({ headerName: 'x-custom-id' });
+      middleware(req, res, next);
+
+      expect(ContextStore.run).toHaveBeenCalledWith({ [StoreKeys.REQUEST_ID]: 'custom-id' }, expect.any(Function));
+      expect(next).toHaveBeenCalled();
+    });
+
+    it('should skip autoLog when autoLog=false', () => {
+      const middleware = setupRequestContext({ autoLog: false });
+      middleware(req, res, next);
+
+      expect(childLogger.info).not.toHaveBeenCalled();
+      expect(next).toHaveBeenCalled();
+    });
+
+    it('should create a child logger with requestId, method, and url', () => {
+      const middleware = setupRequestContext();
+      middleware(req, res, next);
+
+      expect(getLogger).toHaveBeenCalled();
+      expect(getLogger().child).toHaveBeenCalledWith({
+        requestId: 'generated-uuid',
+        method: 'GET',
+        url: '/test'
+      });
     });
   });
 });
