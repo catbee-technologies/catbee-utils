@@ -1,6 +1,6 @@
-import { randomUUID } from 'crypto';
 import { ApiResponse } from '../types/api-response';
 import { getRequestId } from './context-store.utils';
+import { uuid } from './id.utils';
 
 /**
  * Standard HTTP response wrapper for successful responses.
@@ -22,7 +22,7 @@ export class SuccessResponse<T> implements ApiResponse<T> {
   timestamp: string = new Date().toISOString();
 
   /** Unique identifier for this response, useful for request tracing. */
-  requestId: string = getRequestId() ?? randomUUID();
+  requestId: string = getRequestId() ?? uuid();
 
   /**
    * Constructs a new success response.
@@ -51,7 +51,7 @@ export class ErrorResponse extends Error implements Omit<ApiResponse<never>, 'da
   timestamp: string = new Date().toISOString();
 
   /** Unique identifier for this error instance. */
-  requestId: string = getRequestId() ?? randomUUID();
+  requestId: string = getRequestId() ?? uuid();
 
   /**
    * Constructs a new error response.
@@ -143,7 +143,7 @@ export class RedirectResponse {
   isRedirect: boolean = true;
 
   /** Unique identifier for this response */
-  requestId: string = getRequestId() ?? randomUUID();
+  requestId: string = getRequestId() ?? uuid();
 
   /**
    * Constructs a new redirect response.

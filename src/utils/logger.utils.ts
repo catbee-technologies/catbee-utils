@@ -1,7 +1,8 @@
 import pino, { LoggerOptions, stdTimeFunctions } from 'pino';
 import type { Logger as PinoLogger } from 'pino'; // Type-only import
-import { Config } from '../config';
+import { config } from '../config';
 import { ContextStore, StoreKeys } from './context-store.utils';
+import { Env } from './env.utils';
 
 /**
  * Symbol used to store the root logger in the Node.js global object.
@@ -18,6 +19,183 @@ export type Logger = pino.Logger;
  */
 export type LoggerLevels = pino.Level;
 
+// Default sensitive fields
+export const defaultSensitiveFields = [
+  'password',
+  'secret',
+  'token',
+  'apiKey',
+  'api_key',
+  'auth',
+  'jwt',
+  'access_token',
+  'client_secret',
+  'session_token',
+  'refresh_token'
+];
+
+/**
+ * The global censor function used by the logger.
+ */
+let globalRedactCensor: (value: unknown, path: string[], sensitiveFields?: string[]) => string = (
+  value,
+  path,
+  sensitiveFields = defaultSensitiveFields
+) => {
+  if (typeof value !== 'string') return '***';
+
+  const lowerPath = path.map(p => p.toLowerCase());
+  const lowerSensitiveFields = sensitiveFields.map(f => f.toLowerCase());
+
+  if (lowerPath.some(p => lowerSensitiveFields.includes(p))) return '***';
+
+  // Redact URLs
+  if (lowerPath[0] === 'url') {
+    return value.replace(new RegExp(`([?&](${lowerSensitiveFields.join('|')})=)[^&#]*`, 'gi'), '$1***');
+  }
+
+  if (lowerPath.some(p => p.includes('authorization') || p.includes('auth'))) {
+    return value.replace(/^(\S+)\s+.+$/, '$1 ***') || '***';
+  }
+
+  // Redact sensitive fields - check each path segment against each sensitive field
+  if (lowerPath.some(pathPart => lowerSensitiveFields.some(field => pathPart.includes(field)))) {
+    return '***';
+  }
+
+  if (path.length > 0 && !['req', 'res', 'headers'].includes(lowerPath[0])) {
+    return value;
+  }
+
+  return value;
+};
+
+/**
+ * Sets the global redaction censor function used throughout the application for log redaction.
+ *
+ * Use this function to customize how sensitive data is redacted in logs. The provided function
+ * will replace the default censor implementation.
+ *
+ * @example
+ * ```typescript
+ * // Custom censor that redacts only specific values
+ * setRedactCensor((value, path, sensitiveFields) => {
+ *   if (path.includes('password')) return '***';
+ *   return value;
+ * });
+ * ```
+ *
+ * @param fn - The redaction censor function to use globally. This function receives:
+ *   - value: The data value to potentially redact
+ *   - path: Array of strings representing the path to the value in the object
+ *   - sensitiveFields: Optional array of field names to consider sensitive
+ * @returns void
+ */
+export function setRedactCensor(fn: (value: unknown, path: string[], sensitiveFields?: string[]) => string) {
+  globalRedactCensor = fn;
+}
+
+/**
+ * Gets the current global redaction censor function used for log redaction.
+ *
+ * This function is called internally by the logger when determining how to redact
+ * sensitive information. It can also be used to access the current censor implementation
+ * for composition or extension.
+ *
+ * @example
+ * ```typescript
+ * const currentCensor = getRedactCensor();
+ * // Create an enhanced censor that extends the current one
+ * setRedactCensor((value, path, fields) => {
+ *   // Add custom logic before delegating to current censor
+ *   if (someCondition) return customHandling();
+ *   return currentCensor(value, path, fields);
+ * });
+ * ```
+ *
+ * @returns The current redaction censor function
+ */
+export function getRedactCensor() {
+  return globalRedactCensor;
+}
+
+/**
+ * Convenience function to redact sensitive data using the current global redact censor.
+ *
+ * This is a direct wrapper around the global censor function that simplifies usage
+ * in application code without needing to access the censor function directly.
+ *
+ * @example
+ * ```typescript
+ * // Redact a potential sensitive value
+ * const safeValue = redact(value, ['user', 'apiKey']);
+ * ```
+ *
+ * @param value - The value to potentially redact
+ * @param path - Array of strings representing the path to the value in the object
+ * @param sensitiveFields - Optional array of field names to consider sensitive
+ * @returns The redacted string value or "***" for redacted content
+ */
+export function redact(value: unknown, path: string[], sensitiveFields?: string[]) {
+  return globalRedactCensor(value, path, sensitiveFields);
+}
+
+/**
+ * Extends the current redaction function with additional fields to redact.
+ *
+ * This function wraps the existing censor while adding more fields to be considered
+ * sensitive without replacing the entire redaction logic.
+ *
+ * @example
+ * ```typescript
+ * // Add custom fields to be redacted in all future redaction operations
+ * addRedactFields(['customerId', 'accountNumber']);
+ * ```
+ *
+ * @param fields - Array of additional field names to redact
+ */
+export function addRedactFields(fields: string[]) {
+  const prev = globalRedactCensor;
+  globalRedactCensor = (value, path, sensitiveFields = defaultSensitiveFields) =>
+    prev(value, path, [...(sensitiveFields || []), ...fields]);
+}
+
+/**
+ * Replaces the default list of sensitive fields with a new list.
+ *
+ * This is useful when you want complete control over what fields are considered
+ * sensitive by default, rather than using the library's built-in list.
+ *
+ * @example
+ * ```typescript
+ * // Replace default sensitive fields with a custom list
+ * setSensitiveFields(['password', 'ssn', 'creditCard']);
+ * ```
+ *
+ * @param fields - Array of field names to set as the new default sensitive fields
+ */
+export function setSensitiveFields(fields: string[]) {
+  defaultSensitiveFields.splice(0, defaultSensitiveFields.length, ...fields);
+}
+
+/**
+ * Adds additional field names to the default sensitive fields list.
+ *
+ * This preserves the existing sensitive fields while adding new ones for
+ * application-specific sensitive data.
+ *
+ * @example
+ * ```typescript
+ * // Add domain-specific sensitive fields to the default list
+ * addSensitiveFields(['socialSecurityNumber', 'medicalRecordNumber']);
+ * ```
+ *
+ * @param fields - Array of additional field names to add to the sensitive fields list
+ */
+export function addSensitiveFields(fields: string[]) {
+  defaultSensitiveFields.push(...fields);
+}
+
 /**
  * Use an object compatible with either modern or legacy global scopes.
  */
@@ -32,23 +210,33 @@ const _global = _globalThis as unknown as { [GLOBAL_LOGGER_KEY]: PinoLogger };
  */
 function setupLogger(): void {
   const logParams: LoggerOptions = {
-    name: Config.Logger.name,
-    level: Config.Logger.level,
+    name: config.logger.name || '@catbee/utils',
+    level: config.logger.level || 'info',
     redact: {
-      paths: ['req.authorization', 'url'],
-      censor(value, path) {
-        if (path[0] === 'url') {
-          return value.replace(/access_token=[a-zA-Z0-9_-]*/, 'access_token=***');
-        } else if (path[1] === 'authorization') {
-          return value.replace(/\s+(\S+)$/, ' ***');
-        }
-        return '***';
-      }
+      paths: ['req.authorization', 'res.authorization', 'url', 'headers.authorization'],
+      censor: (value, path) => redact(value, path)
     },
     timestamp: stdTimeFunctions.isoTime
   };
 
-  _global[GLOBAL_LOGGER_KEY] = pino(logParams);
+  const logger =
+    config.logger.pretty && Env.isDev()
+      ? pino(
+          logParams,
+          pino.transport({
+            target: 'pino-pretty',
+            options: {
+              colorize: true,
+              translateTime: 'SYS:standard',
+              ignore: 'pid,hostname',
+              singleLine: false, // multi-line errors
+              levelFirst: true
+            }
+          })
+        )
+      : pino(logParams);
+
+  _global[GLOBAL_LOGGER_KEY] = logger;
   _global[GLOBAL_LOGGER_KEY].debug('Logger initialized');
 }
 

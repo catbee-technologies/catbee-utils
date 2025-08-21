@@ -1,4 +1,4 @@
-import { Config } from '../config';
+import { config } from '../config';
 
 /**
  * Represents a cached entry with a value and an expiration timestamp.
@@ -42,7 +42,7 @@ export class TTLCache<K, V> {
    * @param options - Configuration options for the cache
    */
   constructor(options: TTLCacheOptions = {}) {
-    this.ttlMs = options.ttlMs ?? Config.Cache.defaultTtl;
+    this.ttlMs = options.ttlMs ?? config.cache.defaultTtl;
     this.maxSize = options.maxSize;
 
     // Setup auto-cleanup if enabled
@@ -74,9 +74,13 @@ export class TTLCache<K, V> {
   setWithTTL(key: K, value: V, ttlMs: number): void {
     const now = Date.now();
     const expiresAt = now + ttlMs;
+
+    if (this.cache.has(key)) {
+      this.cache.delete(key); // remove old entry to maintain LRU order
+    }
+
     this.cache.set(key, { value, expiresAt, lastAccessed: now });
 
-    // Enforce max size limit if configured
     if (this.maxSize && this.cache.size > this.maxSize) {
       this.evictLRU();
     }
@@ -98,8 +102,12 @@ export class TTLCache<K, V> {
       return undefined;
     }
 
-    // Update last access time for LRU tracking
+    // Update lastAccessed and move key to the end (most recently used)
     entry.lastAccessed = now;
+    // Re-insert to end of Map to maintain LRU order
+    this.cache.delete(key);
+    this.cache.set(key, entry);
+
     return entry.value;
   }
 
@@ -296,25 +304,19 @@ export class TTLCache<K, V> {
    * @private
    */
   private evictLRU(): void {
-    let oldestKey: K | undefined;
-    let oldestAccess = Infinity;
+    const now = Date.now();
 
-    for (const [key, entry] of this.cache.entries()) {
-      // Skip entries that are already expired
-      if (Date.now() > entry.expiresAt) {
+    // Remove all expired items first
+    for (const [key, entry] of Array.from(this.cache.entries())) {
+      if (now > entry.expiresAt) {
         this.cache.delete(key);
-        return;
-      }
-
-      // Find the oldest accessed entry
-      if (entry.lastAccessed && entry.lastAccessed < oldestAccess) {
-        oldestAccess = entry.lastAccessed;
-        oldestKey = key;
       }
     }
 
-    if (oldestKey) {
-      this.cache.delete(oldestKey);
+    // Evict oldest entries until within max size
+    while (this.maxSize && this.cache.size > this.maxSize) {
+      const oldestKey = this.cache.keys().next().value;
+      this.cache.delete(oldestKey as K);
     }
   }
 }

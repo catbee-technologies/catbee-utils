@@ -13,8 +13,9 @@
   },
   "license": "Apache-2.0",
   "scripts": {
+    "start": "node build/src/index.js",
     "prepack": "npm run compile",
-    "compile": "npm run clean && tsc --build tsconfig.json tsconfig.esm.json tsconfig.esnext.json",
+    "compile": "npm run clean && tsc --build tsconfig.json tsconfig.esm.json tsconfig.esnext.json && npm run generate:exports",
     "clean": "tsc --build --clean tsconfig.json tsconfig.esm.json tsconfig.esnext.json",
     "lint": "eslint src tests",
     "lint:fix": "eslint --fix src tests",
@@ -22,7 +23,10 @@
     "pretest": "npm run compile",
     "dryrun": "npm pack --dry-run",
     "test": "cross-env LOGGER_LEVEL=silent jest",
-    "test:coverage": "cross-env LOGGER_LEVEL=silent jest --coverage"
+    "test:coverage": "cross-env LOGGER_LEVEL=silent jest --coverage",
+    "coverage": "npm run test:coverage",
+    "test:debug": "cross-env LOGGER_LEVEL=info jest",
+    "generate:exports": "node scripts/generate-exports.mjs"
   },
   "keywords": [
     "utils",
@@ -45,16 +49,15 @@
     "catbee"
   ],
   "dependencies": {
-    "@types/express": "^5.0.3",
-    "abort-controller": "^3.0.0",
-    "pino": "^9.7.0",
-    "reflect-metadata": "^0.2.2"
+    "pino": "^9.7.0"
   },
   "devDependencies": {
+    "@types/express": "^5.0.3",
     "@types/jest": "^30.0.0",
     "@types/node": "^24.2.0",
     "@typescript-eslint/eslint-plugin": "^8.39.0",
     "@typescript-eslint/parser": "^8.39.0",
+    "abort-controller": "^3.0.0",
     "cross-env": "^10.0.0",
     "eslint": "^9.32.0",
     "eslint-config-prettier": "^10.1.8",
@@ -64,7 +67,9 @@
     "jest": "^30.0.5",
     "jest-junit": "^16.0.0",
     "jest-sonar-reporter": "^2.0.0",
+    "pino-pretty": "^13.1.1",
     "prettier": "^3.6.2",
+    "reflect-metadata": "^0.2.2",
     "ts-jest": "^29.4.1",
     "typescript": "^5.9.2",
     "typescript-eslint": "^8.39.0"

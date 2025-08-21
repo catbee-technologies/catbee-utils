@@ -1,3 +1,5 @@
+export { setConfig, getConfig } from './config';
+
 export * from './utils/array.utils';
 export * from './utils/async.utils';
 export * from './utils/cache.utils';
@@ -13,6 +15,7 @@ export * from './utils/id.utils';
 export * from './utils/logger.utils';
 export * from './utils/middleware.utils';
 export * from './utils/obj.utils';
+export * from './utils/request.utils';
 export * from './utils/response.utils';
 export * from './utils/string.utils';
 export * from './utils/url.utils';

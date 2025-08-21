@@ -2,7 +2,6 @@ import {
   createHmac,
   createHash,
   BinaryToTextEncoding,
-  randomUUID,
   randomBytes,
   createCipheriv,
   createDecipheriv,
@@ -11,6 +10,7 @@ import {
   CipherGCMTypes
 } from 'crypto';
 import { promisify } from 'util';
+import { uuid } from './id.utils';
 
 export type BufferEncoding =
   | 'ascii'
@@ -100,7 +100,7 @@ export function md5(input: string): string {
  * @returns {string} Random string hashed with SHA-256 (hex encoding).
  */
 export function randomString(): string {
-  return sha256(randomUUID());
+  return sha256(uuid());
 }
 
 /**

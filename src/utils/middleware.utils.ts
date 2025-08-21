@@ -1,5 +1,4 @@
-import { randomUUID } from 'crypto';
-import { Config } from '../config';
+import { config } from '../config';
 import { uuid } from './id.utils';
 import { HttpStatusCodes } from './http-status-codes';
 import { ErrorResponse } from './response.utils';
@@ -26,7 +25,7 @@ export function requestId(options?: { headerName?: string; exposeHeader?: boolea
   return (req, res, next) => {
     // Use existing request ID from header or generate a new one
     const existingId = req.headers[headerName.toLowerCase()];
-    const id = (existingId as string) || randomUUID();
+    const id = (existingId as string) || uuid();
 
     // Attach ID to request object
     (req as any).id = id;
@@ -85,7 +84,7 @@ export function responseTime(options?: { addHeader?: boolean; logOnComplete?: bo
  * @param {number} [timeoutMs=30000] - Timeout in milliseconds
  * @returns {Middleware} Express-compatible middleware
  */
-export function timeout(timeoutMs: number = Config.Http.timeout): Middleware {
+export function timeout(timeoutMs: number = config.http.timeout): Middleware {
   return (req, res, next) => {
     // Set timeout for the request
     const timer = setTimeout(() => {
@@ -118,7 +117,7 @@ export function setupRequestContext(options: { headerName?: string; autoLog?: bo
   const { headerName = 'x-request-id', autoLog = true } = options;
   return (req, _res, next) => {
     // Generate or use existing request ID
-    const requestId = (req.headers[headerName] as string) || req?.['id'] || crypto.randomUUID();
+    const requestId = (req.headers[headerName] as string) || req?.['id'] || uuid();
 
     ContextStore.run({ [StoreKeys.REQUEST_ID]: requestId }, () => {
       // Create a child logger for this request
@@ -140,16 +139,40 @@ export function setupRequestContext(options: { headerName?: string; autoLog?: bo
   };
 }
 
+export interface ErrorHandlerOptions {
+  /** Whether to log errors (default: true) */
+  logErrors?: boolean;
+  /** Whether to include error details in non-production (default: false) */
+  includeDetails?: boolean;
+}
+
 /**
  * Global error handling middleware with enhanced features.
  *
- * @param {object} [options] - Error handler options
+ * @param {ErrorHandlerOptions} options - Error handler options
  * @param {boolean} [options.logErrors=true] - Whether to log errors
  * @param {boolean} [options.includeDetails=false] - Whether to include error details in non-production
- * @param {Function} [options.logger=getLogger().error] - Custom logging function
- * @returns {(err: any, req: Request, res: Response, next: NextFunction) => void} Error middleware
+ * @returns Error middleware
+ *
+ * @example
+ * import express from 'express';
+ * import { errorHandler } from '@catbee/utils';
+ *
+ * const app = express();
+ *
+ * // Your routes
+ * app.get('/ping', (req, res) => {
+ *   throw new Error('Something went wrong');
+ * });
+ *
+ * // Error handler (must be last middleware)
+ * app.use(errorHandler({ includeDetails: true }));
+ *
+ * app.listen(3000, () => {
+ *   console.log('Server running on port 3000');
+ * });
  */
-export function errorHandler(options?: { logErrors?: boolean; includeDetails?: boolean }) {
+export function errorHandler(options?: ErrorHandlerOptions) {
   const logErrors = options?.logErrors !== false;
   const includeDetails = options?.includeDetails === true;
 
