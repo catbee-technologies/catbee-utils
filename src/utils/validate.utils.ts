@@ -27,6 +27,17 @@
  */
 
 /**
+ * Checks if a string is a valid port number.
+ *
+ * @param str - The input string or number.
+ * @returns True if valid port number, else false.
+ */
+export function isPort(value: string | number): boolean {
+  const port = typeof value === 'string' ? Number(value.trim()) : value;
+  return Number.isInteger(port) && port > 0 && port <= 65535;
+}
+
+/**
  * Checks if a string is a valid email address.
  *
  * @param {string} str - The input string.

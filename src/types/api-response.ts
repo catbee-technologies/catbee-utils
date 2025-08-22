@@ -33,7 +33,7 @@ export interface ApiResponse<T = any> {
   /** Indicates whether an error occurred (true = error, false = success). */
   error: boolean;
 
-  /** Human-readable message to describe the result or error. */
+  /** Success message describing the result of the operation. */
   message: string;
 
   /** Unique request ID for traceability in logs (e.g., from a middleware). */
@@ -89,14 +89,11 @@ export interface ApiErrorResponse extends Omit<ApiResponse<never>, 'data'> {
   /** HTTP status code */
   status: number;
 
-  /** Error code for client-side error handling */
-  code?: string;
+  /** Path to the resource that caused the error */
+  path: string;
 
-  /** Optional detailed validation errors */
-  details?: Record<string, string[]>;
-
-  /** Link to error documentation */
-  docUrl?: string;
+  /** Stack trace of the error (if available) */
+  stack?: string[];
 }
 
 /**

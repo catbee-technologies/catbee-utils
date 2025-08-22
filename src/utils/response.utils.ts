@@ -22,8 +22,10 @@
  * SOFTWARE.
  */
 
-import { ApiResponse } from '../types/api-response';
+import { Request } from 'express';
+import { ApiErrorResponse, ApiResponse } from '../types/api-response';
 import { getRequestId } from './context-store.utils';
+import { Env } from './env.utils';
 import { uuid } from './id.utils';
 
 /**
@@ -202,6 +204,43 @@ export function createSuccessResponse<T>(data: T, message: string = 'Success'): 
  */
 export function createErrorResponse(message: string, statusCode: number = 500): ErrorResponse {
   return new ErrorResponse(message, statusCode);
+}
+
+/**
+ * Creates a final error response with request information.
+ *
+ * @param req - The original request object.
+ * @param status - The HTTP status code.
+ * @param message - The error message.
+ * @param error - The original error object (optional).
+ * @param options - Additional options for the response (optional).
+ * @returns A properly formatted final error response.
+ */
+export function createFinalErrorResponse(
+  req: Request,
+  status: number,
+  message: string,
+  error?: any,
+  options?: { includeDetails?: boolean }
+) {
+  const isDev = Env.isDev();
+  const includeDetails = options?.includeDetails && isDev;
+
+  const response: ApiErrorResponse = {
+    error: true,
+    message,
+    timestamp: new Date().toISOString(),
+    requestId: error?.requestId || req?.id || uuid(),
+    status,
+    path: req.originalUrl || req.url
+  };
+
+  // Include stack trace in development mode if requested
+  if (includeDetails && error?.stack) {
+    response.stack = error.stack.split('\n').map((line: string) => line.trim());
+  }
+
+  return response;
 }
 
 /**

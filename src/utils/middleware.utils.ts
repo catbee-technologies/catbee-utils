@@ -22,14 +22,14 @@
  * SOFTWARE.
  */
 
-import { config } from '../config';
 import { uuid } from './id.utils';
 import { HttpStatusCodes } from './http-status-codes';
-import { ErrorResponse } from './response.utils';
-import { Env } from './env.utils';
+import { createFinalErrorResponse, ErrorResponse } from './response.utils';
 import { getLogger } from './logger.utils';
 import type { Request, Response, NextFunction } from 'express';
 import { ContextStore, StoreKeys } from './context-store.utils';
+import { RequestTimeoutException } from './exception.utils';
+import { ApiErrorResponse } from '../types/api-response';
 
 export type Middleware = (req: Request, res: Response, next: NextFunction) => void | Promise<void>;
 
@@ -40,19 +40,25 @@ export type Middleware = (req: Request, res: Response, next: NextFunction) => vo
  * @param {object} [options] - Configuration options
  * @param {string} [options.headerName='X-Request-ID'] - Header name for request ID
  * @param {boolean} [options.exposeHeader=true] - Whether to expose the header in response
+ * @param {() => string} [options.generator] - Custom ID generator function
  * @returns {Middleware} Express-compatible middleware
  */
-export function requestId(options?: { headerName?: string; exposeHeader?: boolean }): Middleware {
+export function requestId(options?: {
+  headerName?: string;
+  exposeHeader?: boolean;
+  generator?: () => string;
+}): Middleware {
   const headerName = options?.headerName || 'X-Request-ID';
   const exposeHeader = options?.exposeHeader !== false;
+  const generateId = options?.generator || uuid;
 
   return (req, res, next) => {
     // Use existing request ID from header or generate a new one
     const existingId = req.headers[headerName.toLowerCase()];
-    const id = (existingId as string) || uuid();
+    const id = (existingId as string) || generateId();
 
     // Attach ID to request object
-    (req as any).id = id;
+    req.id = id;
 
     // Add ID to response headers
     if (exposeHeader) {
@@ -78,22 +84,24 @@ export function responseTime(options?: { addHeader?: boolean; logOnComplete?: bo
   return (req: Request, res: Response, next: NextFunction) => {
     const start = process.hrtime();
 
+    // Function to calculate duration
+    const getDuration = () => {
+      const diff = process.hrtime(start);
+      return (diff[0] * 1e3 + diff[1] * 1e-6).toFixed(2);
+    };
+
     if (addHeader) {
-      // Wrap res.end to set header just before sending response
-      const originalEnd = res.end;
-      res.end = function (chunk?: any, encoding?: any, cb?: any) {
-        const diff = process.hrtime(start);
-        const duration = diff[0] * 1e3 + diff[1] * 1e-6;
-        res.setHeader('X-Response-Time', `${duration.toFixed(2)}ms`);
-        return originalEnd.call(this, chunk, encoding, cb);
+      // Ensure header is set before response is sent
+      const originalWriteHead = res.writeHead;
+      res.writeHead = function (...args: any[]) {
+        res.setHeader('X-Response-Time', `${getDuration()}ms`);
+        return originalWriteHead.apply(this, args as any);
       };
     }
 
     if (logOnComplete) {
       res.on('finish', () => {
-        const diff = process.hrtime(start);
-        const duration = diff[0] * 1e3 + diff[1] * 1e-6;
-        getLogger().info(`${req.method} ${req.url} - ${duration.toFixed(2)}ms`);
+        getLogger().info(`${req.method} ${req.url} - ${getDuration()}ms`);
       });
     }
 
@@ -108,16 +116,12 @@ export function responseTime(options?: { addHeader?: boolean; logOnComplete?: bo
  * @param {number} [timeoutMs=30000] - Timeout in milliseconds
  * @returns {Middleware} Express-compatible middleware
  */
-export function timeout(timeoutMs: number = config.http.timeout): Middleware {
-  return (req, res, next) => {
+export function timeout(timeoutMs: number = 30000): Middleware {
+  return (_req, res, next) => {
     // Set timeout for the request
     const timer = setTimeout(() => {
-      res.status(408).json({
-        error: true,
-        message: 'Request timeout',
-        status: 408,
-        timestamp: new Date().toISOString()
-      });
+      const response = new RequestTimeoutException('Request timed out');
+      res.status(HttpStatusCodes.REQUEST_TIMEOUT).json(response);
     }, timeoutMs);
 
     // Clear timeout when response is sent
@@ -206,50 +210,29 @@ export function errorHandler(options?: ErrorHandlerOptions) {
 
     // Log error if enabled
     if (logErrors) {
-      getLogger().error({ error: err }, `${err.message || 'Unknown error'}`);
+      getLogger().error({ err }, `${err.message || 'Unknown error'}`);
     }
 
     // Handle ErrorResponse instances (our custom error class)
     if (err instanceof ErrorResponse) {
-      return res.status(status).json({
-        error: err.error,
+      const result: ApiErrorResponse = {
+        error: true,
         message: err.message,
         timestamp: err.timestamp,
-        requestId: err.requestId || (req as any).id || uuid(),
-        path: req.originalUrl || req.url
-      });
-    }
-
-    const createErrorResponse = (message: string, req: Request, error: any, options?: { includeDetails?: boolean }) => {
-      const isDev = Env.isDev();
-      const includeDetails = options?.includeDetails && isDev;
-
-      const response: Record<string, any> = {
-        error: true,
-        message,
-        timestamp: new Date().toISOString(),
-        requestId: error?.requestId || (req as any).id || uuid(),
+        requestId: err?.requestId || req?.id || uuid(),
+        status,
         path: req.originalUrl || req.url
       };
 
-      // Include error code if present
-      if (error?.code) {
-        response.code = error.code;
+      if (includeDetails && err?.stack) {
+        result.stack = err.stack.split('\n').map((line: string) => line.trim());
       }
-
-      // Include stack trace in development mode if requested
-      if (includeDetails && error?.stack) {
-        response.stack = error.stack.split('\n').map((line: string) => line.trim());
-      }
-
-      return response;
-    };
+      return res.status(status).json(result);
+    }
 
     // Handle any other errors
-    return res.status(status).json(
-      createErrorResponse(err?.message || 'Internal Server Error', req, err, {
-        includeDetails
-      })
-    );
+    return res
+      .status(status)
+      .json(createFinalErrorResponse(req, status, err?.message || 'Internal Server Error', err, { includeDetails }));
   };
 }
