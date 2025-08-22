@@ -536,11 +536,11 @@ logger.error({ context: "some context" }, "Error occurred");
 
 ## 🧩 Middleware Utilities
 
-- `requestId(options?): Middleware` – Generate and attach a unique request ID to each request.
-- `responseTime(options?): Middleware` – Measure and log the response time for each request.
+- `requestId(options: { headerName?: string; exposeHeader?: boolean; generator?: () => string }): Middleware` – Generate and attach a unique request ID to each request.
+- `responseTime(options?: { addHeader?: boolean; logOnComplete?: boolean }): Middleware` – Measure and log the response time for each request.
 - `timeout(timeoutMs?: number): Middleware` – Abort requests that exceed a specified timeout.
 - `setupRequestContext(): Middleware` – Set up the request context for each incoming request.
-- `errorHandler(options?): Middleware` – Centralized error handling middleware.
+- `errorHandler(options: { logErrors?: boolean; includeDetails?: boolean }): Middleware` – Centralized error handling middleware.
 
 **Example:**
 ```ts
@@ -557,7 +557,8 @@ A set of helpers for working with JavaScript objects, including deep merging, fl
 - `isObjEmpty(obj: Record<any, any>): boolean` – Check if an object has no own properties.
 - `pick<T, K extends keyof T>(obj: T, keys: K[]): Pick<T, K>` – Create a new object with only the specified keys.
 - `omit<T, K extends keyof T>(obj: T, keys: K[]): Omit<T, K>` – Create a new object without the specified keys.
-- `deepObjMerge<T>(target: T, source: Partial<T>): T` – Deeply merge two objects.
+- `deepObjMerge<T extends object>(target: T, ...sources: any[]): T` – Deeply merge multiple objects into the target.
+- `isPlainObject(value: any): value is Record<string, any>` – Check if a value is a plain object.
 - `flattenObject<T>(obj: T, prefix?: string): Record<string, any>` – Flatten a nested object into dot notation.
 - `getValueByPath<T>(obj: T, path: string): any` – Get a value from an object by dot path.
 - `setValueByPath<T>(obj: T, path: string, value: any): T` – Set a value in an object by dot path.
@@ -828,6 +829,7 @@ const url = appendQueryParams('https://example.com', { page: 1, limit: 10 });
 
 A comprehensive suite of validators for checking strings, numbers, objects, arrays, and common formats such as email, UUID, IP, and more. Useful for input validation and API parameter checks.
 
+- `isPort(str: string | number): boolean` – Check if a string or number is a valid port number.
 - `isEmail(str: string): boolean` – Check if a string is a valid email address.
 - `isUUID(str: string): boolean` – Check if a string is a valid UUID.
 - `isURL(str: string): boolean` – Check if a string is a valid URL.

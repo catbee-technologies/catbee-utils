@@ -74,43 +74,113 @@ describe('ObjUtils', () => {
   });
 
   describe('deepObjMerge', () => {
-    it('merges simple objects shallowly', () => {
-      const a = { x: 1, y: 2 };
-      const b = { y: 5, z: 8 };
-      expect(deepObjMerge({ ...a }, b)).toEqual({ x: 1, y: 5, z: 8 });
+    it('should return target when no sources provided', () => {
+      const target = { a: 1 };
+      const result = deepObjMerge(target);
+      expect(result).toBe(target);
     });
-    it('merges deeply nested objects', () => {
-      const a = { x: 1, inner: { y: 2, z: 1 } };
-      const b = { inner: { y: 9 } };
-      expect(deepObjMerge({ ...a, inner: { ...a.inner } }, b as any)).toEqual({
-        x: 1,
-        inner: { y: 9, z: 1 }
-      });
+
+    it('should overwrite primitives', () => {
+      const result = deepObjMerge({ a: 1 }, { a: 2, b: 'x' });
+      expect(result).toEqual({ a: 2, b: 'x' });
     });
-    it('creates nested objects if target is missing', () => {
-      const a = { a: 1 };
-      const b = { b: { x: { c: 2 } } };
-      expect(deepObjMerge({ ...a }, b as any)).toEqual({
-        a: 1,
-        b: { x: { c: 2 } }
-      });
+
+    it('should replace arrays instead of merging', () => {
+      const result = deepObjMerge({ arr: [1, 2] }, { arr: [3] });
+      expect(result.arr).toEqual([3]);
     });
-    it('replaces arrays, does not merge them', () => {
-      const a = { arr: [1, 2] };
-      const b = { arr: [3] };
-      expect(deepObjMerge({ ...a }, b)).toEqual({ arr: [3] });
+
+    it('should clone Date objects', () => {
+      const d = new Date();
+      const result: any = deepObjMerge({}, { d });
+      expect(result.d).not.toBe(d);
+      expect(result.d.getTime()).toBe(d.getTime());
     });
-    it('does not change keys present only in target', () => {
-      const a = { a: 1, keep: 2 };
-      const b = { a: 2 };
-      const out = deepObjMerge({ ...a }, b);
-      expect(out).toEqual({ a: 2, keep: 2 });
+
+    it('should clone RegExp objects', () => {
+      const r = /abc/gi;
+      const result: any = deepObjMerge({}, { r });
+      expect(result.r).not.toBe(r);
+      expect(result.r.source).toBe('abc');
+      expect(result.r.flags).toBe('gi');
     });
-    it('mutates and returns the target object', () => {
-      const target = { foo: 1 };
-      const result = deepObjMerge(target, { bar: 2 } as any);
-      expect(target).toBe(result);
-      expect(result).toEqual({ foo: 1, bar: 2 });
+
+    it('should clone Sets', () => {
+      const s = new Set([1, { x: 2 }]);
+      const result: any = deepObjMerge({}, { s });
+      expect(result.s).not.toBe(s);
+      expect([...result.s][1]).not.toBe([...s][1]);
+      expect([...result.s]).toEqual([1, { x: 2 }]);
+    });
+
+    it('should clone Maps', () => {
+      const m = new Map<any, any>([
+        ['a', 1],
+        ['b', { x: 2 }]
+      ]);
+      const result: any = deepObjMerge({}, { m });
+      expect(result.m).not.toBe(m);
+      expect(result.m.get('b')).not.toBe(m.get('b'));
+      expect(result.m.get('b')).toEqual({ x: 2 });
+    });
+
+    it('should clone ArrayBuffer', () => {
+      const buf = new ArrayBuffer(8);
+      const result: any = deepObjMerge({}, { buf });
+      expect(result.buf).not.toBe(buf);
+      expect(result.buf.byteLength).toBe(8);
+    });
+
+    it('should clone TypedArrays', () => {
+      const arr = new Uint8Array([1, 2, 3]);
+      const result: any = deepObjMerge({}, { arr });
+      expect(result.arr).not.toBe(arr);
+      expect([...result.arr]).toEqual([1, 2, 3]);
+    });
+
+    it('should keep functions by reference', () => {
+      const fn = jest.fn();
+      const result: any = deepObjMerge({}, { fn });
+      expect(result.fn).toBe(fn);
+    });
+
+    it('should handle circular references', () => {
+      const obj: any = { name: 'a' };
+      obj.self = obj;
+
+      const result: any = deepObjMerge({}, obj);
+      expect(result.self).toBe(result);
+      expect(result.self.name).toBe('a');
+    });
+
+    it('should deeply merge plain objects', () => {
+      const t = { nested: { a: 1, b: 2 } };
+      const s = { nested: { b: 3, c: 4 } };
+      const result: any = deepObjMerge({}, t, s);
+      expect(result.nested).toEqual({ a: 1, b: 3, c: 4 });
+    });
+
+    it('should preserve prototype', () => {
+      class Foo {
+        x = 1;
+        get y() {
+          return 42;
+        }
+      }
+      const foo = new Foo();
+      const result: any = deepObjMerge({}, { foo });
+      expect(Object.getPrototypeOf(result.foo)).toBe(Foo.prototype);
+      expect(result.foo.y).toBe(42);
+    });
+
+    it('should ignore undefined values in source', () => {
+      const result = deepObjMerge({ a: 1 }, { a: undefined, b: 2 });
+      expect(result).toEqual({ a: 1, b: 2 });
+    });
+
+    it('should apply multiple sources sequentially', () => {
+      const result = deepObjMerge({ a: 1 }, { a: 2 }, { a: 3, b: 4 });
+      expect(result).toEqual({ a: 3, b: 4 });
     });
   });
 

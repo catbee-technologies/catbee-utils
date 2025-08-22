@@ -396,22 +396,22 @@ export function withErrorHandling<T extends (...args: any[]) => Promise<any>>(
   return async (...args: Parameters<T>) => {
     try {
       return await handler(...args);
-    } catch (error) {
-      if (isHttpError(error)) {
-        throw error;
+    } catch (err) {
+      if (isHttpError(err)) {
+        throw err;
       }
 
       // Log the original error (consider using a proper logger)
-      getLogger().error({ error }, 'Caught error in handler');
+      getLogger().error({ err }, 'Caught error in handler');
 
       // Extract status code if it exists, otherwise use 500
       let status = HttpStatusCodes.INTERNAL_SERVER_ERROR;
-      if (hasErrorShape(error) && typeof error.status === 'number') {
-        status = error.status;
+      if (hasErrorShape(err) && typeof err.status === 'number') {
+        status = err.status;
       }
 
       // Create appropriate HTTP error
-      throw createHttpError(status, getErrorMessage(error));
+      throw createHttpError(status, getErrorMessage(err));
     }
   };
 }

@@ -237,9 +237,17 @@ function setupLogger(): void {
     name: config.logger.name || '@catbee/utils',
     level: config.logger.level || 'info',
     redact: {
-      paths: ['req.authorization', 'res.authorization', 'url', 'headers.authorization'],
+      paths: ['req.authorization', 'res.authorization', 'url', 'headers.authorization', 'headers.cookies'],
       censor: (value, path) => redact(value, path)
     },
+    // serializers: {
+    //   req: pino.stdSerializers.req,
+    //   request: pino.stdSerializers.req,
+    //   res: pino.stdSerializers.res,
+    //   response: pino.stdSerializers.res,
+    //   err: pino.stdSerializers.err,
+    //   error: pino.stdSerializers.err
+    // },
     timestamp: stdTimeFunctions.isoTime
   };
 
@@ -253,7 +261,7 @@ function setupLogger(): void {
               colorize: true,
               translateTime: 'SYS:standard',
               ignore: 'pid,hostname',
-              singleLine: false, // multi-line errors
+              singleLine: config.logger.singleLine,
               levelFirst: true
             }
           })
@@ -261,7 +269,7 @@ function setupLogger(): void {
       : pino(logParams);
 
   _global[GLOBAL_LOGGER_KEY] = logger;
-  _global[GLOBAL_LOGGER_KEY].debug('Logger initialized');
+  _global[GLOBAL_LOGGER_KEY]?.debug('Logger initialized');
 }
 
 /**
@@ -282,6 +290,19 @@ export function getLogger(): PinoLogger {
 
   return _global[GLOBAL_LOGGER_KEY];
 }
+
+/**
+ * Alias for the current logger instance.
+ * - Returns a request-scoped logger from AsyncLocalStorage if available
+ * - Falls back to the global (singleton) logger
+ * - Initializes the global logger if not created yet
+ */
+export const logger = getLogger;
+
+/**
+ * Global logger instance.
+ */
+export const globalLogger = getLogger();
 
 /**
  * Creates a child logger with additional context.

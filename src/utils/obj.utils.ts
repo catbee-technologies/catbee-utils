@@ -59,28 +59,188 @@ export function omit<T extends object, K extends keyof T>(obj: T, keys: K[]): Om
 }
 
 /**
- * Deeply merges two objects (mutates and returns the target object, not pure).
+ * Deeply merges multiple objects into the target object (mutates and returns the target object, not pure).
  *
  * @template T
  * @param {T} target - The object to merge into (will be mutated).
- * @param {Partial<T>} source - The object to merge from.
+ * @param {...any[]} sources - The objects to merge from.
  * @returns {T} The merged object (same as target).
  */
-export function deepObjMerge<T extends Record<string, any>>(target: T, source: Partial<T>): T {
-  for (const key in source) {
-    const sourceVal = source[key];
-    const targetVal = target[key];
+export function deepObjMerge<T extends object>(target: T, ...sources: any[]): T {
+  if (!sources.length) return target;
 
-    if (sourceVal && typeof sourceVal === 'object' && !Array.isArray(sourceVal)) {
-      if (!targetVal || typeof targetVal !== 'object' || Array.isArray(targetVal)) {
-        target[key] = {} as any;
-      }
-      deepObjMerge(target[key], sourceVal as any);
-    } else {
-      target[key] = sourceVal as T[Extract<keyof T, string>];
+  const seen = new WeakMap();
+  seen.set(target, target);
+
+  for (const s of sources) {
+    if (s && typeof s === 'object') {
+      seen.set(s, target);
     }
   }
+
+  function deepClone(value: any): any {
+    if (value === null || typeof value !== 'object') return value;
+
+    if (seen.has(value)) return seen.get(value);
+
+    // Date
+    if (value instanceof Date) {
+      return new Date(value.getTime());
+    }
+
+    // Array
+    if (Array.isArray(value)) {
+      const clone: any[] = [];
+      seen.set(value, clone);
+      value.forEach((item, i) => (clone[i] = deepClone(item)));
+      return clone;
+    }
+
+    // Set
+    if (value instanceof Set) {
+      const clone = new Set();
+      seen.set(value, clone);
+      value.forEach(item => clone.add(deepClone(item)));
+      return clone;
+    }
+
+    // Map
+    if (value instanceof Map) {
+      const clone = new Map();
+      seen.set(value, clone);
+      value.forEach((val, key) => clone.set(key, deepClone(val)));
+      return clone;
+    }
+
+    // RegExp
+    if (value instanceof RegExp) {
+      return new RegExp(value.source, value.flags);
+    }
+
+    // ArrayBuffer
+    if (value instanceof ArrayBuffer) {
+      return value.slice(0);
+    }
+
+    // TypedArrays
+    if (ArrayBuffer.isView(value) && !(value instanceof DataView)) {
+      const typed = value as any; // cast for TS
+      const ctor = typed.constructor;
+      // List of standard TypedArray constructors
+      const typedArrayCtors = [
+        Int8Array,
+        Uint8Array,
+        Uint8ClampedArray,
+        Int16Array,
+        Uint16Array,
+        Int32Array,
+        Uint32Array,
+        Float32Array,
+        Float64Array,
+        BigInt64Array,
+        BigUint64Array
+      ].filter(Boolean); // filter out undefined (for environments without BigInt)
+      const typedArrayCtorSet = new Set(typedArrayCtors);
+      if (typeof ctor === 'function' && typedArrayCtorSet.has(ctor)) {
+        // Defensive: ensure buffer is an ArrayBuffer and slice is available
+        const buffer = typed.buffer && typeof typed.buffer.slice === 'function' ? typed.buffer.slice(0) : typed.buffer;
+        const clone = new ctor(buffer, typed.byteOffset, typed.length);
+        seen.set(value, clone);
+        return clone;
+      } else if (typeof typed.slice === 'function') {
+        // Fallback: try using slice if available (e.g., Node.js Buffer)
+        const clone = typed.slice();
+        seen.set(value, clone);
+        return clone;
+      } else {
+        // Could not safely clone, throw an error for better debugging
+        throw new Error(
+          'Cannot deep clone unknown TypedArray type: ' + (typed && typed.constructor && typed.constructor.name)
+        );
+      }
+    }
+
+    const clone = Object.create(Object.getPrototypeOf(value));
+    seen.set(value, clone);
+
+    Reflect.ownKeys(value).forEach(key => {
+      const descriptor = Object.getOwnPropertyDescriptor(value, key)!;
+      if (descriptor.get || descriptor.set) {
+        Object.defineProperty(clone, key, descriptor);
+      } else {
+        (clone as any)[key] = deepClone((value as any)[key]);
+      }
+    });
+
+    return clone;
+  }
+
+  function mergeProp(target: any, source: any, key: string | symbol): void {
+    const targetValue = target[key];
+    const sourceValue = source[key];
+
+    // Ignore undefined in source
+    if (sourceValue === undefined) return;
+
+    // Primitives → overwrite directly
+    if (sourceValue === null || typeof sourceValue !== 'object') {
+      target[key] = sourceValue;
+      return;
+    }
+
+    // Arrays → replace (lodash behavior)
+    if (Array.isArray(sourceValue)) {
+      target[key] = deepClone(sourceValue);
+      return;
+    }
+
+    // Special cloneable objects
+    if (
+      sourceValue instanceof Date ||
+      sourceValue instanceof RegExp ||
+      sourceValue instanceof Set ||
+      sourceValue instanceof Map ||
+      sourceValue instanceof ArrayBuffer ||
+      (ArrayBuffer.isView(sourceValue) && !(sourceValue instanceof DataView))
+    ) {
+      target[key] = deepClone(sourceValue);
+      return;
+    }
+
+    // Plain objects → recursive merge
+    if (isPlainObject(sourceValue) && isPlainObject(targetValue)) {
+      for (const k of Reflect.ownKeys(sourceValue)) {
+        mergeProp(targetValue, sourceValue, k);
+      }
+      return;
+    }
+
+    // Default → overwrite with clone
+    target[key] = deepClone(sourceValue);
+  }
+
+  for (const source of sources) {
+    if (source == null) continue;
+
+    for (const key of Reflect.ownKeys(source)) {
+      mergeProp(target, source, key);
+    }
+  }
+
   return target;
+}
+
+/**
+ * Checks if a value is a plain object (i.e., not an array, null, or a built-in object).
+ *
+ * @param value - The value to check.
+ * @returns True if the value is a plain object, false otherwise.
+ */
+export function isPlainObject(value: any): value is Record<string, any> {
+  if (typeof value !== 'object' || value === null) return false;
+  if (Array.isArray(value)) return false;
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
 }
 
 /**

@@ -22,10 +22,24 @@
  * SOFTWARE.
  */
 
+import { ServerConfig } from './types/server';
 import { Env } from './utils/env.utils';
+import { uuid } from './utils/id.utils';
+import { LoggerLevels } from './utils/logger.utils';
 import { deepObjMerge } from './utils/obj.utils';
 
-type LogLevel = 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace' | 'silent';
+/**
+ * Extends Express Request interface to add request ID tracking.
+ * Added by requestId middleware during request processing.
+ */
+declare global {
+  namespace Express {
+    interface Request {
+      /** Unique request identifier (set by middleware) */
+      id?: string;
+    }
+  }
+}
 
 /**
  * Application runtime configuration loaded from environment variables.
@@ -35,7 +49,7 @@ export let config = {
     /**
      * Logging level (e.g., 'info', 'debug', 'warn', 'error').
      */
-    level: Env.get('LOGGER_LEVEL', 'info') as LogLevel,
+    level: Env.get('LOGGER_LEVEL', 'info') as LoggerLevels,
 
     /**
      * Name of the logger instance (defaults to npm package name).
@@ -46,7 +60,11 @@ export let config = {
      * Enables pretty-print logging in development.
      * Has no effect in production.
      */
-    pretty: Env.getBoolean('LOGGER_PRETTY', true)
+    pretty: Env.getBoolean('LOGGER_PRETTY', true),
+    /**
+     * Single line output for pretty-print (default: false)
+     */
+    singleLine: Env.getBoolean('LOGGER_PRETTY_SINGLE_LINE', false)
   },
 
   http: {
@@ -63,6 +81,75 @@ export let config = {
     defaultTtl: Env.getNumber('CACHE_DEFAULT_TTL_SECONDS', 3600) * 1000
   }
 };
+
+export const defaultServerConfig = {
+  port: 3000,
+  host: '0.0.0.0',
+  cors: false,
+  helmet: false,
+  compression: false,
+  bodyParser: {
+    json: { limit: '1mb' },
+    urlencoded: { extended: true, limit: '1mb' }
+  },
+  cookieParser: false,
+  isMicroservice: false,
+  appName: 'express_app',
+  globalHeaders: {},
+  rateLimit: {
+    enable: false,
+    windowMs: 15 * 60 * 1000,
+    max: 100,
+    message: 'Too many requests',
+    standardHeaders: true,
+    legacyHeaders: false
+  },
+  requestLogging: {
+    enable: Env.isDev(),
+    ignorePaths: (req, _res) => {
+      const skipPaths = ['/healthz', '/favicon.ico', '/metrics', '/docs', '/.well-known'];
+      return skipPaths.some(path => req.path.startsWith(path));
+    },
+    skipNotFoundRoutes: false
+  },
+  openApi: {
+    enable: false,
+    mountPath: '/docs',
+    verbose: false,
+    withGlobalPrefix: false
+  },
+  healthCheck: {
+    path: '/healthz',
+    detailed: true
+  },
+  requestTimeout: 30000,
+  responseTime: {
+    enable: false,
+    addHeader: true,
+    logOnComplete: false
+  },
+  requestId: {
+    headerName: 'x-request-id',
+    exposeHeader: true,
+    generator: () => uuid()
+  },
+  logger: {
+    name: 'express_app',
+    level: 'info' as LoggerLevels,
+    prettyPrint: false,
+    singleLine: false
+  },
+  metrics: {
+    enable: false,
+    path: '/metrics',
+    withGlobalPrefix: false
+  },
+  serviceVersion: {
+    enable: false,
+    headerName: 'x-service-version',
+    version: '0.0.0'
+  }
+} satisfies ServerConfig;
 
 /**
  * Update the @catbee/utils configuration.

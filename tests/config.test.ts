@@ -1,9 +1,10 @@
-jest.mock('../src/utils/env.utils');
+jest.mock('../src/utils/env.utils.ts');
 
 describe('config', () => {
   it('should use default logger config values', () => {
     jest.mock('../src/utils/env.utils', () => ({
       Env: {
+        isDev: jest.fn(() => true),
         get: jest.fn((key: string, fallback: string) => fallback),
         getBoolean: jest.fn(() => false),
         getNumber: jest.fn((key: string, fallback: number) => fallback)
@@ -24,6 +25,7 @@ describe('config', () => {
   it('should load environment-provided logger values', () => {
     jest.mock('../src/utils/env.utils', () => ({
       Env: {
+        isDev: jest.fn(() => true),
         get: jest.fn((key: string, fallback: string) => {
           const values: Record<string, string> = {
             LOGGER_LEVEL: 'debug',
@@ -45,6 +47,7 @@ describe('config', () => {
   it('should fallback to npm_package_name when LOGGER_NAME is not set', () => {
     jest.mock('../src/utils/env.utils', () => ({
       Env: {
+        isDev: jest.fn(() => true),
         get: jest.fn((key: string, fallback: string) => {
           const values: Record<string, string> = {
             LOGGER_LEVEL: 'warn',
@@ -66,6 +69,7 @@ describe('config', () => {
   it('should still return string for level even if invalid', () => {
     jest.mock('../src/utils/env.utils', () => ({
       Env: {
+        isDev: jest.fn(() => true),
         get: jest.fn(() => 'debug'),
         getBoolean: jest.fn(() => false),
         getNumber: jest.fn((key: string, fallback: number) => fallback)
@@ -96,7 +100,8 @@ describe('config', () => {
       logger: {
         level: 'debug',
         name: 'debug',
-        pretty: false
+        pretty: false,
+        singleLine: false
       },
       cache: {
         defaultTtl: 3600000

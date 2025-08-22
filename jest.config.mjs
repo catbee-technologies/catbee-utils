@@ -20,5 +20,6 @@ export default {
   ],
   testMatch: ['**/tests/**/*.test.ts'],
   coveragePathIgnorePatterns: ['index.ts'],
-  testResultsProcessor: 'jest-sonar-reporter'
+  testResultsProcessor: 'jest-sonar-reporter',
+  detectOpenHandles: true
 }
