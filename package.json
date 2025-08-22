@@ -11,7 +11,7 @@
   "author": {
     "name": "Hari G"
   },
-  "license": "Apache-2.0",
+  "license": "MIT",
   "scripts": {
     "start": "node build/src/index.js",
     "prepack": "npm run compile",
@@ -19,14 +19,15 @@
     "clean": "tsc --build --clean tsconfig.json tsconfig.esm.json tsconfig.esnext.json",
     "lint": "eslint src tests",
     "lint:fix": "eslint --fix src tests",
-    "preversion": "npm run lint && npm run test && npm run compile",
+    "preversion": "npm run check-license && npm run lint && npm run test && npm run compile",
     "pretest": "npm run compile",
     "dryrun": "npm pack --dry-run",
     "test": "cross-env LOGGER_LEVEL=silent jest",
     "test:coverage": "cross-env LOGGER_LEVEL=silent jest --coverage",
     "coverage": "npm run test:coverage",
     "test:debug": "cross-env LOGGER_LEVEL=info jest",
-    "generate:exports": "node scripts/generate-exports.mjs"
+    "add-license": "npx license-check-and-add add -f file-banner-lic.json && npm run lint:fix",
+    "check-license": "npx license-check-and-add check -f file-banner-lic.json"
   },
   "keywords": [
     "utils",

@@ -1,0 +1,32 @@
+{
+  "license": "LICENSE",
+  "ignore": [
+    ".*",
+    "./tests/**/*",
+    "./build/**/*",
+    "./scripts/**/*",
+    "./dist/**/*",
+    "./reports/**/*",
+    "**/*.mjs",
+    "**/*.md",
+    "**/*.yaml",
+    "**/*.yml",
+    "**/*.json",
+    "**/*.txt",
+    "**/*.xml"
+  ],
+  "defaultFormat": {
+    "prepend": "/*",
+    "append": "*/"
+  },
+  "licenseFormats": {
+    "js|jsx|ts|tsx": {
+      "prepend": "/*",
+      "append": " */",
+      "eachLine": {
+        "prepend": " * "
+      }
+    }
+  },
+  "trailingWhitespace": "DEFAULT"
+}
