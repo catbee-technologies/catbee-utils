@@ -25,7 +25,8 @@
     "esModuleInterop": true,
     "noImplicitAny": false,
     "emitDecoratorMetadata": true,
-    "experimentalDecorators": true
+    "experimentalDecorators": true,
+    "newLine": "lf"
   },
   "exclude": [
     "node_modules"
