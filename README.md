@@ -56,6 +56,7 @@ console.log(isEmail("user@example.com")); // true
 - [**URL Utilities**](#-url-utilities)
 - [**Validate Utilities**](#-validate-utilities)
 - [**Decorators Utilities**](#-decorators-utilities)
+- [**Express Server**](#-express-server)
 
 ---
 
@@ -927,6 +928,221 @@ registerControllers(router, [ExampleController]);
 - Decorated methods **must** use standard method syntax, not arrow functions or property initializers.
 - All parameter decorators (`@Query`, `@Param`, etc.) are optional and can be used in any order.
 - `registerControllers(router, controllers)` will register all routes and apply middlewares, hooks, status codes, and headers as defined.
+
+## 🚀 Express Server
+
+A production-ready Express server with enterprise-grade features for building robust web services and APIs.
+
+### Features
+
+- **Security**: CORS, Helmet, rate limiting, timeouts, body size limits
+- **Monitoring**: Request logging, Prometheus metrics, health checks
+- **Performance**: Response compression, static file serving, conditional settings
+- **Reliability**: Graceful shutdown, connection tracking, error handling
+- **Developer UX**: OpenAPI docs, debugging tools
+- **Extensibility**: Lifecycle hooks, middleware registration, custom routes
+
+### Getting Started
+
+Create a server with the fluent builder pattern:
+
+```ts
+import { ServerConfigBuilder, ExpressServer } from "@catbee/utils";
+
+// Configure the server
+const config = new ServerConfigBuilder()
+  .withPort(3000)
+  .withHost('localhost')
+  .enableCors()
+  .enableHelmet()
+  .enableCompression()
+  .withGlobalPrefix('/api')
+  .withRequestLogging({ 
+    enable: true,
+    ignorePaths: ['/healthz', '/metrics']
+  })
+  .enableMetrics()
+  .build();
+
+// Create and start the server
+const server = new ExpressServer(config, {
+  beforeStart: (app) => console.log('Server about to start...'),
+  afterStart: (server) => console.log('Server started successfully!')
+});
+
+// Register health checks
+server.registerHealthCheck('database', async () => {
+  return await checkDatabaseConnection();
+});
+
+// Register routes
+const router = server.createRouter('/users');
+router.get('/', (req, res) => {
+  res.json({ users: [] });
+});
+
+// Start the server
+await server.start();
+
+// Enable graceful shutdown handling
+server.enableGracefulShutdown();
+```
+
+### Server Configuration Builder
+
+Use the fluent builder API to configure all aspects of your server:
+
+```ts
+import { ServerConfigBuilder } from "@catbee/utils";
+
+const config = new ServerConfigBuilder()
+  // Basic configuration
+  .withPort(3000)                     // Set listen port
+  .withHost('0.0.0.0')                // Set listen address
+  .withGlobalPrefix('/api/v1')        // Set global route prefix
+
+  // Security
+  .enableCors()                       // Enable CORS (simple)
+  .withCors({                         // Configure CORS (advanced)
+    origin: ['https://example.com'],
+    methods: ['GET', 'POST']
+  })
+  .enableHelmet()                     // Enable secure headers
+  .enableRateLimit({                  // Configure rate limiting
+    max: 100,                        
+    windowMs: 15 * 60 * 1000
+  })
+
+  // Performance
+  .enableCompression()                // Enable response compression
+  .withStaticFolder({                 // Serve static files
+    path: '/assets',
+    directory: './public/assets',
+    maxAge: '1d'
+  })
+
+  // Monitoring
+  .enableMetrics({                    // Enable Prometheus metrics
+    path: '/metrics'
+  })
+  .withHealthCheck({                  // Configure health checks
+    path: '/health',
+    detailed: true
+  })
+  .enableResponseTime()               // Track response times
+  .enableRequestLogging()             // Log requests
+
+  // Documentation
+  .enableOpenApi('./openapi.yaml', {  // Enable OpenAPI docs
+    mountPath: '/docs'
+  })
+
+  // Microservice configuration
+  .withMicroService({                 // Configure as microservice
+    appName: 'user-service',
+    serviceVersion: {
+      enable: true,
+      version: '1.0.0'
+    }
+  })
+  
+  // Build final configuration
+  .build();
+```
+
+### Server Lifecycle Hooks
+
+Register hooks for key server lifecycle events:
+
+```ts
+const server = new ExpressServer(config, {
+  // Before server initialization (middleware setup)
+  beforeInit: (server) => {
+    console.log('Initializing server...');
+  },
+
+  // After server initialization (routes registered)
+  afterInit: (server) => {
+    console.log('Server initialized');
+  },
+
+  // Before server starts listening
+  beforeStart: (app) => {
+    console.log('Starting server...');
+  },
+
+  // After server has started listening
+  afterStart: (httpServer) => {
+    console.log('Server started');
+  },
+
+  // Before server begins shutdown
+  beforeStop: (httpServer) => {
+    console.log('Shutting down server...');
+  },
+
+  // After server has fully stopped
+  afterStop: () => {
+    console.log('Server stopped');
+  },
+
+  // Global request handler
+  onRequest: (req, res, next) => {
+    console.log('Processing request...');
+    next();
+  },
+
+  // Global response handler
+  onResponse: (req, res, next) => {
+    res.setHeader('X-Server-Time', new Date().toISOString());
+    next();
+  },
+
+  // Global error handler
+  onError: (err, req, res, next) => {
+    console.error('Error processing request:', err);
+    res.status(500).json({ error: 'Something went wrong' });
+  }
+});
+```
+
+### Health Checks
+
+Register health checks for monitoring service dependencies:
+
+```ts
+// Simple health check
+server.registerHealthCheck('storage', () => {
+  return fs.existsSync('./data');
+});
+
+// Async health check
+server.registerHealthCheck('database', async () => {
+  try {
+    await db.ping();
+    return true;
+  } catch (err) {
+    return false;
+  }
+});
+```
+
+### Graceful Shutdown
+
+Enable zero-downtime deployments with graceful shutdown:
+
+```ts
+// Enable graceful shutdown handling
+server.enableGracefulShutdown();
+
+// Manually trigger a graceful shutdown
+async function shutdown() {
+  console.log('Starting graceful shutdown...');
+  await server.stop();
+  console.log('Server stopped gracefully');
+  process.exit(0);
+}
+```
 
 ## 🏁 Usage
 
