@@ -292,17 +292,10 @@ export function getLogger(): PinoLogger {
 }
 
 /**
- * Alias for the current logger instance.
- * - Returns a request-scoped logger from AsyncLocalStorage if available
- * - Falls back to the global (singleton) logger
- * - Initializes the global logger if not created yet
+ * Logger instance for the global context.
+ * This logger is used for logging messages that are not tied to a specific request.
  */
-export const logger = getLogger;
-
-/**
- * Global logger instance.
- */
-export const globalLogger = getLogger();
+export const logger = getLogger();
 
 /**
  * Creates a child logger with additional context.

@@ -155,11 +155,13 @@ export function setupRequestContext(options: { headerName?: string; autoLog?: bo
         url: req.originalUrl || req.url
       });
 
+      req.logger = childLogger;
+
       // Store logger in context
       ContextStore.set(StoreKeys.LOGGER, childLogger);
 
       if (autoLog) {
-        childLogger.info('Request context initialized');
+        req.logger.info('Request context initialized');
       }
 
       next();

@@ -25,7 +25,7 @@
 import { ServerConfig } from './types/server';
 import { Env } from './utils/env.utils';
 import { uuid } from './utils/id.utils';
-import { LoggerLevels } from './utils/logger.utils';
+import { Logger, LoggerLevels } from './utils/logger.utils';
 import { deepObjMerge } from './utils/obj.utils';
 
 /**
@@ -37,6 +37,10 @@ declare global {
     interface Request {
       /** Unique request identifier (set by middleware) */
       id?: string;
+      /** Logger instance for the request (set by middleware) */
+      logger?: Logger;
+      /** User information (set by authentication middleware) */
+      user?: any;
     }
   }
 }
