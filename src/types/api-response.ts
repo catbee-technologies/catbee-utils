@@ -179,3 +179,39 @@ export interface StreamResponse {
   /** Chunk size in bytes */
   chunkSize: number;
 }
+
+/**
+ * Sort direction enumeration.
+ */
+export enum SortDirection {
+  /** Ascending sort order */
+  ASC = 'asc',
+
+  /** Descending sort order */
+  DESC = 'desc'
+}
+
+/**
+ * Pagination parameters for API requests.
+ */
+export interface PaginationParams {
+  /** Current page number (1-based index) */
+  page: number;
+
+  /** Number of records per page */
+  limit: number;
+
+  /** Field by which the data is sorted */
+  sortBy: string;
+
+  /** Sort order: ascending or descending */
+  sortOrder: SortDirection;
+
+  /** Optional search query */
+  search?: string;
+}
+
+/**
+ * Type that combines pagination parameters with additional data.
+ */
+export type WithPagination<T = {}> = PaginationParams & T;

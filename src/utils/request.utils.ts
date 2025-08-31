@@ -22,6 +22,9 @@
  * SOFTWARE.
  */
 
+import { Request } from 'express';
+import { SortDirection, WithPagination } from '../types/api-response';
+
 /**
  * Options for parsing and validating request parameters.
  */
@@ -52,6 +55,32 @@ export interface ValidationResult<T> {
   /** Error message if validation failed */
   error?: string;
 }
+
+/**
+ * Extracts pagination, sorting, and optional search params from a request.
+ *
+ * @param req - Express request
+ * @returns Object containing validated pagination, sorting, and additional query params
+ */
+export const getPaginationParams = <T = {}>(req: Request): WithPagination<T> => {
+  const query = req.query as Record<string, string | string[]>;
+
+  // Extract page & limit
+  const { page, limit } = extractPaginationParams(query, 1, 20, 100);
+  const { sortBy, sortOrder } = extractSortParams(query, []);
+
+  // Optional search param
+  const search = typeof query.search === 'string' ? query.search : undefined;
+
+  return {
+    ...(query as T),
+    page,
+    limit,
+    sortBy,
+    sortOrder: sortOrder as SortDirection,
+    search
+  };
+};
 
 /**
  * Safely parses a string parameter to a number.
@@ -199,7 +228,7 @@ export function extractSortParams(
   }
 
   // Validate field
-  if (!allowedFields.includes(sortBy)) {
+  if (allowedFields.length && !allowedFields.includes(sortBy)) {
     sortBy = defaultSort.sortBy;
   }
 
