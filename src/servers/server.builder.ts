@@ -701,7 +701,7 @@ export class ServerConfigBuilder {
    *   .build();
    * ```
    */
-  build() {
+  build(): Readonly<ServerConfig> {
     const config = deepObjMerge({}, defaultServerConfig, this.config) as ServerConfig;
 
     // Common validation
