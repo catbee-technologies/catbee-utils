@@ -1,0 +1,30 @@
+.features {
+  padding: 4rem 0;
+}
+
+.featureSvg {
+  height: 100px;
+  width: 100px;
+  margin-bottom: 1rem;
+}
+
+.featureCard {
+  background: var(--ifm-background-surface);
+  border-radius: 1rem;
+  padding: 2rem 1rem;
+  transition: box-shadow 0.3s ease;
+}
+
+.featureCard:hover {
+  box-shadow: 0 6px 20px rgb(0 0 0 / 25%);
+}
+
+html[data-theme='dark'] .featureCard:hover {
+  box-shadow: 0 6px 20px rgb(255 255 255 / 25%);
+}
+
+@media screen and (max-width: 768px) {
+ .featuresRow {
+    margin: 1rem 0;
+ }
+}
