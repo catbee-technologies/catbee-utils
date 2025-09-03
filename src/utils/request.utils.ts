@@ -24,6 +24,7 @@
 
 import { Request } from 'express';
 import { SortDirection, WithPagination } from '../types/api-response';
+import { BadRequestException } from './exception.utils';
 
 /**
  * Options for parsing and validating request parameters.
@@ -96,7 +97,7 @@ export function parseNumberParam(value: string | undefined, options: ValidationO
   if (value === undefined) {
     if (required) {
       const error = `Required number parameter is missing`;
-      if (throwOnError) throw new Error(error);
+      if (throwOnError) throw new BadRequestException(error);
       return { isValid: false, value: null, error };
     }
 
@@ -110,7 +111,7 @@ export function parseNumberParam(value: string | undefined, options: ValidationO
   // Parse and validate the number
   const num = Number(value);
   if (isNaN(num)) {
-    if (throwOnError) throw new Error(errorMessage);
+    if (throwOnError) throw new BadRequestException(errorMessage);
     return { isValid: false, value: null, error: errorMessage };
   }
 
@@ -134,7 +135,7 @@ export function parseBooleanParam(
   if (value === undefined) {
     if (required) {
       const error = `Required boolean parameter is missing`;
-      if (throwOnError) throw new Error(error);
+      if (throwOnError) throw new BadRequestException(error);
       return { isValid: false, value: null, error };
     }
 
@@ -155,7 +156,7 @@ export function parseBooleanParam(
     return { isValid: true, value: false };
   }
 
-  if (throwOnError) throw new Error(errorMessage);
+  if (throwOnError) throw new BadRequestException(errorMessage);
   return { isValid: false, value: null, error: errorMessage };
 }
 
