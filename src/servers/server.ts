@@ -460,7 +460,7 @@ export class ExpressServer {
             spec: {
               content: await fs.promises.readFile(openApiFilePath, 'utf8')
             }
-          })
+          } as any)
         );
         if (this.config.openApi?.verbose) {
           getLogger().info(`Mounted OpenAPI docs at ${openApiMountPath}`);
@@ -811,7 +811,7 @@ export class ExpressServer {
    *
    * @param signals Array of process signals to listen for (default: SIGINT, SIGTERM)
    */
-  public enableGracefulShutdown(signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM']): void {
+  public enableGracefulShutdown(signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM']): this {
     signals.forEach(signal => {
       process.on(signal, async () => {
         getLogger().info(`Received ${signal}, initiating graceful shutdown...`);
@@ -830,14 +830,16 @@ export class ExpressServer {
         }
       });
     });
+    return this;
   }
 
   /**
    * Set an externally created base router.
    * This will override the internal rootRouter.
    */
-  public setBaseRouter(router: Router): void {
+  public setBaseRouter(router: Router): this {
     this.externalRouter = router;
+    return this;
   }
 
   /**

@@ -22,6 +22,8 @@
  * SOFTWARE.
  */
 
+import { getLogger } from './logger.utils';
+
 /**
  * Delays execution for a specified number of milliseconds.
  *
@@ -493,4 +495,242 @@ export function rateLimit<T>(
     calls.push(Date.now());
     return fn(...args);
   };
+}
+
+/**
+ * Circuit breaker pattern implementation for protecting against cascading failures.
+ * Tracks failures and prevents calling the function when too many failures occur.
+ *
+ * @param fn - Function to protect with circuit breaker
+ * @param options - Circuit breaker options
+ * @returns Function wrapped with circuit breaker logic
+ *
+ * @example
+ * ```typescript
+ * const protectedFetch = circuitBreaker(
+ *   async (url) => {
+ *     const response = await fetch(url);
+ *     if (!response.ok) throw new Error(`HTTP error: ${response.status}`);
+ *     return response.json();
+ *   },
+ *   {
+ *     failureThreshold: 3,
+ *     resetTimeout: 30000,
+ *     onOpen: () => console.log('Circuit breaker opened'),
+ *     onClose: () => console.log('Circuit breaker closed')
+ *   }
+ * );
+ *
+ * // Will throw CircuitBreakerOpenError after failureThreshold consecutive failures
+ * try {
+ *   const data = await protectedFetch('https://api.example.com');
+ * } catch (error) {
+ *   if (error instanceof CircuitBreakerOpenError) {
+ *     console.log('Service is currently unavailable, please try again later');
+ *   }
+ * }
+ * ```
+ */
+export class CircuitBreakerOpenError extends Error {
+  constructor(message = 'Circuit breaker is open') {
+    super(message);
+    this.name = 'CircuitBreakerOpenError';
+  }
+}
+
+/**
+ * Circuit breaker states
+ */
+export enum CircuitBreakerState {
+  CLOSED = 'CLOSED',
+  OPEN = 'OPEN',
+  HALF_OPEN = 'HALF_OPEN'
+}
+
+export interface CircuitBreakerOptions {
+  /** Number of consecutive failures before opening circuit (default: 5) */
+  failureThreshold?: number;
+  /** Time in milliseconds to wait before trying again (default: 10000) */
+  resetTimeout?: number;
+  /** Number of successful calls to close the circuit again (default: 1) */
+  successThreshold?: number;
+  /** Callback when circuit opens */
+  onOpen?: () => void;
+  /** Callback when circuit closes */
+  onClose?: () => void;
+  /** Callback when circuit enters half-open state */
+  onHalfOpen?: () => void;
+}
+
+export function circuitBreaker<T, Args extends any[]>(
+  fn: (...args: Args) => Promise<T>,
+  options: CircuitBreakerOptions = {}
+): (...args: Args) => Promise<T> {
+  const { failureThreshold = 5, resetTimeout = 10000, successThreshold = 1, onOpen, onClose, onHalfOpen } = options;
+
+  let state = CircuitBreakerState.CLOSED;
+  let failureCount = 0;
+  let successCount = 0;
+  let nextAttempt = Date.now();
+
+  return async function (...args: Args): Promise<T> {
+    if (state === CircuitBreakerState.OPEN) {
+      if (Date.now() < nextAttempt) {
+        throw new CircuitBreakerOpenError();
+      }
+
+      // Move to half-open state
+      state = CircuitBreakerState.HALF_OPEN;
+      if (onHalfOpen) onHalfOpen();
+    }
+
+    try {
+      const result = await fn(...args);
+
+      // On success in half-open state
+      if (state === CircuitBreakerState.HALF_OPEN) {
+        successCount++;
+        if (successCount >= successThreshold) {
+          successCount = 0;
+          failureCount = 0;
+          state = CircuitBreakerState.CLOSED;
+          if (onClose) onClose();
+        }
+      } else {
+        // Reset failure count on success in closed state
+        failureCount = 0;
+      }
+
+      return result;
+    } catch (error) {
+      // Track failures
+      failureCount++;
+
+      // Check if we need to open the circuit
+      if (
+        (state === CircuitBreakerState.CLOSED || state === CircuitBreakerState.HALF_OPEN) &&
+        failureCount >= failureThreshold
+      ) {
+        state = CircuitBreakerState.OPEN;
+        nextAttempt = Date.now() + resetTimeout;
+        if (onOpen) onOpen();
+      }
+
+      throw error;
+    }
+  };
+}
+
+/**
+ * Run multiple async tasks with concurrency control.
+ *
+ * @param tasks - Array of async tasks to run
+ * @param options - Concurrency options
+ * @returns Promise that resolves when all tasks are complete
+ *
+ * @example
+ * ```typescript
+ *  const urls = ['https://example.com/1', 'https://example.com/2', many more ];
+ *
+ * // Process up to 5 requests at a time, with progress reporting
+ * const results = await runWithConcurrency(
+ *   urls.map(url => () => fetch(url).then(res => res.json())),
+ *   {
+ *     concurrency: 5,
+ *     onProgress: (completed, total) => {
+ *       console.log(`Progress: ${completed}/${total}`);
+ *     }
+ *   }
+ * );
+ * ```
+ */
+export async function runWithConcurrency<T>(
+  tasks: Array<() => Promise<T>>,
+  options: {
+    /** Maximum number of tasks to run at once (default: 3) */
+    concurrency?: number;
+    /** Called whenever a task completes */
+    onProgress?: (completed: number, total: number) => void;
+    /** Abort signal to cancel execution */
+    signal?: AbortSignal;
+  } = {}
+): Promise<T[]> {
+  const { concurrency = 3, onProgress, signal } = options;
+  const results: T[] = [];
+  const totalTasks = tasks.length;
+  let completed = 0;
+
+  // If no tasks, return empty array
+  if (totalTasks === 0) return results;
+
+  // Check if execution is already aborted
+  if (signal?.aborted) {
+    throw new Error('Aborted');
+  }
+
+  return new Promise((resolve, reject) => {
+    let taskIndex = 0;
+
+    // Process next task function
+    const processNext = async () => {
+      // Get current task index and increment
+      const currentTaskIndex = taskIndex++;
+
+      // Skip if we've processed all tasks
+      if (currentTaskIndex >= totalTasks) return;
+
+      try {
+        // Run the task
+        const result = await tasks[currentTaskIndex]();
+
+        // Check if aborted during task execution
+        if (signal?.aborted) {
+          reject(new Error('Aborted'));
+          return;
+        }
+
+        // Store result and update counters
+        results[currentTaskIndex] = result;
+        completed++;
+
+        // Call progress callback if provided
+        if (onProgress) {
+          try {
+            onProgress(completed, totalTasks);
+          } catch (err) {
+            getLogger().error({ err }, 'Error in onProgress callback');
+          }
+        }
+      } catch (error) {
+        reject(error);
+        return;
+      }
+
+      // Check if all tasks are completed
+      if (completed === totalTasks) {
+        resolve(results);
+        return;
+      }
+
+      // Process next task
+      processNext();
+    };
+
+    // Start initial batch of tasks
+    const initialBatch = Math.min(concurrency, totalTasks);
+    for (let i = 0; i < initialBatch; i++) {
+      processNext();
+    }
+
+    // Set up abort handler
+    if (signal) {
+      signal.addEventListener(
+        'abort',
+        () => {
+          reject(new Error('Aborted'));
+        },
+        { once: true }
+      );
+    }
+  });
 }
