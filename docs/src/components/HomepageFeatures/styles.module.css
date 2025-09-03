@@ -1,0 +1,21 @@
+.features {
+  padding: 4rem 0;
+}
+
+.featureSvg {
+  height: 100px;
+  width: 100px;
+  margin-bottom: 1rem;
+}
+
+.featureCard {
+  background: var(--ifm-background-surface);
+  border-radius: 1rem;
+  padding: 2rem 1rem;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+  transition: box-shadow 0.3s ease;
+}
+
+.featureCard:hover {
+  box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+}

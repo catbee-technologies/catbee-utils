@@ -189,7 +189,6 @@ Global configuration settings for the application, including logging, HTTP, and 
 - `config.logger.level` – Set the logging level (e.g., 'info', 'debug').
 - `config.logger.name` – Set the logger name.
 - `config.logger.pretty` – Enable pretty print for logs.
-- `config.http.timeout` – Set HTTP request timeout in milliseconds.
 - `config.cache.defaultTtl` – Set default cache TTL in seconds.
 - `setConfig(value: Partial<typeof config>): void` – Update configuration settings.
 - `getConfig(): typeof config` – Get the current configuration settings.

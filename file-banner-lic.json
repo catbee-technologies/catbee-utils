@@ -13,7 +13,8 @@
     "**/*.yml",
     "**/*.json",
     "**/*.txt",
-    "**/*.xml"
+    "**/*.xml",
+    "docs/**/*"
   ],
   "defaultFormat": {
     "prepend": "/*",

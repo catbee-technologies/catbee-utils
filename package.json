@@ -29,7 +29,11 @@
     "coverage": "npm run test:coverage",
     "test:debug": "cross-env LOGGER_LEVEL=info jest",
     "add-license": "npx license-check-and-add add -f file-banner-lic.json && npm run lint:fix",
-    "check-license": "npx license-check-and-add check -f file-banner-lic.json"
+    "check-license": "npx license-check-and-add check -f file-banner-lic.json",
+    "docs:install": "cd docs && npm install",
+    "docs:start": "cd docs && npm run start",
+    "docs:build": "cd docs && npm run build",
+    "docs:serve": "npm run docs:build && cd docs && npm run serve"
   },
   "keywords": [
     "utils",
