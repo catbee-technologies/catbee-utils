@@ -71,13 +71,6 @@ export let config = {
     singleLine: Env.getBoolean('LOGGER_PRETTY_SINGLE_LINE', false)
   },
 
-  http: {
-    /**
-     * Timeout for HTTP requests in milliseconds
-     */
-    timeout: Env.getNumber('HTTP_TIMEOUT', 30000)
-  },
-
   cache: {
     /**
      * Default TTL (time to live) for cache entries in seconds
@@ -136,12 +129,6 @@ export const defaultServerConfig = {
     headerName: 'x-request-id',
     exposeHeader: true,
     generator: () => uuid()
-  },
-  logger: {
-    name: 'express_app',
-    level: 'info' as LoggerLevels,
-    prettyPrint: false,
-    singleLine: false
   },
   metrics: {
     enable: false,

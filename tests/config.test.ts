@@ -105,9 +105,6 @@ describe('config', () => {
       },
       cache: {
         defaultTtl: 3600000
-      },
-      http: {
-        timeout: 30000
       }
     });
   });

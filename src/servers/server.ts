@@ -40,7 +40,7 @@ import client, { Counter, Histogram } from 'prom-client';
 import { NotFoundException } from '../utils/exception.utils';
 import fs from 'fs';
 import { apiReference } from '@scalar/express-api-reference';
-import { defaultServerConfig, setConfig } from '../config';
+import { defaultServerConfig } from '../config';
 import { deepObjMerge } from '../utils/obj.utils';
 import { fileExists } from '../utils/fs.utils';
 import { Socket } from 'net';
@@ -172,19 +172,6 @@ export class ExpressServer {
     // Health checks
     if (config.healthCheck?.checks) {
       this.healthChecks.push(...config.healthCheck.checks);
-    }
-
-    // Logger
-    if (this.config.logger) {
-      const { name, level, prettyPrint: pretty, singleLine } = this.config.logger;
-      setConfig({
-        logger: {
-          name: name ?? 'express_app',
-          level: level ?? 'info',
-          pretty: pretty ?? Env.isDev(),
-          singleLine: singleLine ?? false
-        }
-      });
     }
 
     // Set global prefix (normalize to empty string or "/prefix" without trailing slash)

@@ -27,7 +27,6 @@ import { ExpressServer } from '../servers/server';
 import { HelmetOptions } from 'helmet';
 import { CompressionOptions } from 'compression';
 import { CookieParseOptions } from 'cookie-parser';
-import { LoggerLevels } from '../utils/logger.utils';
 import http from 'http';
 import { CorsOptions } from 'cors';
 import { ToggleConfig } from '.';
@@ -235,23 +234,6 @@ export interface ServerConfig {
     verbose?: boolean;
     /** Include in global prefix (default: false) */
     withGlobalPrefix?: boolean;
-  };
-
-  /** Logger settings
-   *  - name: 'express_app'
-   *  - level: 'info'
-   *  - prettyPrint: default true if process.env.NODE_ENV === 'development'
-   *  - singleLine: false
-   */
-  logger?: {
-    /** Logger name (default: 'express_app') */
-    name?: string;
-    /** Log level (default: 'info') */
-    level?: LoggerLevels;
-    /** Pretty print (default: true in dev) */
-    prettyPrint?: boolean;
-    /** Single line output for pretty print (default: false) */
-    singleLine?: boolean;
   };
 
   /** Prometheus metrics
