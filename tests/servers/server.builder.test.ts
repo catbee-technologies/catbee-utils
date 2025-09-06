@@ -204,12 +204,6 @@ describe('ServerConfigBuilder', () => {
     expect((config as any).cookieParser).toEqual({ decode: expect.any(Function) });
   });
 
-  it('should configure logger', () => {
-    const config = new ServerConfigBuilder().withLogger({ level: 'info', prettyPrint: true }).disableOpenApi().build();
-    expect(config.logger?.level).toBe('info');
-    expect(config.logger?.prettyPrint).toBe(true);
-  });
-
   it('should configure microservice', () => {
     const config = new ServerConfigBuilder()
       .withMicroService({

@@ -20,9 +20,6 @@ jest.mock('../../src/utils/logger.utils', () => ({
 jest.mock('../../src/utils/env.utils', () => ({
   Env: { isDev: jest.fn() }
 }));
-jest.mock('../../src/config', () => ({
-  config: { http: { timeout: 30000 } }
-}));
 jest.mock('../../src/utils/context-store.utils', () => {
   const original = jest.requireActual('../../src/utils/context-store.utils');
   return {

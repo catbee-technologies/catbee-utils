@@ -566,27 +566,6 @@ export class ServerConfigBuilder {
   }
 
   /**
-   * Configures the logger used by the server.
-   *
-   * @param opts - Logger configuration options
-   * @returns The builder instance for chaining
-   * @default { name: 'express_app', level: 'info', prettyPrint: true in dev, singleLine: false }
-   *
-   * @example
-   * ```typescript
-   * builder.withLogger({
-   *   level: 'info',
-   *   prettyPrint: true,
-   *   singleLine: false
-   * })
-   * ```
-   */
-  withLogger(opts: Partial<NonNullable<ServerConfig['logger']>>): this {
-    this.mergeConfig('logger', opts as NonNullable<ServerConfig['logger']>);
-    return this;
-  }
-
-  /**
    * Adds a static folder to serve files from.
    *
    * @param folder - Static folder configuration

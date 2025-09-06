@@ -37,12 +37,15 @@ export interface Store {
  * Add new symbols here to avoid duplication.
  */
 export const StoreKeys = {
-  LOGGER: Symbol('logger'),
-  REQUEST_ID: Symbol('requestId'),
-  USER_ID: Symbol('userId'),
-  TENANT_ID: Symbol('tenantId'),
-  TRACE_ID: Symbol('traceId'),
-  CORRELATION_ID: Symbol('correlationId')
+  LOGGER: Symbol('LOGGER'),
+  REQUEST_ID: Symbol('REQUEST_ID'),
+  USER: Symbol('USER'),
+  SESSION: Symbol('SESSION'),
+  TRANSACTION_ID: Symbol('TRANSACTION_ID'),
+  USER_ID: Symbol('USER_ID'),
+  TENANT_ID: Symbol('TENANT_ID'),
+  TRACE_ID: Symbol('TRACE_ID'),
+  CORRELATION_ID: Symbol('CORRELATION_ID')
 };
 
 /**
