@@ -31,7 +31,7 @@ function HomepageHeader() {
               can be imported independently for optimal bundle size.
             </p>
             <div className={styles.buttons}>
-              <Link id='explore-docs' className="button button--primary button--lg" to="/docs">
+              <Link id='explore-docs' className="button button--primary button--lg" to="/docs/">
                 🚀 Explore Docs
               </Link>
               {/* <Link
