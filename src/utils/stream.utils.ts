@@ -154,15 +154,14 @@ export function createBatchStream(size: number, options: { objectMode?: boolean 
         buffers.push(buffer);
         bufferSize += buffer.length;
 
-        if (bufferSize >= size) {
-          const result = Buffer.concat(buffers);
-          this.push(result.slice(0, size));
-
-          // Keep the remainder for the next batch
-          const remainder = result.slice(size);
-          buffers = remainder.length > 0 ? [remainder] : [];
-          bufferSize = remainder.length;
+        // Emit batches of exact size
+        let combined = Buffer.concat(buffers, bufferSize);
+        while (combined.length >= size) {
+          this.push(combined.slice(0, size));
+          combined = combined.slice(size);
         }
+        buffers = combined.length > 0 ? [combined] : [];
+        bufferSize = combined.length;
       }
 
       callback();
@@ -171,10 +170,16 @@ export function createBatchStream(size: number, options: { objectMode?: boolean 
     flush(callback) {
       if (objectMode && batch.length > 0) {
         this.push(batch);
-      } else if (!objectMode && buffers.length > 0) {
-        this.push(Buffer.concat(buffers));
+      } else if (!objectMode && buffers.length > 0 && bufferSize > 0) {
+        let combined = Buffer.concat(buffers, bufferSize);
+        while (combined.length >= size) {
+          this.push(combined.slice(0, size));
+          combined = combined.slice(size);
+        }
+        if (combined.length > 0) {
+          this.push(combined);
+        }
       }
-
       callback();
     }
   });

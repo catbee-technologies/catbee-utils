@@ -55,16 +55,29 @@ export interface DateFormatOptions {
  */
 export function formatDate(date: Date | number, options: DateFormatOptions = {}): string {
   const { format = 'yyyy-MM-dd', locale, timeZone } = options;
+  const d = date instanceof Date ? date : new Date(date);
 
-  // Use Intl.DateTimeFormat for complex formatting
+  // Custom formatter for common patterns
+  if (format === 'yyyy-MM-dd') {
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }
+  if (format === 'yyyy-MM-dd HH:mm:ss') {
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    const HH = String(d.getHours()).padStart(2, '0');
+    const MM = String(d.getMinutes()).padStart(2, '0');
+    const SS = String(d.getSeconds()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd} ${HH}:${MM}:${SS}`;
+  }
   if (format === 'relative') {
     return formatRelativeTime(date);
   }
 
-  // Handle standard date formatting patterns
-  const d = date instanceof Date ? date : new Date(date);
-
-  // Use built-in Intl.DateTimeFormat for locale-aware formatting
+  // Fallback to Intl.DateTimeFormat for other formats
   return new Intl.DateTimeFormat(locale, {
     timeZone,
     year: format.includes('yyyy') || format.includes('y') ? 'numeric' : undefined,
@@ -228,9 +241,15 @@ export function addToDate(
     case 'days':
       d.setDate(d.getDate() + amount);
       break;
-    case 'months':
-      d.setMonth(d.getMonth() + amount);
+    case 'months': {
+      const origDate = d.getDate();
+      const origMonth = d.getMonth();
+      d.setDate(1); // Prevent overflow
+      d.setMonth(origMonth + amount);
+      const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+      d.setDate(Math.min(origDate, lastDay));
       break;
+    }
     case 'years':
       d.setFullYear(d.getFullYear() + amount);
       break;

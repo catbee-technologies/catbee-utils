@@ -56,6 +56,11 @@ export function isPrimitiveType(
     return value === undefined;
   }
 
+  if (type === 'object') {
+    // Only plain objects, not arrays or null
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+  }
+
   return typeof value === type;
 }
 

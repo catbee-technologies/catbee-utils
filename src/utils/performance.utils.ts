@@ -108,6 +108,9 @@ export function timeSync<T>(fn: () => T, options: TimingOptions = {}): { result:
       case 'error':
         logger.error({ timing }, message);
         break;
+      default:
+        logger.debug({ timing }, message);
+        break;
     }
   }
 
@@ -173,6 +176,9 @@ export async function timeAsync<T>(
       case 'error':
         logger.error({ timing }, message);
         break;
+      default:
+        logger.debug({ timing }, message);
+        break;
     }
   }
 
@@ -196,13 +202,26 @@ export async function timeAsync<T>(
  * ```
  */
 export function timed(options: TimingOptions = {}) {
-  return function (target: any, propertyKey: string, descriptor: PropertyDescriptor) {
-    const originalMethod = descriptor.value;
+  return function (target: any, propertyKeyOrContext: string | symbol | any, descriptor?: PropertyDescriptor): void {
+    let propertyKey: string | symbol;
+    let actualDescriptor: PropertyDescriptor;
 
-    descriptor.value = function (...args: any[]) {
+    // ESNext decorator: second argument is context object
+    if (typeof propertyKeyOrContext === 'object' && propertyKeyOrContext !== null && 'name' in propertyKeyOrContext) {
+      propertyKey = propertyKeyOrContext.name;
+      actualDescriptor = descriptor ?? Object.getOwnPropertyDescriptor(target, propertyKey)!;
+    } else {
+      // Legacy decorator: second argument is property key
+      propertyKey = propertyKeyOrContext;
+      actualDescriptor = descriptor ?? Object.getOwnPropertyDescriptor(target, propertyKey)!;
+    }
+
+    const originalMethod = actualDescriptor.value;
+
+    actualDescriptor.value = function (...args: any[]) {
       const methodOptions = {
         ...options,
-        label: options.label || `${target.constructor.name}.${propertyKey}`
+        label: options.label || `${target.constructor.name}.${String(propertyKey)}`
       };
 
       if (originalMethod.constructor.name === 'AsyncFunction') {
@@ -212,7 +231,13 @@ export function timed(options: TimingOptions = {}) {
       }
     };
 
-    return descriptor;
+    // For legacy decorators, assign the new descriptor
+    if (descriptor) {
+      descriptor.value = actualDescriptor.value;
+    } else {
+      Object.defineProperty(target, propertyKey, actualDescriptor);
+    }
+    // No return needed for method decorators
   };
 }
 

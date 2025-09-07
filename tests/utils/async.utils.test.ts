@@ -13,7 +13,10 @@ import {
   abortable,
   createDeferred,
   waterfall,
-  rateLimit
+  rateLimit,
+  circuitBreaker,
+  CircuitBreakerOpenError,
+  runWithConcurrency
 } from '../../src/utils/async.utils';
 
 describe('sleep', () => {
@@ -349,5 +352,123 @@ describe('rateLimit', () => {
     await expect(Promise.all([p1, p2, p3, p4])).resolves.toEqual([1, 2, 3, 4]);
     expect(fn).toHaveBeenCalledTimes(4);
     jest.useRealTimers();
+  });
+});
+
+describe('circuitBreaker', () => {
+  it('allows calls when closed and resets failures on success', async () => {
+    let count = 0;
+    const fn = async () => ++count;
+    const breaker = circuitBreaker(fn, { failureThreshold: 2, resetTimeout: 50 });
+    expect(await breaker()).toBe(1);
+    expect(await breaker()).toBe(2);
+  });
+
+  it('opens circuit after failures and blocks calls', async () => {
+    let fail = true;
+    const fn = async () => {
+      if (fail) throw new Error('fail');
+      return 'ok';
+    };
+    let opened = false;
+    const breaker = circuitBreaker(fn, {
+      failureThreshold: 2,
+      resetTimeout: 50,
+      onOpen: () => {
+        opened = true;
+      }
+    });
+    await expect(breaker()).rejects.toThrow('fail');
+    await expect(breaker()).rejects.toThrow('fail');
+    expect(opened).toBe(true);
+    await expect(breaker()).rejects.toBeInstanceOf(CircuitBreakerOpenError);
+  });
+
+  it('moves to half-open after resetTimeout and closes on success', async () => {
+    let fail = true;
+    let halfOpen = false,
+      closed = false;
+    const fn = async () => {
+      if (fail) throw new Error('fail');
+      return 'ok';
+    };
+    const breaker = circuitBreaker(fn, {
+      failureThreshold: 1,
+      resetTimeout: 10,
+      successThreshold: 1,
+      onHalfOpen: () => {
+        halfOpen = true;
+      },
+      onClose: () => {
+        closed = true;
+      }
+    });
+    await expect(breaker()).rejects.toThrow('fail');
+    await expect(breaker()).rejects.toBeInstanceOf(CircuitBreakerOpenError);
+    await new Promise(res => setTimeout(res, 12));
+    fail = false;
+    expect(await breaker()).toBe('ok');
+    expect(halfOpen).toBe(true);
+    expect(closed).toBe(true);
+  });
+
+  it('throws CircuitBreakerOpenError when open', async () => {
+    const fn = async () => {
+      throw new Error('fail');
+    };
+    const breaker = circuitBreaker(fn, { failureThreshold: 1, resetTimeout: 100 });
+    await expect(breaker()).rejects.toThrow('fail');
+    await expect(breaker()).rejects.toBeInstanceOf(CircuitBreakerOpenError);
+  });
+});
+
+describe('runWithConcurrency', () => {
+  it('runs tasks with concurrency', async () => {
+    const order: number[] = [];
+    const tasks = [1, 2, 3, 4, 5].map(n => async () => {
+      await sleep(10);
+      order.push(n);
+      return n;
+    });
+    const result = await runWithConcurrency(tasks, { concurrency: 2 });
+    expect(result.sort()).toEqual([1, 2, 3, 4, 5]);
+    expect(order.length).toBe(5);
+  });
+
+  it('calls onProgress callback', async () => {
+    const progress: number[] = [];
+    const tasks = [1, 2, 3].map(n => async () => n);
+    await runWithConcurrency(tasks, {
+      concurrency: 2,
+      onProgress: (completed, _total) => progress.push(completed)
+    });
+    expect(progress).toEqual([1, 2, 3]);
+  });
+
+  it('aborts if signal is triggered', async () => {
+    const ctrl = new AbortController();
+    const tasks = [
+      async () => {
+        await sleep(10);
+        return 1;
+      },
+      async () => {
+        await sleep(10);
+        return 2;
+      }
+    ];
+    setTimeout(() => ctrl.abort(), 5);
+    await expect(runWithConcurrency(tasks, { concurrency: 1, signal: ctrl.signal })).rejects.toThrow('Aborted');
+  });
+
+  it('returns empty array for no tasks', async () => {
+    const result = await runWithConcurrency([], { concurrency: 2 });
+    expect(result).toEqual([]);
+  });
+
+  it('throws if already aborted', async () => {
+    const ctrl = new AbortController();
+    ctrl.abort();
+    await expect(runWithConcurrency([async () => 1], { signal: ctrl.signal })).rejects.toThrow('Aborted');
   });
 });
