@@ -34,12 +34,6 @@ function HomepageHeader() {
               <Link id='explore-docs' className="button button--primary button--lg" to="/docs/">
                 🚀 Explore Docs
               </Link>
-              {/* <Link
-                className="button button--secondary button--lg"
-                href="https://www.npmjs.com/package/@catbee/utils"
-                target="_blank">
-                Open on NPM
-              </Link> */}
             </div>
           </motion.div>
           <motion.div
