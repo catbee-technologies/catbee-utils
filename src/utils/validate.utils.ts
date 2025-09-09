@@ -1,7 +1,7 @@
 /*
  * The MIT License
  *
- * Copyright (c) 2025 Catbee Technologies
+ * Copyright (c) 2025 Catbee Technologies. https://catbee-utils.npm.hprasath.com/license
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
