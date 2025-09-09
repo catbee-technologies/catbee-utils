@@ -1,0 +1,132 @@
+/**
+ * Any CSS included here will be global. The classic template
+ * bundles Infima by default. Infima is a CSS framework designed to
+ * work well for content-centric websites.
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:ital,wght@0,100..700;1,100..700&display=swap');
+
+:root {
+  --ifm-color-primary: #6a4fbc;
+  --ifm-color-primary-dark: #5d42ad;
+  --ifm-color-primary-darker: #563ea3;
+  --ifm-color-primary-darkest: #473386;
+  --ifm-color-primary-light: #7a62c4;
+  --ifm-color-primary-lighter: #846cc8;
+  --ifm-color-primary-lightest: #9f8cd5;
+  --ifm-code-font-size: 95%;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
+
+  --ifm-font-family-base: 'Inter', system-ui, sans-serif;
+  --ifm-font-family-monospace: 'Roboto Mono', monospace;
+  --ifm-heading-font-weight: 700;
+  --ifm-line-height-base: 1.6;
+}
+
+[data-theme='dark'] {
+  --ifm-color-primary: #9d7eff;
+  --ifm-color-primary-dark: #8560ff;
+  --ifm-color-primary-darker: #7951ff;
+  --ifm-color-primary-darkest: #5924ff;
+  --ifm-color-primary-light: #b59cff;
+  --ifm-color-primary-lighter: #c1abff;
+  --ifm-color-primary-lightest: #e0d8ff;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
+}
+
+html {
+  background-color: #f9f9f9;
+}
+
+html[data-theme='dark'] {
+  background-color: #0f0f11;
+}
+
+html, body {
+  font-family: "Inter", sans-serif;
+  font-optical-sizing: auto;
+  font-weight: 500;
+  font-style: normal;
+}
+
+.button {
+  border-radius: 0.75rem;
+  font-weight: 600;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+}
+
+.hero--primary {
+  background: linear-gradient(135deg, #6a4fbc, #9d7eff);
+  color: #fff;
+}
+
+.hero__title {
+  font-size: 3rem;
+  font-weight: 800;
+}
+
+.hero__subtitle {
+  font-size: 1.25rem;
+  opacity: 0.9;
+}
+
+nav.navbar {
+  background-color: color-mix(in srgb, white 70%, transparent);
+  transition: background-color .3s ease, border-color .3s ease;
+  border-block-end: 1px solid var(--ifm-toc-border-color);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+
+nav.navbar.navbar-sidebar--show {
+  -webkit-backdrop-filter: unset;
+  backdrop-filter: unset;
+  background-color: white;
+}
+
+html[data-theme='dark'] nav.navbar.navbar-sidebar--show {
+  background-color: #0f0f11;
+}
+
+html[data-theme='dark'] nav.navbar {
+  background-color: color-mix(in srgb, oklch(16.93% .004 285.95) 70%, transparent);
+  border-block-end: 1px solid var(--ifm-toc-border-color);
+}
+
+nav .navbar-sidebar {
+  background: white;
+  border-right: var(--ifm-toc-border-color);
+}
+
+html[data-theme='dark'] nav .navbar-sidebar {
+  background: #0f0f11;
+  border-right: 1px solid var(--ifm-toc-border-color);
+}
+
+footer.footer {
+  padding: 1rem 0;
+  background: white;
+  color: black;
+  border-top: 1px solid var(--ifm-toc-border-color);
+  font-size: .75rem;
+  -moz-user-select: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+html[data-theme='dark'] footer.footer {
+  background: #0f0f11;
+  color: white;
+}
+
+@media (max-width: 768px) {
+  .button {
+    margin: 0 auto !important;
+  }
+}
