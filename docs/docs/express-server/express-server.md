@@ -355,32 +355,32 @@ new ServerConfigBuilder()
   .withPort(port: number)
   .withHost(host: string)
   .enableCors()
-  .withCors(options)
+  .withCors(options: CorsOptions)
   .enableHelmet()
-  .withHelmet(options)
+  .withHelmet(options: HelmetOptions)
   .enableCompression()
-  .withCompression(options)
-  .enableRateLimit(options)
-  .withRateLimit(options)
-  .enableRequestLogging(options)
-  .withRequestLogging(options)
-  .enableMetrics(options)
-  .withMetrics(options)
-  .withHealthCheck(options)
-  .enableOpenApi(filePath, options)
-  .withOpenApi(options)
+  .withCompression(options: CompressionOptions)
+  .enableRateLimit(options: RateLimitOptions)
+  .withRateLimit(options: RateLimitOptions)
+  .enableRequestLogging(options: RequestLoggingOptions)
+  .withRequestLogging(options: RequestLoggingOptions)
+  .enableMetrics(options: MetricsOptions)
+  .withMetrics(options: MetricsOptions)
+  .withHealthCheck(options: HealthCheckOptions)
+  .enableOpenApi(filePath: string, options: OpenApiOptions)
+  .withOpenApi(options: OpenApiOptions)
   .withMicroService({ appName, serviceVersion })
-  .withTrustProxy(value)
-  .withRequestId(options)
-  .enableResponseTime(options)
-  .withResponseTime(options)
-  .withBodyParser(options)
-  .withCookies(options)
+  .withTrustProxy(value: boolean)
+  .withRequestId(options: { headerName?: string; exposeHeader?: boolean; generator?: () => string })
+  .enableResponseTime(options: { addHeader?: boolean; logOnComplete?: boolean })
+  .withResponseTime(options: { addHeader?: boolean; logOnComplete?: boolean })
+  .withBodyParser(options: { json?: BodyParserOptions; urlencoded?: BodyParserOptions })
+  .withCookies(options: { secret?: string; secure?: boolean })
   .withStaticFolder({ path, directory, ... })
-  .withGlobalHeaders(headers)
-  .withGlobalPrefix(prefix)
-  .withHttps(options)
-  .withCustom(overrides)
+  .withGlobalHeaders(headers: Record<string, string>)
+  .withGlobalPrefix(prefix: string)
+  .withHttps(options: { cert: string; key: string; ca?: string })
+  .withCustom(overrides: Partial<ServerConfig>)
   .build()
 ```
 
@@ -534,21 +534,37 @@ const registry = server.getMetricsRegistry();
 See [ServerConfigBuilder](#serverconfigbuilder) and [ExpressServer](#expressserver) for full method documentation and options.
 
 ---
-- `withCompression(opts)` / `enableCompression()` / `disableCompression()` - Configure response compression
-- `withRateLimit(opts)` / `enableRateLimit(opts)` / `disableRateLimit()` - Configure rate limiting
-- `withRequestLogging(opts)` / `enableRequestLogging(opts)` / `disableRequestLogging()` - Configure request logging
-- `withMetrics(opts)` / `enableMetrics(opts)` / `disableMetrics()` - Configure Prometheus metrics
-- `withHealthCheck(opts)` - Configure health check endpoints
-- `withOpenApi(opts)` / `enableOpenApi(filePath, opts)` / `disableOpenApi()` - Configure OpenAPI documentation
-- `withMicroService(opts)` - Configure as a microservice
-- `withTrustProxy(opts)` - Configure trust proxy settings
-- `withRequestId(opts)` - Configure request ID generation
-- `withResponseTime(opts)` / `enableResponseTime(opts)` / `disableResponseTime()` - Configure response time tracking
-- `withBodyParser(opts)` - Configure request body parsing
-- `withCookies(opts)` - Configure cookie parsing
-- `withStaticFolder(folder)` - Configure static file serving
-- `withGlobalHeaders(headers)` - Set global response headers
-- `withGlobalPrefix(prefix)` - Set global route prefix
-- `withHttps(opts)` - Configure HTTPS
-- `withCustom(overrides)` - Apply custom configuration
+- `withCompression(opts: CompressionOptions)` / `enableCompression()` / `disableCompression()` - Configure response compression
+- `withRateLimit(opts: RateLimitOptions)` / `enableRateLimit(opts: RateLimitOptions)` / `disableRateLimit()` - Configure rate limiting
+- `withRequestLogging(opts: RequestLoggingOptions)` / `enableRequestLogging(opts: RequestLoggingOptions)` / `disableRequestLogging()` - Configure request logging
+- `withMetrics(opts: MetricsOptions)` / `enableMetrics(opts: MetricsOptions)` / `disableMetrics()` - Configure Prometheus metrics
+- `withHealthCheck(opts: HealthCheckOptions)` - Configure health check endpoints
+- `withOpenApi(opts: OpenApiOptions)` / `enableOpenApi(filePath: string, opts: OpenApiOptions)` / `disableOpenApi()` - Configure OpenAPI documentation
+- `withMicroService(opts: MicroServiceOptions)` - Configure as a microservice
+- `withTrustProxy(opts: TrustProxyOptions)` - Configure trust proxy settings
+- `withRequestId(opts: RequestIdOptions)` - Configure request ID generation
+- `withResponseTime(opts: ResponseTimeOptions)` / `enableResponseTime(opts: ResponseTimeOptions)` / `disableResponseTime()` - Configure response time tracking
+- `withBodyParser(opts: BodyParserOptions)` - Configure request body parsing
+- `withCookies(opts: CookiesOptions)` - Configure cookie parsing
+- `withStaticFolder(folder: string)` - Configure static file serving
+- `withGlobalHeaders(headers: Record<string, string>)` - Set global response headers
+- `withGlobalPrefix(prefix: string)` - Set global route prefix
+- `withHttps(opts: HttpsOptions)` - Configure HTTPS
+- `withCustom(overrides: Partial<ServerConfig>)` - Apply custom configuration
 - `build()` - Build the final configuration
+
+---
+
+## Required npm Packages for Features
+
+| Feature                | Required npm Packages                   |
+|------------------------|-----------------------------------------|
+| CORS                   | `cors`                                  |
+| Helmet (security)      | `helmet`                                |
+| Compression            | `compression`                           |
+| Cookie Parsing         | `cookie-parser`                         |
+| Rate Limiting          | `express-rate-limit`                    |
+| Prometheus Metrics     | `prom-client`                           |
+| OpenAPI Docs           | `@scalar/express-api-reference`         |
+
+**Note:** These packages must be installed via `npm install <package>` if you enable the corresponding feature in your server config.
