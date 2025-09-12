@@ -238,3 +238,43 @@ export function errorHandler(options?: ErrorHandlerOptions) {
       .json(createFinalErrorResponse(req, status, err?.message || 'Internal Server Error', err, { includeDetails }));
   };
 }
+
+/**
+ * Health check middleware for service status and custom checks.
+ *
+ * @param {object} [options] - Health check options
+ * @param {string} [options.path='/healthz'] - Health check endpoint path
+ * @param {Array<{name: string; check: () => Promise<boolean> | boolean}>} [options.checks] - Custom health checks
+ * @param {boolean} [options.detailed=true] - Show detailed check results
+ * @returns {Middleware} Express-compatible middleware
+ */
+export function healthCheck(options?: {
+  path?: string;
+  checks?: Array<{ name: string; check: () => Promise<boolean> | boolean }>;
+  detailed?: boolean;
+}): Middleware {
+  const path = options?.path || '/healthz';
+  const checks = options?.checks || [];
+  const detailed = options?.detailed !== false;
+
+  return async (req, res, next) => {
+    if (req.path !== path) return next();
+    const results: Record<string, boolean> = {};
+    let allHealthy = true;
+    for (const check of checks) {
+      try {
+        const result = await Promise.resolve(check.check());
+        results[check.name] = !!result;
+        if (!result) allHealthy = false;
+      } catch {
+        results[check.name] = false;
+        allHealthy = false;
+      }
+    }
+    const status = allHealthy ? HttpStatusCodes.OK : HttpStatusCodes.SERVICE_UNAVAILABLE;
+    const response = detailed
+      ? { status: allHealthy ? 'ok' : 'unhealthy', checks: results, timestamp: new Date().toISOString() }
+      : { status: allHealthy ? 'ok' : 'unhealthy' };
+    res.status(status).json(response);
+  };
+}

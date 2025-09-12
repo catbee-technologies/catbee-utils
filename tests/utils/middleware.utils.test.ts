@@ -1,4 +1,11 @@
-import { requestId, timeout, errorHandler, responseTime, setupRequestContext } from '../../src/utils/middleware.utils';
+import {
+  requestId,
+  timeout,
+  errorHandler,
+  responseTime,
+  setupRequestContext,
+  healthCheck
+} from '../../src/utils/middleware.utils';
 import { HttpStatusCodes } from '../../src/utils/http-status-codes';
 import { ErrorResponse } from '../../src/utils/response.utils';
 import { Env } from '../../src/utils/env.utils';
@@ -287,6 +294,98 @@ describe('Middleware tests', () => {
         method: 'GET',
         url: '/test'
       });
+    });
+  });
+
+  describe('healthCheck middleware', () => {
+    let req: any;
+    let res: any;
+    let next: jest.Mock;
+
+    beforeEach(() => {
+      req = { path: '/healthz' };
+      res = {
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn()
+      };
+      next = jest.fn();
+    });
+
+    it('should return healthy status by default', async () => {
+      await healthCheck()(req, res, next);
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ status: 'ok' }));
+    });
+
+    it('should run custom checks and return ok if all pass', async () => {
+      const checks = [
+        { name: 'db', check: () => true },
+        { name: 'cache', check: () => Promise.resolve(true) }
+      ];
+      await healthCheck({ checks })(req, res, next);
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 'ok',
+          checks: { db: true, cache: true }
+        })
+      );
+    });
+
+    it('should return unhealthy if any check fails', async () => {
+      const checks = [
+        { name: 'db', check: () => false },
+        { name: 'cache', check: () => true }
+      ];
+      await healthCheck({ checks })(req, res, next);
+      expect(res.status).toHaveBeenCalledWith(503);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 'unhealthy',
+          checks: { db: false, cache: true }
+        })
+      );
+    });
+
+    it('should return unhealthy if a check throws', async () => {
+      const checks = [
+        {
+          name: 'db',
+          check: () => {
+            throw new Error('fail');
+          }
+        }
+      ];
+      await healthCheck({ checks })(req, res, next);
+      expect(res.status).toHaveBeenCalledWith(503);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 'unhealthy',
+          checks: { db: false }
+        })
+      );
+    });
+
+    it('should not include checks if detailed=false', async () => {
+      const checks = [{ name: 'db', check: () => true }];
+      await healthCheck({ checks, detailed: false })(req, res, next);
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ status: 'ok' }));
+      expect(res.json.mock.calls[0][0].checks).toBeUndefined();
+    });
+
+    it('should skip if path does not match', async () => {
+      req.path = '/not-healthz';
+      await healthCheck()(req, res, next);
+      expect(next).toHaveBeenCalled();
+      expect(res.status).not.toHaveBeenCalled();
+    });
+
+    it('should support custom path', async () => {
+      req.path = '/custom-health';
+      await healthCheck({ path: '/custom-health' })(req, res, next);
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ status: 'ok' }));
     });
   });
 });
