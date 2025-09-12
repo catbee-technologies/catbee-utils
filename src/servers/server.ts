@@ -25,21 +25,14 @@
 import express, { Express, Request, Response, NextFunction, Router } from 'express';
 import http from 'http';
 import https from 'https';
-import cors from 'cors';
-import helmet from 'helmet';
-import compression from 'compression';
-import cookieParser from 'cookie-parser';
-import rateLimit from 'express-rate-limit';
 import { HttpStatusCodes } from '../utils/http-status-codes';
 import { createFinalErrorResponse, SuccessResponse } from '../utils/response.utils';
 import { errorHandler, requestId, responseTime, setupRequestContext, timeout } from '../utils/middleware.utils';
 import { Env } from '../utils/env.utils';
 import { getLogger } from '../utils/logger.utils';
 import { InternalServerErrorException, ServiceUnavailableException } from '../utils/exception.utils';
-import client, { Counter, Histogram } from 'prom-client';
 import { NotFoundException } from '../utils/exception.utils';
 import fs from 'fs';
-import { apiReference } from '@scalar/express-api-reference';
 import { defaultServerConfig } from '../config';
 import { deepObjMerge } from '../utils/obj.utils';
 import { fileExists } from '../utils/fs.utils';
@@ -64,7 +57,7 @@ import { isPort } from '../utils/validate.utils';
  */
 export class ExpressServer {
   /** Prometheus client registry for metrics collection */
-  private register: client.Registry = new client.Registry();
+  private register: any = null;
   /** HTTP server instance (null when not running) */
   protected server: http.Server | https.Server | null = null;
   /** Merged configuration with defaults applied */
@@ -90,10 +83,10 @@ export class ExpressServer {
   private healthChecks: Array<{ name: string; check: () => Promise<boolean> | boolean }> = [];
 
   /** Prometheus metrics for monitoring */
-  private requestCounter?: Counter<string>;
-  private routeTimings?: Histogram<string>;
-  private requestSizes?: Histogram<string>;
-  private clientIPs?: Counter<string>;
+  private requestCounter?: any;
+  private routeTimings?: any;
+  private requestSizes?: any;
+  private clientIPs?: any;
 
   /** Promise that resolves when initialization (middleware + routes) is complete */
   private initPromise: Promise<void>;
@@ -124,44 +117,50 @@ export class ExpressServer {
     }
 
     if (!isPort(this.config.port)) {
-      throw new Error(`Port must be a valid number between 1 and 65535, got: ${this.config.port}`);
+      getLogger().error(`Port must be a valid number between 1 and 65535, got: ${this.config.port}`);
+      process.exit(1);
     }
 
     // Sanitize app name for metrics (replace invalid characters with underscore)
     const safeAppName = (this.config.appName || 'express_app').toLowerCase().replace(/[^a-z0-9_]/g, '_');
 
     if (this.config.metrics?.enable) {
+      const client = ExpressServer.optionalRequire('prom-client');
+      if (!client) {
+        getLogger().error(
+          { command: 'npm install prom-client' },
+          'prom-client is required for metrics but not installed. Please add it to your dependencies'
+        );
+        process.exit(1);
+      }
+      this.register = new client.Registry();
       // Initialize Prometheus metrics with sanitized names
-      this.requestCounter = new Counter({
+      this.requestCounter = new client.Counter({
         name: `${safeAppName}_http_requests_total`,
         help: 'Total HTTP requests',
         labelNames: ['method', 'route', 'status'],
         registers: [this.register]
       });
-
-      this.routeTimings = new Histogram({
+      this.routeTimings = new client.Histogram({
         name: `${safeAppName}_http_request_duration_seconds`,
         help: 'Duration of HTTP requests by route',
         labelNames: ['method', 'route', 'status'],
         buckets: [0.1, 0.3, 0.5, 0.7, 1, 3, 5, 7, 10],
         registers: [this.register]
       });
-
-      this.requestSizes = new Histogram({
+      this.requestSizes = new client.Histogram({
         name: `${safeAppName}_http_request_size_bytes`,
         help: 'Size of HTTP request bodies',
         labelNames: ['method', 'route'],
         buckets: [100, 1000, 10000, 100000, 1000000],
         registers: [this.register]
       });
-
-      this.clientIPs = new Counter({
+      this.clientIPs = new client.Counter({
         name: `${safeAppName}_http_client_ip_total`,
         help: 'Client IP request counter',
         labelNames: ['ip', 'method'],
         registers: [this.register]
       });
-
       // Default system metrics (CPU, memory, event loop lag, etc.)
       client.collectDefaultMetrics({
         register: this.register,
@@ -278,6 +277,15 @@ export class ExpressServer {
 
     // Security middleware should come early
     if (this.config.helmet) {
+      const helmet = ExpressServer.optionalRequire('helmet');
+      if (!helmet) {
+        getLogger().error(
+          { command: 'npm install helmet' },
+          'helmet is required but not installed. Please add it to your dependencies'
+        );
+        process.exit(1);
+      }
+
       if (typeof this.config.helmet === 'object') {
         this.app.use(helmet(this.config.helmet));
       } else {
@@ -287,6 +295,14 @@ export class ExpressServer {
 
     // CORS middleware should be early
     if (this.config.cors) {
+      const cors = ExpressServer.optionalRequire('cors');
+      if (!cors) {
+        getLogger().error(
+          { command: 'npm install cors' },
+          'cors is required but not installed. Please add it to your dependencies'
+        );
+        process.exit(1);
+      }
       this.app.use(cors(this.config.cors === true ? {} : this.config.cors));
     }
 
@@ -329,6 +345,15 @@ export class ExpressServer {
 
     // Rate limiting should be early to prevent unnecessary processing
     if (this.config.rateLimit?.enable) {
+      const rateLimit = ExpressServer.optionalRequire('express-rate-limit');
+      if (!rateLimit) {
+        getLogger().error(
+          { command: 'npm install express-rate-limit' },
+          'express-rate-limit is required but not installed. Please add it to your dependencies'
+        );
+        process.exit(1);
+      }
+
       this.app.use(
         rateLimit({
           windowMs: this.config.rateLimit.windowMs ?? 15 * 60 * 1000,
@@ -378,6 +403,15 @@ export class ExpressServer {
 
     // Response compression for better performance
     if (this.config.compression) {
+      const compression = ExpressServer.optionalRequire('compression');
+      if (!compression) {
+        getLogger().error(
+          { command: 'npm install compression' },
+          'compression is required but not installed. Please add it to your dependencies'
+        );
+        process.exit(1);
+      }
+
       if (typeof this.config.compression === 'object') {
         this.app.use(compression(this.config.compression));
       } else {
@@ -414,6 +448,15 @@ export class ExpressServer {
 
     // Cookie parser middleware
     if (this.config.cookieParser) {
+      const cookieParser = ExpressServer.optionalRequire('cookie-parser');
+      if (!cookieParser) {
+        getLogger().error(
+          { command: 'npm install cookie-parser' },
+          'cookie-parser is required but not installed. Please add it to your dependencies'
+        );
+        process.exit(1);
+      }
+
       if (typeof this.config.cookieParser === 'object') {
         this.app.use(cookieParser(undefined, this.config.cookieParser));
       } else {
@@ -430,17 +473,29 @@ export class ExpressServer {
         );
         const openApiFilePath = this.config.openApi.filePath;
         if (!openApiFilePath) {
-          throw new Error('OpenAPI file path is required');
+          getLogger().error('OpenAPI file path is required');
+          process.exit(1);
         }
         const isOpenApiFilePathExists = await fileExists(openApiFilePath);
         if (!isOpenApiFilePathExists) {
-          throw new Error(`OpenAPI spec file not found at ${openApiFilePath}`);
+          getLogger().error(`OpenAPI spec file not found at ${openApiFilePath}`);
+          process.exit(1);
         }
 
         if (this.config.openApi?.verbose) {
           getLogger().info(`Mounting OpenAPI docs at ${openApiMountPath}`);
           getLogger().info(`Using OpenAPI spec file at ${openApiFilePath}`);
         }
+
+        const apiReference = ExpressServer.optionalRequire('@scalar/express-api-reference').apiReference;
+        if (!apiReference) {
+          getLogger().error(
+            { command: 'npm install @scalar/express-api-reference' },
+            '@scalar/express-api-reference is required for OpenAPI docs but not installed. Please add it to your dependencies'
+          );
+          process.exit(1);
+        }
+
         this.app.use(
           openApiMountPath,
           apiReference({
@@ -926,7 +981,7 @@ export class ExpressServer {
    *
    * @return {*}  {client.Registry}
    */
-  public getMetricsRegistry(): client.Registry {
+  public getMetricsRegistry(): any {
     return this.register;
   }
 
@@ -1022,13 +1077,16 @@ export class ExpressServer {
 
   private async validateHttpsFiles() {
     if (!(await fileExists(this.config.https!.key))) {
-      throw new Error(`HTTPS key file not found: ${this.config.https!.key}`);
+      getLogger().error(`HTTPS key file not found: ${this.config.https!.key}`);
+      process.exit(1);
     }
     if (!(await fileExists(this.config.https!.cert))) {
-      throw new Error(`HTTPS cert file not found: ${this.config.https!.cert}`);
+      getLogger().error(`HTTPS cert file not found: ${this.config.https!.cert}`);
+      process.exit(1);
     }
     if (this.config.https!.ca && !(await fileExists(this.config.https!.ca))) {
-      throw new Error(`HTTPS CA file not found: ${this.config.https!.ca}`);
+      getLogger().error(`HTTPS CA file not found: ${this.config.https!.ca}`);
+      process.exit(1);
     }
   }
 
@@ -1037,5 +1095,13 @@ export class ExpressServer {
       return true;
     }
     return false;
+  }
+
+  private static optionalRequire<T = any>(name: string): T | null {
+    try {
+      return require(name);
+    } catch {
+      return null;
+    }
   }
 }
