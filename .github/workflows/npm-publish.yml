@@ -5,7 +5,8 @@ name: 📦 Auto Publish to npm
 on:
   push:
     tags:
-      - 'v*.*.*'
+      - 'v*.*.*'       # stable tags like v1.2.3
+      - 'v*.*.*-*'     # prerelease tags like v1.2.3-rc.1, v1.2.3-beta.0
   workflow_dispatch:
 
 jobs:
@@ -38,6 +39,19 @@ jobs:
         run: npm run compile
 
       - name: 🚀 Publish to npm
-        run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          VERSION=${GITHUB_REF_NAME#v} # strip "v" prefix
+          echo "Publishing version $VERSION"
+
+          if [[ "$VERSION" == *-* ]]; then
+            # It's a prerelease (contains "-rc", "-beta", etc.)
+            TAG=$(echo $VERSION | sed 's/^[0-9.]*-//' | cut -d. -f1)
+            echo "Detected prerelease, using dist-tag=$TAG"
+            npm publish --access public --tag "$TAG"
+          else
+            # Stable release
+            echo "Detected stable release, using dist-tag=latest"
+            npm publish --access public --tag latest
+          fi
