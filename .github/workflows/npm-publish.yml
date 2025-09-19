@@ -38,6 +38,16 @@ jobs:
       - name: 🛠️ Build package
         run: npm run compile
 
+      - name: 📝 Remove devDependencies from package.json
+        run: |
+          node -e "
+          const fs = require('fs');
+          const pkg = JSON.parse(fs.readFileSync('package.json','utf8'));
+          delete pkg.devDependencies;
+          fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));
+          console.log('Removed devDependencies for publish');
+          "
+
       - name: 🚀 Publish to npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
