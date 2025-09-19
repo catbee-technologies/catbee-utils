@@ -5,3 +5,4 @@ logs/
 *.log
 reports
 **/test-report.xml
+pack-output.json
