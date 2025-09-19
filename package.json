@@ -24,6 +24,7 @@
     "preversion": "npm run check-license && npm run lint && npm run test && npm run compile",
     "pretest": "npm run compile",
     "dryrun": "npm pack --dry-run",
+    "dryrun:list": "npm pack --dry-run --json > pack-output.json",
     "test": "cross-env LOGGER_LEVEL=silent jest",
     "test:coverage": "cross-env LOGGER_LEVEL=silent jest --coverage",
     "coverage": "npm run test:coverage",
@@ -64,7 +65,6 @@
     "functional",
     "tools"
   ],
-  "dependencies": {},
   "devDependencies": {
     "@types/compression": "^1.8.1",
     "@types/cookie-parser": "^1.4.9",

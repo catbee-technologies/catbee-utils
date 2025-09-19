@@ -1,10 +1,34 @@
 # @catbee/utils
 
+<!-- <div style="width: 100%; display: flex; align-items: center; justify-content: space-between;">
+  <b style="font-size: 24px; text-decoration: none;">@catbee/utils</b>
+  <a href="https://sonarcloud.io/summary/new_code?id=catbee-technologies_catbee-utils">
+    <img src="https://sonarcloud.io/images/project_badges/sonarcloud-dark.svg" alt="SonarQube Cloud" width="200"/>
+  </a>
+</div> -->
+
 ## 🧰 Utility Modules for Node.js
 
 A modular, production-grade utility toolkit for Node.js and TypeScript, designed for robust, scalable applications. All utilities are tree-shakable and can be imported independently.
 
-![build](https://img.shields.io/badge/build-passing-brightgreen) ![coverage](https://codecov.io/gh/catbee-technologies/catbee-utils/graph/badge.svg?token=XAJHK6R1OQ) ![node](https://img.shields.io/node/v/@catbee/utils) ![npm](https://img.shields.io/npm/v/@catbee/utils) ![downloads](https://img.shields.io/npm/dm/@catbee/utils) ![dependencies](https://img.shields.io/librariesio/release/npm/@catbee%2Futils) ![license](https://img.shields.io/npm/l/@catbee/utils)
+<div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 1rem 0;">
+  <img src="https://img.shields.io/badge/build-passing-brightgreen" alt="Build Status" />
+  <img src="https://codecov.io/gh/catbee-technologies/catbee-utils/graph/badge.svg?token=XAJHK6R1OQ" alt="Coverage" />
+  <img src="https://img.shields.io/node/v/@catbee/utils" alt="Node Version" />
+  <img src="https://img.shields.io/npm/v/@catbee/utils" alt="NPM Version" />
+  <img src="https://img.shields.io/npm/v/@catbee/utils/rc" alt="NPM RC Version" />
+  <img src="https://img.shields.io/npm/dt/@catbee/utils" alt="NPM Downloads" />
+  <img src="https://img.shields.io/npm/types/@catbee/utils" alt="TypeScript Types" />
+  <img src="https://img.shields.io/librariesio/release/npm/@catbee%2Futils" alt="Dependencies" />
+  <img src="https://img.shields.io/maintenance/yes/2025" alt="Maintenance" />
+  <img src="https://snyk.io/test/github/<owner>/<repo>/badge.svg" alt="Snyk Vulnerabilities" />
+  <!-- <img src="https://sonarcloud.io/api/project_badges/measure?project=catbee-technologies_catbee-utils&metric=alert_status&token=93da835f2d48d37b41fa628cc7fc764c873bd700" alt="Quality Gate Status" /> -->
+  <img src="https://sonarcloud.io/api/project_badges/measure?project=catbee-technologies_catbee-utils&metric=ncloc&token=93da835f2d48d37b41fa628cc7fc764c873bd700" alt="Lines of Code" />
+  <img src="https://sonarcloud.io/api/project_badges/measure?project=catbee-technologies_catbee-utils&metric=security_rating&token=93da835f2d48d37b41fa628cc7fc764c873bd700" alt="Security Rating" />
+  <img src="https://sonarcloud.io/api/project_badges/measure?project=catbee-technologies_catbee-utils&metric=sqale_rating&token=93da835f2d48d37b41fa628cc7fc764c873bd700" alt="Maintainability Rating" />
+  <img src="https://sonarcloud.io/api/project_badges/measure?project=catbee-technologies_catbee-utils&metric=vulnerabilities&token=93da835f2d48d37b41fa628cc7fc764c873bd700" alt="Vulnerabilities" />
+  <img src="https://img.shields.io/npm/l/@catbee/utils" alt="License" />
+</div>
 
 ---
 
