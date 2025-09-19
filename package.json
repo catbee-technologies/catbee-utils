@@ -1,6 +1,6 @@
 {
   "name": "@catbee/utils",
-  "version": "0.0.7",
+  "version": "0.0.8-rc.0",
   "description": "A modular, production-grade utility toolkit for Node.js and TypeScript, designed for robust, scalable applications (including Express-based services). All utilities are tree-shakable and can be imported independently.",
   "main": "build/src/index.js",
   "module": "build/esm/index.js",
