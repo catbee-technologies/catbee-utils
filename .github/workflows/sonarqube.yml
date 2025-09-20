@@ -1,0 +1,62 @@
+name: 🧩 SonarCloud Analysis
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches: 
+      - main
+      - feature-next
+    types: [opened, synchronize, reopened]
+
+jobs:
+  sonarcloud:
+    if: >
+      github.event_name != 'pull_request' ||
+      (!contains(github.event.pull_request.title, 'WIP') && !contains(github.event.pull_request.title, '!SONAR'))
+    name: 🧩 SonarCloud Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: ⬇️ Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history for SonarCloud analysis
+
+      - name: ☕ Set up JDK 17 (required by SonarCloud)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: 🟢 Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: 'npm'
+
+      - name: 📦 Install dependencies
+        run: npm ci
+
+      - name: 🧹 Lint code
+        run: npm run lint
+
+      - name: 🔡 Type check
+        run: npx tsc --noEmit
+
+      - name: 🧪 Run tests
+        run: npm run test
+
+      - name: 🏗️ Build project
+        run: npm run compile
+
+      - name: 🔎 SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@v2
+        with:
+          args: >
+            -Dsonar.projectKey=catbee-utils
+            -Dsonar.organization=catbee-technologies
+            -Dsonar.javascript.lcov.reportPaths=reports/coverage/lcov.info
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
