@@ -24,10 +24,17 @@ These utilities provide a declarative way to define Express routes, middleware, 
 - [**`@Res(): ParameterDecorator`**](#res) - Extract the response object.
 - [**`@HttpCode(status: number): MethodDecorator`**](#httpcode) - Set a custom HTTP status code for the response.
 - [**`@Header(name: string, value: string): MethodDecorator`**](#header) - Add a custom HTTP header to the response.
+- [**`@Headers(headers: Record<string, string> | string, value?: string): MethodDecorator`**](#headers) - Add multiple custom HTTP headers to the response.
 - [**`@Before(fn: Function): MethodDecorator`**](#before) - Run a function before the route handler.
 - [**`@After(fn: Function): MethodDecorator`**](#after) - Run a function after the route handler.
 - [**`@Redirect(url?: string, statusCode?: number): MethodDecorator`**](#redirect) - Redirect to another URL.
 - [**`@Roles(...roles: string[]): MethodDecorator`**](#roles) - Require specific roles for accessing a route.
+- [**`@Cache(ttlSeconds: number): MethodDecorator`**](#cache) - Add caching to route responses.
+- [**`@RateLimit(options: RateLimitOptions): MethodDecorator`**](#ratelimit) - Apply rate limiting to routes.
+- [**`@ContentType(type: string): MethodDecorator`**](#contenttype) - Set the content type for responses.
+- [**`@Version(version: string, options?: VersionOptions): MethodDecorator`**](#version) - Add API versioning to routes.
+- [**`@Timeout(ms: number): MethodDecorator`**](#timeout) - Set execution timeout for routes.
+- [**`@Log(options?: LogOptions): MethodDecorator`**](#log) - Add comprehensive logging to routes.
 
 ---
 
@@ -42,6 +49,8 @@ These decorators and utilities allow you to:
 - Run hooks before and after route handlers.
 - Restrict access to routes by user roles.
 - Redirect requests to other URLs.
+- Add caching, rate limiting, versioning, and timeout handling.
+- Implement comprehensive logging and response customization.
 - Register controller classes with an Express router.
 
 ---
@@ -66,11 +75,37 @@ interface ParamDefinition {
   key?: string;
 }
 
+// Rate limiting options interface
+interface RateLimitOptions {
+  max: number;
+  windowMs: number;
+  standardHeaders?: boolean; // Default: true
+  legacyHeaders?: boolean;   // Default: false
+}
+
+// Version decorator options interface
+interface VersionOptions {
+  addPrefix?: boolean;    // Default: true
+  addHeader?: boolean;    // Default: true
+  headerName?: string;    // Default: 'X-API-Version'
+}
+
+// Log decorator options interface
+interface LogOptions {
+  logEntry?: boolean;     // Default: true
+  logExit?: boolean;      // Default: true
+  logBody?: boolean;      // Default: false
+  logParams?: boolean;    // Default: false
+  logResponse?: boolean;  // Default: false
+}
+
 // Example enum for HTTP status codes
 enum HttpStatusCodes {
   OK = 200,
   CREATED = 201,
   FORBIDDEN = 403,
+  REQUEST_TIMEOUT = 408,
+  TOO_MANY_REQUESTS = 429,
   // ...other status codes
 }
 ```
@@ -575,6 +610,46 @@ getData() {
 
 ---
 
+### `@Headers()`
+Adds multiple custom HTTP headers to the response.
+
+**Method Signature:**
+```ts
+@Headers(headers: Record<string, string> | string, value?: string): MethodDecorator
+```
+
+**Parameters:**
+- `headers`: Either an object with header name-value pairs, or a single header name
+- `value`: Header value (required when first parameter is a string)
+
+**Returns:** 
+- A method decorator.
+
+**Examples:**
+```ts
+import { Get, Headers } from '@catbee/utils';
+
+// Single header
+@Get('/data')
+@Headers('Cache-Control', 'max-age=60')
+getData() {
+  return { data: '...' };
+}
+
+// Multiple headers
+@Get('/secure')
+@Headers({
+  'Cache-Control': 'max-age=3600',
+  'X-Custom-Header': 'custom-value',
+  'Content-Security-Policy': "default-src 'self'"
+})
+getSecureData() {
+  return { data: 'secure content' };
+}
+```
+
+---
+
 ### `@Before()`
 Runs a function before the route handler.
 
@@ -629,33 +704,6 @@ getUser(@Param('id') id: string) {
 
 ---
 
-### `@Roles()`
-Requires specific roles for accessing a route.
-
-**Method Signature:**
-```ts
-@Roles(...roles: string[]): MethodDecorator
-```
-
-**Parameters:**
-- `...roles`: The roles required to access the route.
-
-**Returns:** 
-- A method decorator.
-
-**Examples:**
-```ts
-import { Roles, Get } from '@catbee/utils';
-
-@Get('/admin/settings')
-@Roles('admin', 'superuser')
-getSettings() {
-  return { settings: ['a', 'b'] };
-}
-```
-
----
-
 ### `@Redirect()`
 Redirects to another URL.
 
@@ -687,3 +735,414 @@ getDynamicRedirect() {
 }
 ```
 
+---
+
+### `@Roles()`
+Requires specific roles for accessing a route.
+
+**Method Signature:**
+```ts
+@Roles(...roles: string[]): MethodDecorator
+```
+
+**Parameters:**
+- `...roles`: The roles required to access the route.
+
+**Returns:** 
+- A method decorator.
+
+**Examples:**
+```ts
+import { Roles, Get } from '@catbee/utils';
+
+@Get('/admin/settings')
+@Roles('admin', 'superuser')
+getSettings() {
+  return { settings: ['a', 'b'] };
+}
+```
+
+---
+
+### `@Cache()`
+Adds caching headers to route responses for client-side caching.
+
+**Method Signature:**
+```ts
+@Cache(ttlSeconds: number): MethodDecorator
+```
+
+**Parameters:**
+- `ttlSeconds`: Time to live in seconds for the cache
+
+**Returns:** 
+- A method decorator.
+
+**Headers Set:**
+- `Cache-Control: public, max-age={ttlSeconds}`
+
+**Examples:**
+```ts
+import { Get, Cache } from '@catbee/utils';
+
+@Get('/static-data')
+@Cache(300) // Cache for 5 minutes
+getStaticData() {
+  return { data: 'This data changes infrequently' };
+}
+
+@Get('/user-profile/:id')
+@Cache(60) // Cache for 1 minute
+getUserProfile(@Param('id') id: string) {
+  return this.userService.getProfile(id);
+}
+```
+
+---
+
+### `@RateLimit()`
+Applies rate limiting to routes using express-rate-limit.
+
+**Method Signature:**
+```ts
+@RateLimit(options: RateLimitOptions): MethodDecorator
+```
+
+**Parameters:**
+- `options.max`: Maximum number of requests allowed in the window
+- `options.windowMs`: Time window in milliseconds
+- `options.standardHeaders`: Include standard rate limit headers (default: `true`)
+- `options.legacyHeaders`: Include legacy rate limit headers (default: `false`)
+
+**Default Options:**
+```ts
+{
+  standardHeaders: true,
+  legacyHeaders: false
+}
+```
+
+**Returns:** 
+- A method decorator.
+
+**Note:** Requires `express-rate-limit` package to be installed.
+
+**Examples:**
+```ts
+import { Post, RateLimit, Body } from '@catbee/utils';
+
+@Post('/login')
+@RateLimit({ max: 5, windowMs: 60000 }) // 5 requests per minute
+login(@Body() credentials: any) {
+  return this.authService.login(credentials);
+}
+
+@Post('/api/data')
+@RateLimit({ 
+  max: 100, 
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  standardHeaders: true,
+  legacyHeaders: false 
+})
+createData(@Body() data: any) {
+  return this.dataService.create(data);
+}
+```
+
+---
+
+### `@ContentType()`
+Sets the content type header for the response.
+
+**Method Signature:**
+```ts
+@ContentType(type: string): MethodDecorator
+```
+
+**Parameters:**
+- `type`: MIME type for the response
+
+**Returns:** 
+- A method decorator.
+
+**Headers Set:**
+- `Content-Type: {type}`
+
+**Examples:**
+```ts
+import { Get, ContentType } from '@catbee/utils';
+
+@Get('/download/pdf')
+@ContentType('application/pdf')
+downloadPdf() {
+  return this.fileService.generatePdf();
+}
+
+@Get('/api/xml')
+@ContentType('application/xml')
+getXmlData() {
+  return this.dataService.toXml();
+}
+
+@Get('/feed.rss')
+@ContentType('application/rss+xml')
+getRssFeed() {
+  return this.feedService.generateRss();
+}
+```
+
+---
+
+### `@Version()`
+Adds API versioning to routes with configurable prefix and header options.
+
+**Method Signature:**
+```ts
+@Version(version: string, options?: VersionOptions): MethodDecorator
+```
+
+**Parameters:**
+- `version`: Version string for the API endpoint
+- `options.addPrefix`: Add version prefix to the route path (default: `true`)
+- `options.addHeader`: Add version header to the response (default: `true`)
+- `options.headerName`: Name of the version header (default: `'X-API-Version'`)
+
+**Default Options:**
+```ts
+{
+  addPrefix: true,
+  addHeader: true,
+  headerName: 'X-API-Version'
+}
+```
+
+**Returns:** 
+- A method decorator.
+
+**Examples:**
+```ts
+import { Get, Version } from '@catbee/utils';
+
+@Get('/users')
+@Version('v2') // Route becomes /v2/users, adds X-API-Version: v2 header
+getUsersV2() {
+  return this.userService.findAllV2();
+}
+
+@Get('/data')
+@Version('v3', { addPrefix: false, addHeader: true, headerName: 'API-Version' })
+getDataV3() {
+  // Route stays /data, adds API-Version: v3 header
+  return this.dataService.getV3();
+}
+
+@Get('/legacy')
+@Version('v1', { addPrefix: true, addHeader: false })
+getLegacyData() {
+  // Route becomes /v1/legacy, no version header
+  return this.legacyService.getData();
+}
+```
+
+---
+
+### `@Timeout()`
+Sets execution timeout for route handlers to prevent long-running requests.
+
+**Method Signature:**
+```ts
+@Timeout(ms: number): MethodDecorator
+```
+
+**Parameters:**
+- `ms`: Timeout duration in milliseconds
+
+**Returns:** 
+- A method decorator.
+
+**Behavior:**
+- If the route handler takes longer than the specified time, a 408 Request Timeout response is sent
+- The handler execution is not cancelled, but the response is sent early
+
+**Examples:**
+```ts
+import { Get, Timeout } from '@catbee/utils';
+
+@Get('/slow-operation')
+@Timeout(30000) // 30 second timeout
+async slowOperation() {
+  return await this.heavyService.processLargeDataset();
+}
+
+@Post('/upload')
+@Timeout(60000) // 1 minute timeout for file uploads
+async uploadFile(@Body() fileData: any) {
+  return await this.fileService.processUpload(fileData);
+}
+
+@Get('/report')
+@Timeout(120000) // 2 minute timeout for report generation
+async generateReport(@Query('type') type: string) {
+  return await this.reportService.generate(type);
+}
+```
+
+---
+
+### `@Log()`
+Adds comprehensive logging to routes for monitoring and debugging.
+
+**Method Signature:**
+```ts
+@Log(options?: LogOptions): MethodDecorator
+```
+
+**Parameters:**
+- `options.logEntry`: Log when the route handler starts (default: `true`)
+- `options.logExit`: Log when the route handler completes (default: `true`)
+- `options.logBody`: Include request body in logs (default: `false`)
+- `options.logParams`: Include request parameters and query in logs (default: `false`)
+- `options.logResponse`: Include response data in logs (default: `false`)
+
+**Default Options:**
+```ts
+{
+  logEntry: true,
+  logExit: true,
+  logBody: false,
+  logParams: false,
+  logResponse: false
+}
+```
+
+**Returns:** 
+- A method decorator.
+
+**Log Information:**
+- Entry logs: method, URL, user agent, timestamp
+- Exit logs: method, URL, status code, execution duration
+- Optional: request parameters, body, and response data
+
+**Examples:**
+```ts
+import { Post, Log, Body, Param } from '@catbee/utils';
+
+// Basic logging (entry and exit only)
+@Post('/users')
+@Log()
+createUser(@Body() userData: any) {
+  return this.userService.create(userData);
+}
+
+// Comprehensive logging
+@Post('/orders/:id/process')
+@Log({
+  logEntry: true,
+  logExit: true,
+  logBody: true,
+  logParams: true,
+  logResponse: false // Don't log response for security
+})
+processOrder(@Param('id') id: string, @Body() orderData: any) {
+  return this.orderService.process(id, orderData);
+}
+
+// Minimal logging (exit only with response)
+@Get('/public/stats')
+@Log({
+  logEntry: false,
+  logExit: true,
+  logResponse: true
+})
+getPublicStats() {
+  return this.statsService.getPublic();
+}
+```
+
+---
+
+## Controller-Level Decorator Inheritance
+
+Many decorators can be applied at the controller level and will be inherited by all methods in that controller, unless overridden at the method level.
+
+**Inheritable Decorators:**
+- `@Headers()`
+- `@Cache()`
+- `@RateLimit()`
+- `@Version()`
+- `@Timeout()`
+- `@Log()`
+- `@Roles()`
+
+**Examples:**
+```ts
+import { Controller, Get, Post, Cache, Headers, Roles, Version } from '@catbee/utils';
+
+@Controller('/api/admin')
+@Cache(300) // All routes cached for 5 minutes by default
+@Headers({ 'X-Admin-API': 'true' }) // All routes get this header
+@Roles('admin') // All routes require admin role
+@Version('v2') // All routes are v2
+class AdminController {
+  
+  @Get('/users')
+  // Inherits: @Cache(300), @Headers({'X-Admin-API': 'true'}), @Roles('admin'), @Version('v2')
+  getUsers() {
+    return this.userService.findAll();
+  }
+  
+  @Get('/stats')
+  @Cache(60) // Overrides controller-level cache to 1 minute
+  @Headers({ 'X-Fresh-Data': 'true' }) // Merges with controller headers
+  getStats() {
+    return this.statsService.getAdminStats();
+  }
+  
+  @Post('/settings')
+  @Roles('superadmin') // Overrides controller-level roles
+  updateSettings(@Body() settings: any) {
+    return this.settingsService.update(settings);
+  }
+}
+```
+
+---
+
+## Error Handling
+
+The decorators include built-in error handling for various scenarios:
+
+**Rate Limiting:** Returns 429 Too Many Requests when rate limit is exceeded.
+**Timeout:** Returns 408 Request Timeout when execution exceeds the specified time.
+**Roles:** Returns 403 Forbidden when user lacks required roles.
+**General Errors:** All unhandled errors are passed to Express error middleware via `next(err)`.
+
+**Example Error Responses:**
+```json
+// Rate limit exceeded
+{
+  "error": true,
+  "message": "Too Many Requests",
+  "status": 429,
+  "timestamp": "2025-01-08T10:30:00.000Z",
+  "requestId": "12345678-1234-1234-1234-123456789012"
+}
+
+// Insufficient roles
+{
+  "error": true,
+  "message": "Forbidden Insufficient Roles",
+  "status": 403,
+  "timestamp": "2025-01-08T10:30:00.000Z",
+  "requestId": "12345678-1234-1234-1234-123456789012"
+}
+
+// Request timeout
+{
+  "error": true,
+  "message": "Request timed out",
+  "status": 408,
+  "timestamp": "2025-01-08T10:30:00.000Z",
+  "requestId": "12345678-1234-1234-1234-123456789012"
+}
+```
