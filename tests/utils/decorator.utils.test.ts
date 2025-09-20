@@ -235,7 +235,16 @@ describe('Decorators and registerControllers', () => {
     await routeHandler(mockReq, mockRes, mockNext);
 
     expect(mockRes.status).toHaveBeenCalledWith(HttpStatusCodes.FORBIDDEN);
-    expect(mockRes.json).toHaveBeenCalledWith(expect.any(ForbiddenException));
+    expect(mockRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: true,
+        message: 'Forbidden Insufficient Roles',
+        path: undefined,
+        requestId: expect.stringMatching(/^[0-9a-fA-F-]{36}$/),
+        status: 403,
+        timestamp: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
+      })
+    );
     // The handler should not execute
     expect(mockRes.json).not.toHaveBeenCalledWith({ access: 'granted' });
   });
@@ -259,6 +268,15 @@ describe('Decorators and registerControllers', () => {
     await routeHandler(mockReq, mockRes, mockNext);
 
     expect(mockRes.status).toHaveBeenCalledWith(HttpStatusCodes.FORBIDDEN);
-    expect(mockRes.json).toHaveBeenCalledWith(expect.any(ForbiddenException));
+    expect(mockRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: true,
+        message: 'Forbidden Insufficient Roles',
+        path: undefined,
+        requestId: expect.stringMatching(/^[0-9a-fA-F-]{36}$/),
+        status: 403,
+        timestamp: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
+      })
+    );
   });
 });

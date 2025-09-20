@@ -24,10 +24,13 @@
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
-import type { RequestHandler, Router } from 'express';
+import type { Request, RequestHandler, Response, Router } from 'express';
 import 'reflect-metadata';
+import { getLogger } from './logger.utils';
+import { createFinalErrorResponse } from './response.utils';
 import { HttpStatusCodes } from './http-status-codes';
-import { ForbiddenException } from './exception.utils';
+import { rateLimit } from 'express-rate-limit';
+import { TTLCache } from './cache.utils';
 
 // Metadata keys
 const ROUTES_KEY = Symbol('routes');
@@ -39,6 +42,12 @@ const BEFORE_KEY = Symbol('before');
 const AFTER_KEY = Symbol('after');
 const ROLES_KEY = Symbol('roles');
 const REDIRECT_KEY = Symbol('redirect');
+const CACHE_KEY = Symbol('cache');
+const RATE_LIMIT_KEY = Symbol('rateLimit');
+const CONTENT_TYPE_KEY = Symbol('contentType');
+const VERSION_KEY = Symbol('version');
+const TIMEOUT_KEY = Symbol('timeout');
+const LOG_KEY = Symbol('log');
 
 /**
  * Supported HTTP methods for route decorators
@@ -67,6 +76,92 @@ interface ParamDefinition {
   type: 'query' | 'param' | 'body' | 'req' | 'res';
   /** Optional key for extracting specific property */
   key?: string;
+}
+
+type CachedRateLimiter = {
+  limiter: ReturnType<typeof rateLimit>;
+  config: string;
+};
+
+/**
+ * RateLimiter cache that uses TTLCache for automatic TTL and LRU handling.
+ */
+export class RateLimiterCache {
+  private cache: TTLCache<string, CachedRateLimiter>;
+
+  constructor(maxSize = 100, ttlMs = 5 * 60 * 1000) {
+    this.cache = new TTLCache<string, CachedRateLimiter>({
+      maxSize,
+      ttlMs
+    });
+  }
+
+  private generateKey(options: {
+    max: number;
+    windowMs: number;
+    standardHeaders: boolean;
+    legacyHeaders: boolean;
+  }): string {
+    return `${options.max}:${options.windowMs}:${options.standardHeaders}:${options.legacyHeaders}`;
+  }
+
+  get(options: {
+    max: number;
+    windowMs: number;
+    standardHeaders: boolean;
+    legacyHeaders: boolean;
+  }): ReturnType<typeof rateLimit> {
+    const key = this.generateKey(options);
+
+    const cached = this.cache.get(key);
+    if (cached) {
+      return cached.limiter;
+    }
+
+    // Create new limiter
+    const limiter = rateLimit({
+      ...options,
+      handler: (req: Request, res: Response) => {
+        const errorResponse = createFinalErrorResponse(req, HttpStatusCodes.TOO_MANY_REQUESTS, 'Too Many Requests');
+        res.status(HttpStatusCodes.TOO_MANY_REQUESTS).json(errorResponse);
+      }
+    });
+
+    // Store in cache
+    this.cache.set(key, {
+      limiter,
+      config: key
+    });
+
+    return limiter;
+  }
+
+  clear(): void {
+    this.cache.clear();
+  }
+
+  size(): number {
+    return this.cache.size();
+  }
+
+  destroy(): void {
+    this.cache.destroy();
+  }
+}
+
+// Global cache instance
+const rateLimiterCache = new RateLimiterCache();
+
+function normalizeHeaderValue(value: unknown): string | string[] | undefined {
+  if (typeof value === 'undefined') return undefined;
+
+  if (typeof value === 'string') return value;
+
+  if (Array.isArray(value) && value.every(item => typeof item === 'string')) {
+    return value;
+  }
+
+  return String(value);
 }
 
 /**
@@ -350,8 +445,8 @@ export function HttpCode(status: number): MethodDecorator {
 /**
  * Decorator that adds a custom HTTP header to the response.
  *
- * @param name - Header name
- * @param value - Header value
+ * @param header - Header name-value pairs or a single header name and value
+ * @param value - Header value if a single header name is provided
  * @returns Method decorator
  *
  * @example
@@ -362,13 +457,45 @@ export function HttpCode(status: number): MethodDecorator {
  *   // Response will include the Cache-Control header
  *   return { data: '...' };
  * }
- * ```
  */
 export function Header(name: string, value: string): MethodDecorator {
-  return (target, propertyKey, _descriptor) => {
-    const headers: Record<string, string> = Reflect.getMetadata(HEADER_KEY, target, propertyKey as string) || {};
-    headers[name] = value;
-    Reflect.defineMetadata(HEADER_KEY, headers, target, propertyKey as string);
+  return Headers(name, value);
+}
+
+/**
+ * Decorator that adds a custom HTTP headers to the response.
+ *
+ * @param headers - Header name-value pairs or a single header name and value
+ * @param value - Header value if a single header name is provided
+ * @returns Method decorator
+ *
+ * @example
+ * ```ts
+ * @Get('/data')
+ * @Headers('Cache-Control', 'max-age=60')
+ * getData() {
+ *   // Response will include the Cache-Control header
+ *   return { data: '...' };
+ * }
+ *
+ * @Get('/data/:id')
+ * @Headers({
+ *   'Cache-Control': 'max-age=60',
+ *   'X-Custom-Header': 'custom-value',
+ *   'Content-Security-Policy': "default-src 'self'"
+ * })
+ * getData() {
+ *   // Response will include all specified headers
+ *   return { data: '...' };
+ * }
+ *
+ * ```
+ */
+export function Headers(headers: Record<string, string> | string, value?: string): MethodDecorator {
+  return (target, propertyKey) => {
+    const existing: Record<string, string> = Reflect.getMetadata(HEADER_KEY, target, propertyKey) || {};
+    const newHeaders = typeof headers === 'string' ? { [headers]: value! } : headers;
+    Reflect.defineMetadata(HEADER_KEY, { ...existing, ...newHeaders }, target, propertyKey);
   };
 }
 
@@ -476,6 +603,199 @@ export function Redirect(url?: string, statusCode: number = 302): MethodDecorato
 }
 
 /**
+ * Decorator that adds caching to a route response.
+ *
+ * @param ttlSeconds - Time to live in seconds for the cache
+ * @returns Method decorator
+ *
+ * @example
+ * ```ts
+ * @Get('/data')
+ * @Cache(300) // Cache for 5 minutes
+ * getData() {
+ *   return { data: 'expensive operation result' };
+ * }
+ * ```
+ */
+export function Cache(ttlSeconds: number): MethodDecorator {
+  return (target, propertyKey, _descriptor) => {
+    Reflect.defineMetadata(CACHE_KEY, { ttlSeconds }, target, propertyKey as string);
+  };
+}
+
+/**
+ * Decorator that applies rate limiting to a route.
+ * Note: Requires 'express-rate-limit' package to be installed.
+ *
+ * @param limit - Maximum number of requests allowed in the window
+ * @param windowMs - Time window in milliseconds
+ * @returns Method decorator
+ *
+ * Default Options:
+ *  - standardHeaders: true
+ *  - legacyHeaders: false
+ *
+ * @example
+ * ```ts
+ * @Post('/login')
+ * @RateLimit({ max: 5, windowMs: 60000, standardHeaders: true, legacyHeaders: false }) // 5 requests per minute
+ * login(@Body() credentials: LoginDto) {
+ *   return this.authService.login(credentials);
+ * }
+ * ```
+ */
+export function RateLimit(options: {
+  max: number;
+  windowMs: number;
+  standardHeaders?: boolean;
+  legacyHeaders?: boolean;
+}): MethodDecorator {
+  const opts = {
+    standardHeaders: true,
+    legacyHeaders: false,
+    ...options
+  };
+  return (target, propertyKey, _descriptor) => {
+    Reflect.defineMetadata(RATE_LIMIT_KEY, opts, target, propertyKey as string);
+  };
+}
+
+/**
+ * Decorator that sets the content type for the response.
+ *
+ * @param type - MIME type for the response
+ * @returns Method decorator
+ *
+ * @example
+ * ```ts
+ * @Get('/download')
+ * @ContentType('application/pdf')
+ * downloadPdf() {
+ *   return this.fileService.generatePdf();
+ * }
+ * ```
+ */
+export function ContentType(type: string): MethodDecorator {
+  return (target, propertyKey, _descriptor) => {
+    Reflect.defineMetadata(CONTENT_TYPE_KEY, { type }, target, propertyKey as string);
+  };
+}
+
+/**
+ * Decorator that adds API versioning to a route.
+ *
+ * @param version - Version string for the API endpoint
+ * @param options - Versioning options
+ * @returns Method decorator
+ *
+ * Default Options:
+ *  - addPrefix: true
+ *  - addHeader: true
+ *  - headerName: 'X-API-Version'
+ *
+ * @example
+ * ```ts
+ *
+ * @Get('/users')
+ * @Version('v2')
+ * getUsersV2() {
+ *   return this.userService.findAllV2();
+ * }
+ *
+ * @Get('/users')
+ * @Version('v2', { addPrefix: true, addHeader: true, headerName: 'X-API-Version' })
+ * getUsersV2() {
+ *   // Route becomes /v2/users
+ *   return this.userService.findAllV2();
+ * }
+ * ```
+ */
+export function Version(
+  version: string,
+  options?: { addPrefix?: boolean; addHeader?: boolean; headerName?: string }
+): MethodDecorator {
+  const opts = {
+    addPrefix: true,
+    addHeader: true,
+    headerName: 'X-API-Version',
+    ...options
+  };
+
+  return (target, propertyKey, _descriptor) => {
+    Reflect.defineMetadata(VERSION_KEY, { version, options: opts }, target, propertyKey as string);
+  };
+}
+
+/**
+ * Decorator that sets a timeout for route execution.
+ *
+ * @param ms - Timeout in milliseconds
+ * @returns Method decorator
+ *
+ * @example
+ * ```ts
+ * @Get('/slow-operation')
+ * @Timeout(30000) // 30 second timeout
+ * slowOperation() {
+ *   return this.heavyService.processData();
+ * }
+ * ```
+ */
+export function Timeout(ms: number): MethodDecorator {
+  return (target, propertyKey, _descriptor) => {
+    Reflect.defineMetadata(TIMEOUT_KEY, { ms }, target, propertyKey as string);
+  };
+}
+
+/**
+ * Decorator that adds comprehensive logging to a route.
+ *
+ * @param options - Logging configuration options
+ * @returns Method decorator
+ *
+ * Default Options:
+ *  - logEntry: true
+ *  - logExit: true
+ *  - logBody: false
+ *  - logParams: false
+ *  - logResponse: false
+ *
+ * @example
+ * ```ts
+ * @Post('/users')
+ * @Log({
+ *   logEntry: true,
+ *   logExit: true,
+ *   logBody: true,
+ *   logParams: true,
+ *   logResponse: false
+ * })
+ * createUser(@Body() userData: any) {
+ *   return this.userService.create(userData);
+ * }
+ * ```
+ */
+export function Log(options?: {
+  logEntry?: boolean;
+  logExit?: boolean;
+  logBody?: boolean;
+  logParams?: boolean;
+  logResponse?: boolean;
+}): MethodDecorator {
+  return (target, propertyKey, _descriptor) => {
+    const config = {
+      logEntry: true,
+      logExit: true,
+      logBody: false,
+      logParams: false,
+      logResponse: false,
+      ...options
+    };
+    Reflect.defineMetadata(LOG_KEY, config, target, propertyKey as string);
+  };
+}
+
+/**
  * Registers all controller classes with the provided router.
  * This function processes all decorators and sets up the Express routes.
  *
@@ -488,31 +808,158 @@ export function registerControllers(router: Router, controllers: any[]) {
     const basePath: string = Reflect.getMetadata('basePath', ControllerClass) || '';
     const routes: RouteDefinition[] = Reflect.getMetadata(ROUTES_KEY, ControllerClass) || [];
 
+    // Get controller-level decorators (fallback values)
+    const controllerRateLimit = Reflect.getMetadata(RATE_LIMIT_KEY, ControllerClass);
+    const controllerCache = Reflect.getMetadata(CACHE_KEY, ControllerClass);
+    const controllerTimeout = Reflect.getMetadata(TIMEOUT_KEY, ControllerClass);
+    const controllerVersion = Reflect.getMetadata(VERSION_KEY, ControllerClass);
+    const controllerRoles = Reflect.getMetadata(ROLES_KEY, ControllerClass);
+    const controllerLogConfig = Reflect.getMetadata(LOG_KEY, ControllerClass);
+    const controllerHeaders = Reflect.getMetadata(HEADER_KEY, ControllerClass) || {};
+
     routes.forEach(({ path, method, handlerName }) => {
       const middlewares: RequestHandler[] = Reflect.getMetadata(MIDDLEWARE_KEY, instance, handlerName) || [];
       const params: ParamDefinition[] = Reflect.getMetadata(PARAMS_KEY, instance, handlerName) || [];
 
       const httpCode: number | undefined = Reflect.getMetadata(HTTP_CODE_KEY, instance, handlerName);
-      const headers: Record<string, string> = Reflect.getMetadata(HEADER_KEY, instance, handlerName) || {};
+
+      // Merge controller-level and method-level headers
+      const methodHeaders: Record<string, string> = Reflect.getMetadata(HEADER_KEY, instance, handlerName) || {};
+      const headers = { ...controllerHeaders, ...methodHeaders };
+
       const beforeHooks: Function[] = Reflect.getMetadata(BEFORE_KEY, instance, handlerName) || [];
       const afterHooks: Function[] = Reflect.getMetadata(AFTER_KEY, instance, handlerName) || [];
-      const roles: string[] = Reflect.getMetadata(ROLES_KEY, instance, handlerName) || [];
       const redirect: { url?: string; statusCode: number } | undefined = Reflect.getMetadata(
         REDIRECT_KEY,
         instance,
         handlerName
       );
+      const contentType: { type: string } | undefined = Reflect.getMetadata(CONTENT_TYPE_KEY, instance, handlerName);
+
+      // Use method-level decorators if present, otherwise fall back to controller-level
+      const roles: string[] = Reflect.getMetadata(ROLES_KEY, instance, handlerName) || controllerRoles || [];
+      const cache: { ttlSeconds: number } | undefined =
+        Reflect.getMetadata(CACHE_KEY, instance, handlerName) || controllerCache;
+      const rateLimitOptions:
+        | { max: number; windowMs: number; standardHeaders: boolean; legacyHeaders: boolean }
+        | undefined = Reflect.getMetadata(RATE_LIMIT_KEY, instance, handlerName) || controllerRateLimit;
+      const version:
+        | { version: string; options: { addPrefix: boolean; addHeader: boolean; headerName: string } }
+        | undefined = Reflect.getMetadata(VERSION_KEY, instance, handlerName) || controllerVersion;
+      const timeout: { ms: number } | undefined =
+        Reflect.getMetadata(TIMEOUT_KEY, instance, handlerName) || controllerTimeout;
+      const logConfig:
+        | {
+            logEntry?: boolean;
+            logExit?: boolean;
+            logBody?: boolean;
+            logParams?: boolean;
+            logResponse?: boolean;
+          }
+        | undefined = Reflect.getMetadata(LOG_KEY, instance, handlerName) || controllerLogConfig;
+
+      // Create rate limiter for this specific route if needed
+      let rateLimiter: any = null;
+      if (rateLimitOptions) {
+        try {
+          rateLimiter = rateLimiterCache.get(rateLimitOptions);
+        } catch (err) {
+          getLogger().warn({ err }, 'express-rate-limit not available, skipping rate limiting for this route');
+        }
+      }
+
+      let finalPath = path;
+      if (version?.options?.addPrefix) {
+        finalPath = `/${version.version}${path}`;
+      }
 
       const handler: RequestHandler = async (req, res, next) => {
+        // Set start time for duration tracking
+        req['startTime'] = Date.now();
+
+        let timeoutId: NodeJS.Timeout | undefined;
+        let timedOut = false;
+
         try {
+          // Handle timeout setup
+          if (timeout) {
+            timeoutId = setTimeout(() => {
+              if (!res.headersSent && !timedOut) {
+                timedOut = true;
+                const errorResponse = createFinalErrorResponse(
+                  req,
+                  HttpStatusCodes.REQUEST_TIMEOUT,
+                  'Request timed out'
+                );
+                res.status(HttpStatusCodes.REQUEST_TIMEOUT).json(errorResponse);
+              }
+            }, timeout.ms);
+          }
+
+          if (timedOut) return;
+
+          // Handle rate limiting
+          if (rateLimiter) {
+            await new Promise<void>((resolve, reject) => {
+              rateLimiter(req, res, (err: any) => {
+                if (err) reject(err);
+                else resolve();
+              });
+            });
+          }
+
+          // Handle content type
+          if (!res.headersSent && contentType) {
+            res.setHeader('Content-Type', contentType.type);
+          }
+
+          // Handle versioning header
+          if (version?.options?.addHeader && version?.options?.headerName && version?.version) {
+            if (!res.headersSent) {
+              res.setHeader(version.options.headerName, version.version);
+            }
+          }
+
+          // Handle caching
+          if (cache && !res.headersSent) {
+            res.setHeader('Cache-Control', `public, max-age=${cache.ttlSeconds}`);
+          }
+
+          // Handle logging - entry
+          if (logConfig?.logEntry) {
+            const logger = getLogger();
+            const logData: any = {
+              method: req.method,
+              url: req.originalUrl || req.url,
+              userAgent: req.get('User-Agent')
+            };
+            if (logConfig.logParams) {
+              logData.params = req.params;
+              logData.query = req.query;
+            }
+            if (logConfig.logBody) logData.body = req.body;
+            logger.info({ entry: logData }, 'Route Entry:');
+          }
+
           // Handle roles-based access control
           if (roles.length && !(req as any)?.user?.roles?.some((role: string) => roles.includes(role))) {
-            res.status(HttpStatusCodes.FORBIDDEN).json(new ForbiddenException('Forbidden Insufficient Roles'));
+            const errorResponse = createFinalErrorResponse(
+              req,
+              HttpStatusCodes.FORBIDDEN,
+              'Forbidden Insufficient Roles'
+            );
+            res.status(HttpStatusCodes.FORBIDDEN).json(errorResponse);
+            if (timeoutId) {
+              clearTimeout(timeoutId);
+            }
             return;
           }
 
           // Process static redirect if configured
           if (redirect && redirect.url) {
+            if (timeoutId) {
+              clearTimeout(timeoutId);
+            }
             return res.redirect(redirect.statusCode, redirect.url);
           }
 
@@ -543,6 +990,13 @@ export function registerControllers(router: Router, controllers: any[]) {
           // Support both sync and async handlers
           const awaited = result instanceof Promise ? await result : result;
 
+          // Clear timeout if operation completed
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+          }
+
+          if (timedOut) return;
+
           // Handle dynamic redirects
           if (redirect && awaited && typeof awaited === 'object' && 'url' in awaited) {
             const redirectUrl = awaited.url as string;
@@ -551,17 +1005,42 @@ export function registerControllers(router: Router, controllers: any[]) {
           }
 
           if (!res.headersSent && typeof awaited !== 'undefined') {
-            if (httpCode) res.status?.(httpCode);
-            for (const [k, v] of Object.entries(headers)) res.set?.(k, v);
+            if (httpCode) res.status(httpCode);
+            for (const [k, v] of Object.entries(headers)) {
+              const normalized = normalizeHeaderValue(v);
+              if (typeof normalized !== 'undefined') {
+                res.set(k, normalized);
+              }
+            }
             res.json(awaited);
           }
+
+          // Handle logging - exit
+          if (logConfig?.logExit) {
+            const logger = getLogger();
+            const logData: any = {
+              method: req.method,
+              url: req.originalUrl || req.url,
+              statusCode: res.statusCode,
+              duration: `${Date.now() - (req as any).startTime}ms`
+            };
+            if (logConfig.logResponse) logData.response = awaited;
+            logger.info({ exit: logData }, 'Route Exit:');
+          }
+
           for (const fn of afterHooks) await fn(req, res, awaited);
         } catch (err) {
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+          }
           next(err);
         }
       };
 
-      (router as any)[method](basePath + path, ...middlewares, handler);
+      (router as any)[method](basePath + finalPath, ...middlewares, handler);
     });
   });
 }
+
+// Export for testing purposes
+export { rateLimiterCache };
