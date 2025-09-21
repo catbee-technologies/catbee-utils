@@ -1,7 +1,10 @@
 {
-  "extends": "./tsconfig.base.es5.json",
+  "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "module": "ES6",
-    "moduleResolution": "node"
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "target": "ES2022",
+    "sourceMap": false,
+    "declarationMap": false
   }
 }

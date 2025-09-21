@@ -2,10 +2,9 @@
   "name": "@catbee/utils",
   "version": "0.0.8-rc.1",
   "description": "A modular, production-grade utility toolkit for Node.js and TypeScript, designed for robust, scalable applications (including Express-based services). All utilities are tree-shakable and can be imported independently.",
-  "main": "build/src/index.js",
+  "main": "build/esm/index.js",
   "module": "build/esm/index.js",
-  "esnext": "build/esnext/index.js",
-  "types": "build/src/index.d.ts",
+  "types": "build/esm/index.d.ts",
   "publishConfig": {
     "access": "public"
   },
@@ -15,10 +14,10 @@
   },
   "license": "MIT",
   "scripts": {
-    "start": "node build/src/index.js",
+    "start": "node build/esm/index.js",
     "prepack": "npm run compile",
-    "compile": "npm run clean && tsc --build tsconfig.json tsconfig.esm.json tsconfig.esnext.json",
-    "clean": "tsc --build --clean tsconfig.json tsconfig.esm.json tsconfig.esnext.json",
+    "compile": "npm run clean && tsc --build tsconfig.esm.json",
+    "clean": "tsc --build --clean tsconfig.esm.json",
     "lint": "eslint src tests",
     "lint:fix": "eslint --fix src tests",
     "preversion": "npm run check-license && npm run lint && npm run test && npm run compile",
@@ -117,14 +116,7 @@
   },
   "files": [
     "build/esm/**/*.js",
-    "build/esm/**/*.js.map",
     "build/esm/**/*.d.ts",
-    "build/esnext/**/*.js",
-    "build/esnext/**/*.js.map",
-    "build/esnext/**/*.d.ts",
-    "build/src/**/*.js",
-    "build/src/**/*.js.map",
-    "build/src/**/*.d.ts",
     "LICENSE",
     "README.md"
   ]

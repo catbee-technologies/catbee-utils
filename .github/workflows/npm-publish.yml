@@ -38,14 +38,15 @@ jobs:
       - name: 🛠️ Build package
         run: npm run compile
 
-      - name: 📝 Remove devDependencies from package.json
+      - name: 📝 Remove some fields from package.json
         run: |
           node -e "
           const fs = require('fs');
           const pkg = JSON.parse(fs.readFileSync('package.json','utf8'));
           delete pkg.devDependencies;
+          delete pkg.scripts;
           fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));
-          console.log('Removed devDependencies for publish');
+          console.log('Removed devDependencies and scripts for publish');
           "
 
       - name: 🚀 Publish to npm
