@@ -458,7 +458,7 @@ export function HttpCode(status: number): MethodDecorator {
  *   return { data: '...' };
  * }
  */
-export function Header(name: string, value: string): MethodDecorator {
+export function Header(name: string, value: string): MethodDecorator & ClassDecorator {
   return Headers(name, value);
 }
 
@@ -491,11 +491,19 @@ export function Header(name: string, value: string): MethodDecorator {
  *
  * ```
  */
-export function Headers(headers: Record<string, string> | string, value?: string): MethodDecorator {
-  return (target, propertyKey) => {
-    const existing: Record<string, string> = Reflect.getMetadata(HEADER_KEY, target, propertyKey) || {};
-    const newHeaders = typeof headers === 'string' ? { [headers]: value! } : headers;
-    Reflect.defineMetadata(HEADER_KEY, { ...existing, ...newHeaders }, target, propertyKey);
+export function Headers(headers: Record<string, string> | string, value?: string): MethodDecorator & ClassDecorator {
+  return (target: any, propertyKey?: string | symbol) => {
+    if (typeof propertyKey === 'undefined') {
+      // Class decorator
+      const existing: Record<string, string> = Reflect.getMetadata(HEADER_KEY, target) || {};
+      const newHeaders = typeof headers === 'string' ? { [headers]: value! } : headers;
+      Reflect.defineMetadata(HEADER_KEY, { ...existing, ...newHeaders }, target);
+    } else {
+      // Method decorator
+      const existing: Record<string, string> = Reflect.getMetadata(HEADER_KEY, target, propertyKey) || {};
+      const newHeaders = typeof headers === 'string' ? { [headers]: value! } : headers;
+      Reflect.defineMetadata(HEADER_KEY, { ...existing, ...newHeaders }, target, propertyKey);
+    }
   };
 }
 
@@ -552,6 +560,8 @@ export function After(fn: Function): MethodDecorator {
  * Decorator that requires specific roles for accessing a route.
  * Must be used with authentication middleware.
  *
+ * Check req.user.roles for user roles[].
+ *
  * @param roles - List of roles that can access this route
  * @returns Method decorator
  *
@@ -565,9 +575,15 @@ export function After(fn: Function): MethodDecorator {
  * }
  * ```
  */
-export function Roles(...roles: string[]): MethodDecorator {
-  return (target, propertyKey, _descriptor) => {
-    Reflect.defineMetadata(ROLES_KEY, roles, target, propertyKey as string);
+export function Roles(...roles: string[]): MethodDecorator & ClassDecorator {
+  return (target: any, propertyKey?: string | symbol, _descriptor?: PropertyDescriptor) => {
+    if (typeof propertyKey === 'undefined') {
+      // Class decorator
+      Reflect.defineMetadata(ROLES_KEY, roles, target);
+    } else {
+      // Method decorator
+      Reflect.defineMetadata(ROLES_KEY, roles, target, propertyKey as string);
+    }
   };
 }
 
@@ -617,9 +633,15 @@ export function Redirect(url?: string, statusCode: number = 302): MethodDecorato
  * }
  * ```
  */
-export function Cache(ttlSeconds: number): MethodDecorator {
-  return (target, propertyKey, _descriptor) => {
-    Reflect.defineMetadata(CACHE_KEY, { ttlSeconds }, target, propertyKey as string);
+export function Cache(ttlSeconds: number): MethodDecorator & ClassDecorator {
+  return (target: any, propertyKey?: string | symbol, _descriptor?: PropertyDescriptor) => {
+    if (typeof propertyKey === 'undefined') {
+      // Class decorator
+      Reflect.defineMetadata(CACHE_KEY, { ttlSeconds }, target);
+    } else {
+      // Method decorator
+      Reflect.defineMetadata(CACHE_KEY, { ttlSeconds }, target, propertyKey as string);
+    }
   };
 }
 
@@ -649,14 +671,20 @@ export function RateLimit(options: {
   windowMs: number;
   standardHeaders?: boolean;
   legacyHeaders?: boolean;
-}): MethodDecorator {
+}): MethodDecorator & ClassDecorator {
   const opts = {
     standardHeaders: true,
     legacyHeaders: false,
     ...options
   };
-  return (target, propertyKey, _descriptor) => {
-    Reflect.defineMetadata(RATE_LIMIT_KEY, opts, target, propertyKey as string);
+  return (target: any, propertyKey?: string | symbol, _descriptor?: PropertyDescriptor) => {
+    if (typeof propertyKey === 'undefined') {
+      // Class decorator
+      Reflect.defineMetadata(RATE_LIMIT_KEY, opts, target);
+    } else {
+      // Method decorator
+      Reflect.defineMetadata(RATE_LIMIT_KEY, opts, target, propertyKey as string);
+    }
   };
 }
 
@@ -713,7 +741,7 @@ export function ContentType(type: string): MethodDecorator {
 export function Version(
   version: string,
   options?: { addPrefix?: boolean; addHeader?: boolean; headerName?: string }
-): MethodDecorator {
+): MethodDecorator & ClassDecorator {
   const opts = {
     addPrefix: true,
     addHeader: true,
@@ -721,8 +749,14 @@ export function Version(
     ...options
   };
 
-  return (target, propertyKey, _descriptor) => {
-    Reflect.defineMetadata(VERSION_KEY, { version, options: opts }, target, propertyKey as string);
+  return (target: any, propertyKey?: string | symbol, _descriptor?: PropertyDescriptor) => {
+    if (typeof propertyKey === 'undefined') {
+      // Class decorator
+      Reflect.defineMetadata(VERSION_KEY, { version, options: opts }, target);
+    } else {
+      // Method decorator
+      Reflect.defineMetadata(VERSION_KEY, { version, options: opts }, target, propertyKey as string);
+    }
   };
 }
 
@@ -741,9 +775,15 @@ export function Version(
  * }
  * ```
  */
-export function Timeout(ms: number): MethodDecorator {
-  return (target, propertyKey, _descriptor) => {
-    Reflect.defineMetadata(TIMEOUT_KEY, { ms }, target, propertyKey as string);
+export function Timeout(ms: number): MethodDecorator & ClassDecorator {
+  return (target: any, propertyKey?: string | symbol, _descriptor?: PropertyDescriptor) => {
+    if (typeof propertyKey === 'undefined') {
+      // Class decorator
+      Reflect.defineMetadata(TIMEOUT_KEY, { ms }, target);
+    } else {
+      // Method decorator
+      Reflect.defineMetadata(TIMEOUT_KEY, { ms }, target, propertyKey as string);
+    }
   };
 }
 
@@ -781,8 +821,8 @@ export function Log(options?: {
   logBody?: boolean;
   logParams?: boolean;
   logResponse?: boolean;
-}): MethodDecorator {
-  return (target, propertyKey, _descriptor) => {
+}): MethodDecorator & ClassDecorator {
+  return (target: any, propertyKey?: string | symbol, _descriptor?: PropertyDescriptor) => {
     const config = {
       logEntry: true,
       logExit: true,
@@ -791,7 +831,13 @@ export function Log(options?: {
       logResponse: false,
       ...options
     };
-    Reflect.defineMetadata(LOG_KEY, config, target, propertyKey as string);
+    if (typeof propertyKey === 'undefined') {
+      // Class decorator
+      Reflect.defineMetadata(LOG_KEY, config, target);
+    } else {
+      // Method decorator
+      Reflect.defineMetadata(LOG_KEY, config, target, propertyKey as string);
+    }
   };
 }
 
