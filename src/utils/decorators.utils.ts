@@ -152,16 +152,98 @@ class RateLimiterCache {
 // Global cache instance
 const rateLimiterCache = new RateLimiterCache();
 
+// di.container.ts
+type Constructor<T = any> = new (...args: any[]) => T;
+
+export class DIContainer {
+  private instances = new Map<Constructor, any>();
+  private constructing = new Map<Constructor, any>();
+
+  register<T>(target: Constructor<T>) {
+    // Mark as injectable, but do not instantiate yet
+    if (!this.instances.has(target) && !this.constructing.has(target)) {
+      // No-op: instantiation is deferred until get()
+    }
+  }
+
+  get<T>(target: Constructor<T>): T {
+    // Return existing instance if available
+    if (this.instances.has(target)) {
+      return this.instances.get(target);
+    }
+
+    // If currently constructing, return the proxy (for circular refs)
+    if (this.constructing.has(target)) {
+      return this.constructing.get(target);
+    }
+
+    // Mark as constructing (for circular dependency support)
+    let proxy: any = {};
+    this.constructing.set(target, proxy);
+
+    // Resolve constructor dependencies
+    const paramTypes: Constructor[] = Reflect.getMetadata('design:paramtypes', target as object) || [];
+    const dependencies = paramTypes.map(dep => this.get(dep));
+    const instance = new target(...dependencies);
+
+    // Copy instance properties to proxy (for circular refs)
+    Object.assign(proxy, instance);
+
+    // Replace proxy with real instance
+    this.instances.set(target, proxy);
+    this.constructing.delete(target);
+
+    // Copy prototype (for instanceof checks)
+    Object.setPrototypeOf(proxy, target.prototype);
+
+    return proxy;
+  }
+
+  clear() {
+    this.instances.clear();
+    this.constructing.clear();
+  }
+}
+
+const diContainer = new DIContainer();
+
 function normalizeHeaderValue(value: unknown): string | string[] | undefined {
   if (typeof value === 'undefined') return undefined;
-
   if (typeof value === 'string') return value;
-
   if (Array.isArray(value) && value.every(item => typeof item === 'string')) {
     return value;
   }
-
   return String(value);
+}
+
+/**
+ * Injectable decorator for marking classes as injectable.
+ *
+ * @returns Class decorator that marks a class as injectable and registers it with the DI container.
+ */
+export function Injectable(): ClassDecorator {
+  return target => {
+    Reflect.defineMetadata('injectable', true, target);
+    diContainer.register(target as any);
+  };
+}
+
+/**
+ * Inject decorator for injecting dependencies into class properties.
+ *
+ * @param targetClass - The class to inject
+ * @returns Property decorator that injects the specified class into the property
+ */
+export function Inject<T>(targetClass: new (...args: any[]) => T): PropertyDecorator {
+  return (target, propertyKey) => {
+    Object.defineProperty(target, propertyKey, {
+      get: function () {
+        return diContainer.get(targetClass);
+      },
+      enumerable: true,
+      configurable: true
+    });
+  };
 }
 
 /**
@@ -173,13 +255,13 @@ function normalizeHeaderValue(value: unknown): string | string[] | undefined {
 function createRouteDecorator(method: HttpMethod) {
   return (path: string): MethodDecorator => {
     return (target, propertyKey, descriptor) => {
-      const routes: RouteDefinition[] = Reflect.getMetadata(ROUTES_KEY, target.constructor) || [];
+      const routes: RouteDefinition[] = Reflect.getMetadata(ROUTES_KEY, (target as object).constructor) || [];
       routes.push({
         path,
         method,
         handlerName: propertyKey as string
       });
-      Reflect.defineMetadata(ROUTES_KEY, routes, target.constructor);
+      Reflect.defineMetadata(ROUTES_KEY, routes, (target as object).constructor);
     };
   };
 }
@@ -311,8 +393,9 @@ export function Controller(basePath: string): ClassDecorator {
  */
 export function Use(...middlewares: RequestHandler[]): MethodDecorator {
   return (target, propertyKey, _descriptor) => {
-    const existing: RequestHandler[] = Reflect.getMetadata(MIDDLEWARE_KEY, target, propertyKey as string) || [];
-    Reflect.defineMetadata(MIDDLEWARE_KEY, [...existing, ...middlewares], target, propertyKey as string);
+    const existing: RequestHandler[] =
+      Reflect.getMetadata(MIDDLEWARE_KEY, target as object, propertyKey as string) || [];
+    Reflect.defineMetadata(MIDDLEWARE_KEY, [...existing, ...middlewares], target as object, propertyKey as string);
   };
 }
 
@@ -326,11 +409,11 @@ export function Use(...middlewares: RequestHandler[]): MethodDecorator {
 function createParamDecorator(type: ParamDefinition['type'], key?: string) {
   return (paramKey?: string): ParameterDecorator => {
     return (target, propertyKey, parameterIndex) => {
-      const params: ParamDefinition[] = Reflect.getMetadata(PARAMS_KEY, target, propertyKey as string) || [];
+      const params: ParamDefinition[] = Reflect.getMetadata(PARAMS_KEY, target as object, propertyKey as string) || [];
       // Ensure parameters are ordered by index
       params.push({ index: parameterIndex, type, key: paramKey || key });
       params.sort((a, b) => a.index - b.index);
-      Reflect.defineMetadata(PARAMS_KEY, params, target, propertyKey as string);
+      Reflect.defineMetadata(PARAMS_KEY, params, target as object, propertyKey as string);
     };
   };
 }
@@ -495,14 +578,14 @@ export function Headers(headers: Record<string, string> | string, value?: string
   return (target: any, propertyKey?: string | symbol) => {
     if (typeof propertyKey === 'undefined') {
       // Class decorator
-      const existing: Record<string, string> = Reflect.getMetadata(HEADER_KEY, target) || {};
+      const existing: Record<string, string> = Reflect.getMetadata(HEADER_KEY, target as object) || {};
       const newHeaders = typeof headers === 'string' ? { [headers]: value! } : headers;
-      Reflect.defineMetadata(HEADER_KEY, { ...existing, ...newHeaders }, target);
+      Reflect.defineMetadata(HEADER_KEY, { ...existing, ...newHeaders }, target as object);
     } else {
       // Method decorator
-      const existing: Record<string, string> = Reflect.getMetadata(HEADER_KEY, target, propertyKey) || {};
+      const existing: Record<string, string> = Reflect.getMetadata(HEADER_KEY, target as object, propertyKey) || {};
       const newHeaders = typeof headers === 'string' ? { [headers]: value! } : headers;
-      Reflect.defineMetadata(HEADER_KEY, { ...existing, ...newHeaders }, target, propertyKey);
+      Reflect.defineMetadata(HEADER_KEY, { ...existing, ...newHeaders }, target as object, propertyKey);
     }
   };
 }
@@ -525,9 +608,9 @@ export function Headers(headers: Record<string, string> | string, value?: string
  */
 export function Before(fn: Function): MethodDecorator {
   return (target, propertyKey, _descriptor) => {
-    const hooks: Function[] = Reflect.getMetadata(BEFORE_KEY, target, propertyKey as string) || [];
+    const hooks: Function[] = Reflect.getMetadata(BEFORE_KEY, target as object, propertyKey as string) || [];
     hooks.push(fn);
-    Reflect.defineMetadata(BEFORE_KEY, hooks, target, propertyKey as string);
+    Reflect.defineMetadata(BEFORE_KEY, hooks, target as object, propertyKey as string);
   };
 }
 
@@ -550,9 +633,9 @@ export function Before(fn: Function): MethodDecorator {
  */
 export function After(fn: Function): MethodDecorator {
   return (target, propertyKey, _descriptor) => {
-    const hooks: Function[] = Reflect.getMetadata(AFTER_KEY, target, propertyKey as string) || [];
+    const hooks: Function[] = Reflect.getMetadata(AFTER_KEY, target as object, propertyKey as string) || [];
     hooks.push(fn);
-    Reflect.defineMetadata(AFTER_KEY, hooks, target, propertyKey as string);
+    Reflect.defineMetadata(AFTER_KEY, hooks, target as object, propertyKey as string);
   };
 }
 
@@ -579,10 +662,10 @@ export function Roles(...roles: string[]): MethodDecorator & ClassDecorator {
   return (target: any, propertyKey?: string | symbol, _descriptor?: PropertyDescriptor) => {
     if (typeof propertyKey === 'undefined') {
       // Class decorator
-      Reflect.defineMetadata(ROLES_KEY, roles, target);
+      Reflect.defineMetadata(ROLES_KEY, roles, target as object);
     } else {
       // Method decorator
-      Reflect.defineMetadata(ROLES_KEY, roles, target, propertyKey as string);
+      Reflect.defineMetadata(ROLES_KEY, roles, target as object, propertyKey as string);
     }
   };
 }
@@ -637,10 +720,10 @@ export function Cache(ttlSeconds: number): MethodDecorator & ClassDecorator {
   return (target: any, propertyKey?: string | symbol, _descriptor?: PropertyDescriptor) => {
     if (typeof propertyKey === 'undefined') {
       // Class decorator
-      Reflect.defineMetadata(CACHE_KEY, { ttlSeconds }, target);
+      Reflect.defineMetadata(CACHE_KEY, { ttlSeconds }, target as object);
     } else {
       // Method decorator
-      Reflect.defineMetadata(CACHE_KEY, { ttlSeconds }, target, propertyKey as string);
+      Reflect.defineMetadata(CACHE_KEY, { ttlSeconds }, target as object, propertyKey as string);
     }
   };
 }
@@ -680,10 +763,10 @@ export function RateLimit(options: {
   return (target: any, propertyKey?: string | symbol, _descriptor?: PropertyDescriptor) => {
     if (typeof propertyKey === 'undefined') {
       // Class decorator
-      Reflect.defineMetadata(RATE_LIMIT_KEY, opts, target);
+      Reflect.defineMetadata(RATE_LIMIT_KEY, opts, target as object);
     } else {
       // Method decorator
-      Reflect.defineMetadata(RATE_LIMIT_KEY, opts, target, propertyKey as string);
+      Reflect.defineMetadata(RATE_LIMIT_KEY, opts, target as object, propertyKey as string);
     }
   };
 }
@@ -752,10 +835,10 @@ export function Version(
   return (target: any, propertyKey?: string | symbol, _descriptor?: PropertyDescriptor) => {
     if (typeof propertyKey === 'undefined') {
       // Class decorator
-      Reflect.defineMetadata(VERSION_KEY, { version, options: opts }, target);
+      Reflect.defineMetadata(VERSION_KEY, { version, options: opts }, target as object);
     } else {
       // Method decorator
-      Reflect.defineMetadata(VERSION_KEY, { version, options: opts }, target, propertyKey as string);
+      Reflect.defineMetadata(VERSION_KEY, { version, options: opts }, target as object, propertyKey as string);
     }
   };
 }
@@ -779,10 +862,10 @@ export function Timeout(ms: number): MethodDecorator & ClassDecorator {
   return (target: any, propertyKey?: string | symbol, _descriptor?: PropertyDescriptor) => {
     if (typeof propertyKey === 'undefined') {
       // Class decorator
-      Reflect.defineMetadata(TIMEOUT_KEY, { ms }, target);
+      Reflect.defineMetadata(TIMEOUT_KEY, { ms }, target as object);
     } else {
       // Method decorator
-      Reflect.defineMetadata(TIMEOUT_KEY, { ms }, target, propertyKey as string);
+      Reflect.defineMetadata(TIMEOUT_KEY, { ms }, target as object, propertyKey as string);
     }
   };
 }
@@ -833,10 +916,10 @@ export function Log(options?: {
     };
     if (typeof propertyKey === 'undefined') {
       // Class decorator
-      Reflect.defineMetadata(LOG_KEY, config, target);
+      Reflect.defineMetadata(LOG_KEY, config, target as object);
     } else {
       // Method decorator
-      Reflect.defineMetadata(LOG_KEY, config, target, propertyKey as string);
+      Reflect.defineMetadata(LOG_KEY, config, target as object, propertyKey as string);
     }
   };
 }
@@ -850,50 +933,56 @@ export function Log(options?: {
  */
 export function registerControllers(router: Router, controllers: any[]) {
   controllers.forEach(ControllerClass => {
-    const instance = new ControllerClass();
-    const basePath: string = Reflect.getMetadata('basePath', ControllerClass) || '';
-    const routes: RouteDefinition[] = Reflect.getMetadata(ROUTES_KEY, ControllerClass) || [];
+    // Use DI container to resolve controller (constructor injection + property injection)
+    const instance = diContainer.get(ControllerClass);
+    const basePath: string = Reflect.getMetadata('basePath', ControllerClass as object) || '';
+    const routes: RouteDefinition[] = Reflect.getMetadata(ROUTES_KEY, ControllerClass as object) || [];
 
     // Get controller-level decorators (fallback values)
-    const controllerRateLimit = Reflect.getMetadata(RATE_LIMIT_KEY, ControllerClass);
-    const controllerCache = Reflect.getMetadata(CACHE_KEY, ControllerClass);
-    const controllerTimeout = Reflect.getMetadata(TIMEOUT_KEY, ControllerClass);
-    const controllerVersion = Reflect.getMetadata(VERSION_KEY, ControllerClass);
-    const controllerRoles = Reflect.getMetadata(ROLES_KEY, ControllerClass);
-    const controllerLogConfig = Reflect.getMetadata(LOG_KEY, ControllerClass);
-    const controllerHeaders = Reflect.getMetadata(HEADER_KEY, ControllerClass) || {};
+    const controllerRateLimit = Reflect.getMetadata(RATE_LIMIT_KEY, ControllerClass as object);
+    const controllerCache = Reflect.getMetadata(CACHE_KEY, ControllerClass as object);
+    const controllerTimeout = Reflect.getMetadata(TIMEOUT_KEY, ControllerClass as object);
+    const controllerVersion = Reflect.getMetadata(VERSION_KEY, ControllerClass as object);
+    const controllerRoles = Reflect.getMetadata(ROLES_KEY, ControllerClass as object);
+    const controllerLogConfig = Reflect.getMetadata(LOG_KEY, ControllerClass as object);
+    const controllerHeaders = Reflect.getMetadata(HEADER_KEY, ControllerClass as object) || {};
 
     routes.forEach(({ path, method, handlerName }) => {
-      const middlewares: RequestHandler[] = Reflect.getMetadata(MIDDLEWARE_KEY, instance, handlerName) || [];
-      const params: ParamDefinition[] = Reflect.getMetadata(PARAMS_KEY, instance, handlerName) || [];
+      const middlewares: RequestHandler[] = Reflect.getMetadata(MIDDLEWARE_KEY, instance as object, handlerName) || [];
+      const params: ParamDefinition[] = Reflect.getMetadata(PARAMS_KEY, instance as object, handlerName) || [];
 
-      const httpCode: number | undefined = Reflect.getMetadata(HTTP_CODE_KEY, instance, handlerName);
+      const httpCode: number | undefined = Reflect.getMetadata(HTTP_CODE_KEY, instance as object, handlerName);
 
       // Merge controller-level and method-level headers
-      const methodHeaders: Record<string, string> = Reflect.getMetadata(HEADER_KEY, instance, handlerName) || {};
+      const methodHeaders: Record<string, string> =
+        Reflect.getMetadata(HEADER_KEY, instance as object, handlerName) || {};
       const headers = { ...controllerHeaders, ...methodHeaders };
 
-      const beforeHooks: Function[] = Reflect.getMetadata(BEFORE_KEY, instance, handlerName) || [];
-      const afterHooks: Function[] = Reflect.getMetadata(AFTER_KEY, instance, handlerName) || [];
+      const beforeHooks: Function[] = Reflect.getMetadata(BEFORE_KEY, instance as object, handlerName) || [];
+      const afterHooks: Function[] = Reflect.getMetadata(AFTER_KEY, instance as object, handlerName) || [];
       const redirect: { url?: string; statusCode: number } | undefined = Reflect.getMetadata(
         REDIRECT_KEY,
-        instance,
+        instance as object,
         handlerName
       );
-      const contentType: { type: string } | undefined = Reflect.getMetadata(CONTENT_TYPE_KEY, instance, handlerName);
+      const contentType: { type: string } | undefined = Reflect.getMetadata(
+        CONTENT_TYPE_KEY,
+        instance as object,
+        handlerName
+      );
 
       // Use method-level decorators if present, otherwise fall back to controller-level
-      const roles: string[] = Reflect.getMetadata(ROLES_KEY, instance, handlerName) || controllerRoles || [];
+      const roles: string[] = Reflect.getMetadata(ROLES_KEY, instance as object, handlerName) || controllerRoles || [];
       const cache: { ttlSeconds: number } | undefined =
-        Reflect.getMetadata(CACHE_KEY, instance, handlerName) || controllerCache;
+        Reflect.getMetadata(CACHE_KEY, instance as object, handlerName) || controllerCache;
       const rateLimitOptions:
         | { max: number; windowMs: number; standardHeaders: boolean; legacyHeaders: boolean }
-        | undefined = Reflect.getMetadata(RATE_LIMIT_KEY, instance, handlerName) || controllerRateLimit;
+        | undefined = Reflect.getMetadata(RATE_LIMIT_KEY, instance as object, handlerName) || controllerRateLimit;
       const version:
         | { version: string; options: { addPrefix: boolean; addHeader: boolean; headerName: string } }
-        | undefined = Reflect.getMetadata(VERSION_KEY, instance, handlerName) || controllerVersion;
+        | undefined = Reflect.getMetadata(VERSION_KEY, instance as object, handlerName) || controllerVersion;
       const timeout: { ms: number } | undefined =
-        Reflect.getMetadata(TIMEOUT_KEY, instance, handlerName) || controllerTimeout;
+        Reflect.getMetadata(TIMEOUT_KEY, instance as object, handlerName) || controllerTimeout;
       const logConfig:
         | {
             logEntry?: boolean;
@@ -902,7 +991,7 @@ export function registerControllers(router: Router, controllers: any[]) {
             logParams?: boolean;
             logResponse?: boolean;
           }
-        | undefined = Reflect.getMetadata(LOG_KEY, instance, handlerName) || controllerLogConfig;
+        | undefined = Reflect.getMetadata(LOG_KEY, instance as object, handlerName) || controllerLogConfig;
 
       // Create rate limiter for this specific route if needed
       let rateLimiter: any = null;
