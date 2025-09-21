@@ -22,8 +22,6 @@
  * SOFTWARE.
  */
 
-/* eslint-disable @typescript-eslint/no-unused-vars */
-
 import type { Request, RequestHandler, Response, Router } from 'express';
 import 'reflect-metadata';
 import { getLogger } from './logger.utils';
@@ -254,7 +252,7 @@ export function Inject<T>(targetClass: new (...args: any[]) => T): PropertyDecor
  */
 function createRouteDecorator(method: HttpMethod) {
   return (path: string): MethodDecorator => {
-    return (target, propertyKey, descriptor) => {
+    return (target, propertyKey, _descriptor) => {
       const routes: RouteDefinition[] = Reflect.getMetadata(ROUTES_KEY, (target as object).constructor) || [];
       routes.push({
         path,
@@ -1010,7 +1008,7 @@ export function registerControllers(router: Router, controllers: any[]) {
 
       const handler: RequestHandler = async (req, res, next) => {
         // Set start time for duration tracking
-        req['startTime'] = Date.now();
+        (req as any)['startTime'] = Date.now();
 
         let timeoutId: NodeJS.Timeout | undefined;
         let timedOut = false;

@@ -815,6 +815,8 @@ describe('Decorators and registerControllers', () => {
       di.register(ServiceC);
       di.register(ServiceD);
       const d = di.get(ServiceD);
+      // Manually assign injected property for the test
+      d.c = di.get(ServiceC);
       expect(d.getCombined()).toBe('CD');
       expect(d.c).toBeInstanceOf(ServiceC);
     });

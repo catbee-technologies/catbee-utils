@@ -5,9 +5,9 @@ describe('config', () => {
     jest.mock('../src/utils/env.utils', () => ({
       Env: {
         isDev: jest.fn(() => true),
-        get: jest.fn((key: string, fallback: string) => fallback),
+        get: jest.fn((_key: string, fallback: string) => fallback),
         getBoolean: jest.fn(() => false),
-        getNumber: jest.fn((key: string, fallback: number) => fallback)
+        getNumber: jest.fn((_key: string, fallback: number) => fallback)
       }
     }));
 
@@ -34,7 +34,7 @@ describe('config', () => {
           return key in values ? values[key] : fallback;
         }),
         getBoolean: jest.fn((key: string, fallback: boolean) => (key === 'LOGGER_ISO_TIMESTAMP' ? true : fallback)),
-        getNumber: jest.fn((key: string, fallback: number) => fallback)
+        getNumber: jest.fn((_key: string, fallback: number) => fallback)
       }
     }));
 
@@ -56,7 +56,7 @@ describe('config', () => {
           return key in values ? values[key] : fallback;
         }),
         getBoolean: jest.fn(() => false),
-        getNumber: jest.fn((key: string, fallback: number) => fallback)
+        getNumber: jest.fn((_key: string, fallback: number) => fallback)
       }
     }));
 
@@ -72,7 +72,7 @@ describe('config', () => {
         isDev: jest.fn(() => true),
         get: jest.fn(() => 'debug'),
         getBoolean: jest.fn(() => false),
-        getNumber: jest.fn((key: string, fallback: number) => fallback)
+        getNumber: jest.fn((_key: string, fallback: number) => fallback)
       }
     }));
 

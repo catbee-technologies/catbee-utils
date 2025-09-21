@@ -1,13 +1,13 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "outDir": "build/esm",
+    "outDir": "build/cjs",
     "rootDir": "src",
-    "module": "ES2022",
+    "module": "CommonJS",
     "target": "ES2022",
     "moduleResolution": "node",
     "downlevelIteration": true,
-    "tsBuildInfoFile": "build/esm/tsconfig.esm.tsbuildinfo"
+    "tsBuildInfoFile": "build/cjs/tsconfig.cjs.tsbuildinfo"
   },
   "include": ["src/**/*.ts"]
 }

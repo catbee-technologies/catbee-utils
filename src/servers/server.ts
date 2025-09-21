@@ -1094,7 +1094,7 @@ export class ExpressServer {
   }
 
   private static isBuiltServerConfig(config: Partial<ServerConfig>): boolean {
-    if (config[BUILD_MARKER]) {
+    if ((config as any)[BUILD_MARKER]) {
       return true;
     }
     return false;

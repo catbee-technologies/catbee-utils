@@ -32,8 +32,8 @@ jobs:
       - name: 🧪 Run tests
         run: npm run test
 
-      - name: 🏗️ Build project
-        run: npm run compile
+      - name: 🏗️ Build and Start
+        run: npm run build:start
 
       - name: 📦🔍 Check outdated dependencies
         run: |

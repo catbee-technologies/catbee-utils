@@ -33,7 +33,7 @@ jest.mock('../../src/utils/context-store.utils', () => {
     ...original,
     ContextStore: {
       ...original.ContextStore,
-      run: jest.fn((store, cb) => cb()),
+      run: jest.fn((_store, cb) => cb()),
       set: jest.fn()
     },
     getRequestId: jest.fn(() => undefined)
@@ -232,7 +232,7 @@ describe('Middleware tests', () => {
         child: jest.fn(() => childLogger)
       });
 
-      (ContextStore.run as jest.Mock).mockImplementation((ctx, fn) => fn());
+      (ContextStore.run as jest.Mock).mockImplementation((_ctx, fn) => fn());
     });
 
     afterEach(() => {

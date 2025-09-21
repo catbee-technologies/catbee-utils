@@ -14,7 +14,11 @@
     "**/*.json",
     "**/*.txt",
     "**/*.xml",
-    "docs/**/*"
+    "docs/**/*",
+    "**.config.ts",
+    "**.config.js",
+    "**.config.cjs",
+    "**.config.mjs"
   ],
   "defaultFormat": {
     "prepend": "/*",

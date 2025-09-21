@@ -60,7 +60,7 @@ jest.mock('fs/promises', () => ({
 }));
 
 jest.mock('@scalar/express-api-reference', () => ({
-  apiReference: () => (req: any, res: any, next: Function) => next()
+  apiReference: () => (_req: any, _res: any, next: Function) => next()
 }));
 
 jest.mock('../../src/utils/env.utils', () => ({
@@ -74,7 +74,7 @@ jest.mock('../../src/utils/env.utils', () => ({
       return key in values ? values[key] : fallback;
     }),
     getBoolean: jest.fn().mockReturnValue(false),
-    getNumber: jest.fn().mockImplementation((key: string, fallback: number) => fallback)
+    getNumber: jest.fn().mockImplementation((_key: string, fallback: number) => fallback)
   },
   isDev: jest.fn().mockReturnValue(true)
 }));
@@ -229,7 +229,7 @@ describe('ExpressServer', () => {
 
     it('should handle custom routes', async () => {
       const server = new ExpressServer(baseConfig);
-      server.registerRoute(['get'], '/test-route', (req, res) => {
+      server.registerRoute(['get'], '/test-route', (_req, res) => {
         res.status(200).json({ success: true, message: 'Custom route' });
       });
 
@@ -259,7 +259,7 @@ describe('ExpressServer', () => {
 
     it('should register custom middleware', async () => {
       const server = new ExpressServer(baseConfig);
-      const middleware = jest.fn((req, res, next) => next());
+      const middleware = jest.fn((_req, _res, next) => next());
       server.registerMiddleware('/middleware-test', middleware);
       await server.start();
       const res = await request(server.getApp()).get('/middleware-test/something');
@@ -272,7 +272,7 @@ describe('ExpressServer', () => {
 
     it('should apply global middleware', async () => {
       const server = new ExpressServer(baseConfig);
-      const middleware = jest.fn((req, res, next) => next());
+      const middleware = jest.fn((_req, _res, next) => next());
       server.useMiddleware(middleware);
       await server.start();
 
@@ -436,7 +436,7 @@ describe('ExpressServer', () => {
     it('should support custom routers', async () => {
       const server = new ExpressServer(baseConfig);
       const router = express.Router();
-      router.get('/custom-route', (req, res) => {
+      router.get('/custom-route', (_req, res) => {
         res.status(HttpStatusCodes.OK).json({ success: true, message: 'Custom router' });
       });
       server.setBaseRouter(router);
@@ -454,7 +454,7 @@ describe('ExpressServer', () => {
     it('should create and register nested routers', async () => {
       const server = new ExpressServer(baseConfig);
       const router = server.createRouter('/api');
-      router.get('/nested', (req, res) => {
+      router.get('/nested', (_req, res) => {
         res.status(200).json({ success: true, message: 'Nested route' });
       });
       await server.start();

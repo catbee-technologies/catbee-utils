@@ -257,7 +257,7 @@ export class ContextStore {
    * @returns Express middleware function.
    */
   static createExpressMiddleware(initialValuesFactory: (req: any) => Partial<Record<symbol, unknown>> = () => ({})) {
-    return (req: any, res: any, next: any) => {
+    return (req: any, _res: any, next: any) => {
       const initialValues = initialValuesFactory(req);
       ContextStore.run(initialValues as Store, next);
     };

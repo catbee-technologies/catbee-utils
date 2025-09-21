@@ -306,7 +306,7 @@ describe('LoggerUtils', () => {
     describe('addRedactFields', () => {
       it('should extend the redact function with additional fields', () => {
         const originalCensor = loggerUtils.getRedactCensor();
-        const mockCensor = jest.fn().mockImplementation((value, path, sensitiveFields) => {
+        const mockCensor = jest.fn().mockImplementation((_value, _path, sensitiveFields) => {
           // Return the sensitive fields for testing
           return JSON.stringify(sensitiveFields);
         });
