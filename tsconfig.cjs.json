@@ -1,6 +1,7 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
+    "composite": false,
     "outDir": "build/cjs",
     "rootDir": "src",
     "module": "CommonJS",
@@ -9,5 +10,5 @@
     "downlevelIteration": true,
     "tsBuildInfoFile": "build/cjs/tsconfig.cjs.tsbuildinfo"
   },
-  "include": ["src/**/*.ts"]
+  "include": ["**/*.ts"]
 }

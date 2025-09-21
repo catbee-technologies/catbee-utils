@@ -26,7 +26,6 @@ import os from 'os';
 import fs from 'fs';
 import fsp from 'fs/promises';
 import path from 'path';
-import { glob } from 'glob';
 import { randomBytes } from 'crypto';
 
 /**
@@ -193,22 +192,58 @@ export function watchDir(
 }
 
 /**
- * Finds files matching a glob pattern.
+ * Recursively finds files matching a simple pattern (supports '*' and '?').
  *
- * @param {string} pattern - Glob pattern to match files.
- * @param {object} [options] - Options for glob pattern matching.
- * @param {string} [options.cwd] - Current working directory for relative patterns.
+ * @param {string} pattern - Simple pattern to match files (e.g., '*.ts', 'src/*.js').
+ * @param {object} [options] - Options for matching files.
+ * @param {string} [options.cwd=process.cwd()] - Base directory to start searching from.
  * @param {boolean} [options.dot=false] - Include dotfiles in matches.
- * @param {boolean} [options.nodir=true] - Only match files, not directories.
  * @returns {Promise<string[]>} Array of matched file paths.
- * @throws {Error} If pattern matching fails.
  */
 export async function findFilesByPattern(
   pattern: string,
-  options: { cwd?: string; dot?: boolean; nodir?: boolean } = {}
+  options: { cwd?: string; dot?: boolean } = {}
 ): Promise<string[]> {
-  const defaultOptions = { nodir: true, ...options };
-  return glob(pattern, defaultOptions);
+  const matchPattern = (name: string, pattern: string): boolean => {
+    let escaped = pattern.replaceAll(/[.+^${}()|[\]\\]/g, '\\$&');
+    escaped = escaped.replaceAll('*', '.*').replaceAll('?', '.');
+    const regex = new RegExp(`^${escaped}$`);
+    return regex.test(name);
+  };
+
+  const { cwd = process.cwd(), dot = false } = options;
+  const segments = pattern.split('/');
+
+  async function walk(dir: string, segIndex: number): Promise<string[]> {
+    if (segIndex >= segments.length) return [];
+
+    const segment = segments[segIndex];
+    const entries = await fs.promises.readdir(dir, { withFileTypes: true });
+    let matchedFiles: string[] = [];
+
+    for (const entry of entries) {
+      const entryName = entry.name;
+
+      if (!dot && entryName.startsWith('.')) continue;
+
+      const fullPath = path.join(dir, entryName);
+      const isLastSegment = segIndex === segments.length - 1;
+
+      if (isLastSegment) {
+        if (matchPattern(entryName, segment) && entry.isFile()) {
+          matchedFiles.push(fullPath);
+        }
+      } else if (entry.isDirectory()) {
+        if (matchPattern(entryName, segment)) {
+          matchedFiles.push(...(await walk(fullPath, segIndex + 1)));
+        }
+      }
+    }
+
+    return matchedFiles;
+  }
+
+  return walk(cwd, 0);
 }
 
 /**
@@ -292,11 +327,12 @@ export async function createTempDir(
     });
 
     // Handle signals for better cleanup
-    ['SIGINT', 'SIGTERM', 'SIGUSR1', 'SIGUSR2'].forEach(signal => {
+    const signals = ['SIGINT', 'SIGTERM', 'SIGUSR1', 'SIGUSR2'];
+    for (const signal of signals) {
       process.once(signal as NodeJS.Signals, () => {
         cleanup().then(() => process.exit());
       });
-    });
+    }
   }
 
   return { path: tempDirPath, cleanup };
@@ -443,7 +479,9 @@ export async function watchDirRecursive(
 
   // Return a function to close all watchers
   return () => {
-    watchers.forEach(watcher => watcher.close());
+    for (const watcher of watchers) {
+      watcher.close();
+    }
   };
 }
 

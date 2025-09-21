@@ -2,9 +2,9 @@
   "name": "@catbee/utils",
   "version": "0.0.8-rc.3",
   "description": "A modular, production-grade utility toolkit for Node.js and TypeScript, designed for robust, scalable applications (including Express-based services). All utilities are tree-shakable and can be imported independently.",
-  "main": "build/cjs/index.js",
-  "module": "build/esm/index.js",
-  "types": "build/esm/index.d.ts",
+  "main": "build/index.cjs",
+  "module": "build/index.mjs",
+  "types": "build/index.d.ts",
   "publishConfig": {
     "access": "public"
   },
@@ -14,17 +14,16 @@
   },
   "license": "MIT",
   "scripts": {
-    "start": "node build/cjs/index.js",
-    "prepack": "npm run compile",
-    "compile": "npm run clean && tsc --build tsconfig.cjs.json tsconfig.esm.json",
+    "start": "node build/index.cjs && node build/index.mjs",
+    "prepack": "npm run compile -- --silent",
+    "compile": "tsup",
     "clean": "rimraf build",
     "build": "npm run compile",
     "build:clean": "npm run clean && npm run build",
     "build:start": "npm run build && npm run start",
     "lint": "eslint src tests",
     "lint:fix": "eslint --fix src tests",
-    "generate:exports": "npm run build && node scripts/generate-exports.mjs",
-    "preversion": "npm run check-license && npm run lint && npm run build:start && npm run test && npm run build && npm run generate:exports",
+    "preversion": "npm run check-license && npm run lint && npm run build:start && npm run test",
     "pretest": "npm run build",
     "dryrun": "npm pack --dry-run",
     "dryrun:list": "npm pack --dry-run --json > pack-output.json",
@@ -82,10 +81,14 @@
     "prom-client": "^15.1.3"
   },
   "peerDependencies": {
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "reflect-metadata": "^0.2.2"
   },
   "peerDependenciesMeta": {
     "express": {
+      "optional": true
+    },
+    "reflect-metadata": {
       "optional": true
     }
   },
@@ -93,293 +96,10 @@
     "node": ">=18.4"
   },
   "files": [
-    "build/esm/**/*.js",
-    "build/esm/**/*.d.ts",
-    "build/cjs/**/*.js",
-    "build/cjs/**/*.d.ts",
+    "build/**/*.mjs",
+    "build/**/*.cjs",
+    "build/**/*.d.ts",
     "LICENSE",
     "README.md"
-  ],
-  "exports": {
-    ".": {
-      "import": {
-        "types": "./build/esm/index.d.ts",
-        "default": "./build/esm/index.js"
-      },
-      "require": {
-        "types": "./build/cjs/index.d.ts",
-        "default": "./build/cjs/index.js"
-      }
-    },
-    "./array": {
-      "import": {
-        "types": "./build/esm/utils/array.utils.d.ts",
-        "default": "./build/esm/utils/array.utils.js"
-      },
-      "require": {
-        "types": "./build/cjs/utils/array.utils.d.ts",
-        "default": "./build/cjs/utils/array.utils.js"
-      }
-    },
-    "./async": {
-      "import": {
-        "types": "./build/esm/utils/async.utils.d.ts",
-        "default": "./build/esm/utils/async.utils.js"
-      },
-      "require": {
-        "types": "./build/cjs/utils/async.utils.d.ts",
-        "default": "./build/cjs/utils/async.utils.js"
-      }
-    },
-    "./cache": {
-      "import": {
-        "types": "./build/esm/utils/cache.utils.d.ts",
-        "default": "./build/esm/utils/cache.utils.js"
-      },
-      "require": {
-        "types": "./build/cjs/utils/cache.utils.d.ts",
-        "default": "./build/cjs/utils/cache.utils.js"
-      }
-    },
-    "./context-store": {
-      "import": {
-        "types": "./build/esm/utils/context-store.utils.d.ts",
-        "default": "./build/esm/utils/context-store.utils.js"
-      },
-      "require": {
-        "types": "./build/cjs/utils/context-store.utils.d.ts",
-        "default": "./build/cjs/utils/context-store.utils.js"
-      }
-    },
-    "./crypto": {
-      "import": {
-        "types": "./build/esm/utils/crypto.utils.d.ts",
-        "default": "./build/esm/utils/crypto.utils.js"
-      },
-      "require": {
-        "types": "./build/cjs/utils/crypto.utils.d.ts",
-        "default": "./build/cjs/utils/crypto.utils.js"
-      }
-    },
-    "./date": {
-      "import": {
-        "types": "./build/esm/utils/date.utils.d.ts",
-        "default": "./build/esm/utils/date.utils.js"
-      },
-      "require": {
-        "types": "./build/cjs/utils/date.utils.d.ts",
-        "default": "./build/cjs/utils/date.utils.js"
-      }
-    },
-    "./decorators": {
-      "import": {
-        "types": "./build/esm/utils/decorators.utils.d.ts",
-        "default": "./build/esm/utils/decorators.utils.js"
-      },
-      "require": {
-        "types": "./build/cjs/utils/decorators.utils.d.ts",
-        "default": "./build/cjs/utils/decorators.utils.js"
-      }
-    },
-    "./dir": {
-      "import": {
-        "types": "./build/esm/utils/dir.utils.d.ts",
-        "default": "./build/esm/utils/dir.utils.js"
-      },
-      "require": {
-        "types": "./build/cjs/utils/dir.utils.d.ts",
-        "default": "./build/cjs/utils/dir.utils.js"
-      }
-    },
-    "./env": {
-      "import": {
-        "types": "./build/esm/utils/env.utils.d.ts",
-        "default": "./build/esm/utils/env.utils.js"
-      },
-      "require": {
-        "types": "./build/cjs/utils/env.utils.d.ts",
-        "default": "./build/cjs/utils/env.utils.js"
-      }
-    },
-    "./exception": {
-      "import": {
-        "types": "./build/esm/utils/exception.utils.d.ts",
-        "default": "./build/esm/utils/exception.utils.js"
-      },
-      "require": {
-        "types": "./build/cjs/utils/exception.utils.d.ts",
-        "default": "./build/cjs/utils/exception.utils.js"
-      }
-    },
-    "./fs": {
-      "import": {
-        "types": "./build/esm/utils/fs.utils.d.ts",
-        "default": "./build/esm/utils/fs.utils.js"
-      },
-      "require": {
-        "types": "./build/cjs/utils/fs.utils.d.ts",
-        "default": "./build/cjs/utils/fs.utils.js"
-      }
-    },
-    "./http-status-codes": {
-      "import": {
-        "types": "./build/esm/utils/http-status-codes.d.ts",
-        "default": "./build/esm/utils/http-status-codes.js"
-      },
-      "require": {
-        "types": "./build/cjs/utils/http-status-codes.d.ts",
-        "default": "./build/cjs/utils/http-status-codes.js"
-      }
-    },
-    "./id": {
-      "import": {
-        "types": "./build/esm/utils/id.utils.d.ts",
-        "default": "./build/esm/utils/id.utils.js"
-      },
-      "require": {
-        "types": "./build/cjs/utils/id.utils.d.ts",
-        "default": "./build/cjs/utils/id.utils.js"
-      }
-    },
-    "./logger": {
-      "import": {
-        "types": "./build/esm/utils/logger.utils.d.ts",
-        "default": "./build/esm/utils/logger.utils.js"
-      },
-      "require": {
-        "types": "./build/cjs/utils/logger.utils.d.ts",
-        "default": "./build/cjs/utils/logger.utils.js"
-      }
-    },
-    "./middleware": {
-      "import": {
-        "types": "./build/esm/utils/middleware.utils.d.ts",
-        "default": "./build/esm/utils/middleware.utils.js"
-      },
-      "require": {
-        "types": "./build/cjs/utils/middleware.utils.d.ts",
-        "default": "./build/cjs/utils/middleware.utils.js"
-      }
-    },
-    "./obj": {
-      "import": {
-        "types": "./build/esm/utils/obj.utils.d.ts",
-        "default": "./build/esm/utils/obj.utils.js"
-      },
-      "require": {
-        "types": "./build/cjs/utils/obj.utils.d.ts",
-        "default": "./build/cjs/utils/obj.utils.js"
-      }
-    },
-    "./performance": {
-      "import": {
-        "types": "./build/esm/utils/performance.utils.d.ts",
-        "default": "./build/esm/utils/performance.utils.js"
-      },
-      "require": {
-        "types": "./build/cjs/utils/performance.utils.d.ts",
-        "default": "./build/cjs/utils/performance.utils.js"
-      }
-    },
-    "./request": {
-      "import": {
-        "types": "./build/esm/utils/request.utils.d.ts",
-        "default": "./build/esm/utils/request.utils.js"
-      },
-      "require": {
-        "types": "./build/cjs/utils/request.utils.d.ts",
-        "default": "./build/cjs/utils/request.utils.js"
-      }
-    },
-    "./response": {
-      "import": {
-        "types": "./build/esm/utils/response.utils.d.ts",
-        "default": "./build/esm/utils/response.utils.js"
-      },
-      "require": {
-        "types": "./build/cjs/utils/response.utils.d.ts",
-        "default": "./build/cjs/utils/response.utils.js"
-      }
-    },
-    "./stream": {
-      "import": {
-        "types": "./build/esm/utils/stream.utils.d.ts",
-        "default": "./build/esm/utils/stream.utils.js"
-      },
-      "require": {
-        "types": "./build/cjs/utils/stream.utils.d.ts",
-        "default": "./build/cjs/utils/stream.utils.js"
-      }
-    },
-    "./string": {
-      "import": {
-        "types": "./build/esm/utils/string.utils.d.ts",
-        "default": "./build/esm/utils/string.utils.js"
-      },
-      "require": {
-        "types": "./build/cjs/utils/string.utils.d.ts",
-        "default": "./build/cjs/utils/string.utils.js"
-      }
-    },
-    "./type": {
-      "import": {
-        "types": "./build/esm/utils/type.utils.d.ts",
-        "default": "./build/esm/utils/type.utils.js"
-      },
-      "require": {
-        "types": "./build/cjs/utils/type.utils.d.ts",
-        "default": "./build/cjs/utils/type.utils.js"
-      }
-    },
-    "./url": {
-      "import": {
-        "types": "./build/esm/utils/url.utils.d.ts",
-        "default": "./build/esm/utils/url.utils.js"
-      },
-      "require": {
-        "types": "./build/cjs/utils/url.utils.d.ts",
-        "default": "./build/cjs/utils/url.utils.js"
-      }
-    },
-    "./validate": {
-      "import": {
-        "types": "./build/esm/utils/validate.utils.d.ts",
-        "default": "./build/esm/utils/validate.utils.js"
-      },
-      "require": {
-        "types": "./build/cjs/utils/validate.utils.d.ts",
-        "default": "./build/cjs/utils/validate.utils.js"
-      }
-    },
-    "./types/api-response": {
-      "import": {
-        "types": "./build/esm/types/api-response.d.ts",
-        "default": "./build/esm/types/api-response.js"
-      },
-      "require": {
-        "types": "./build/cjs/types/api-response.d.ts",
-        "default": "./build/cjs/types/api-response.js"
-      }
-    },
-    "./types/index": {
-      "import": {
-        "types": "./build/esm/types/index.d.ts",
-        "default": "./build/esm/types/index.js"
-      },
-      "require": {
-        "types": "./build/cjs/types/index.d.ts",
-        "default": "./build/cjs/types/index.js"
-      }
-    },
-    "./types/server": {
-      "import": {
-        "types": "./build/esm/types/server.d.ts",
-        "default": "./build/esm/types/server.js"
-      },
-      "require": {
-        "types": "./build/cjs/types/server.d.ts",
-        "default": "./build/cjs/types/server.js"
-      }
-    }
-  }
+  ]
 }
