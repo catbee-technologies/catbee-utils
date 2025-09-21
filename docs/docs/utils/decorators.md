@@ -35,6 +35,8 @@ These utilities provide a declarative way to define Express routes, middleware, 
 - [**`@Version(version: string, options?: VersionOptions): MethodDecorator`**](#version) - Add API versioning to routes.
 - [**`@Timeout(ms: number): MethodDecorator`**](#timeout) - Set execution timeout for routes.
 - [**`@Log(options?: LogOptions): MethodDecorator`**](#log) - Add comprehensive logging to routes.
+- [**`@Injectable(): ClassDecorator`**](#injectable) - Mark a class as injectable for DI.
+- [**`@Inject(targetClass: Constructor): PropertyDecorator`**](#inject) - Inject a dependency into a class property.
 
 ---
 
@@ -52,6 +54,7 @@ These decorators and utilities allow you to:
 - Add caching, rate limiting, versioning, and timeout handling.
 - Implement comprehensive logging and response customization.
 - Register controller classes with an Express router.
+- Use dependency injection for services and controllers.
 
 ---
 
@@ -1056,6 +1059,76 @@ processOrder(@Param('id') id: string, @Body() orderData: any) {
 })
 getPublicStats() {
   return this.statsService.getPublic();
+}
+```
+
+---
+
+### `@Injectable()`
+Marks a class as injectable for dependency injection.
+
+**Method Signature:**
+```ts
+@Injectable(): ClassDecorator
+```
+
+**Returns:** 
+- A class decorator.
+
+**Examples:**
+```ts
+import { Injectable } from '@catbee/utils';
+
+@Injectable()
+class UserService {
+  findAll() { /* ... */ }
+}
+```
+
+---
+
+### `@Inject()`
+Injects a dependency into a class property or via constructor.
+
+**Method Signature:**
+```ts
+@Inject(targetClass: Constructor): PropertyDecorator
+```
+
+**Parameters:**
+- `targetClass`: The class to inject.
+
+**Returns:** 
+- A property decorator.
+
+**Examples (Property Injection):**
+```ts
+import { Injectable, Inject, Controller } from '@catbee/utils';
+
+@Injectable()
+class UserService {
+  getUser() { /* ... */ }
+}
+
+@Controller('/api/users')
+class UserController {
+  @Inject(UserService)
+  userService!: UserService;
+}
+```
+
+**Examples (Constructor Injection):**
+```ts
+import { Injectable, Controller } from '@catbee/utils';
+
+@Injectable()
+class UserService {
+  getUser() { /* ... */ }
+}
+
+@Controller('/api/users')
+class UserController {
+  constructor(public userService: UserService) {}
 }
 ```
 
