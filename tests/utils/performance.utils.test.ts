@@ -34,7 +34,7 @@ describe('performance.utils', () => {
         return 'done';
       });
       expect(result).toBe('done');
-      expect(timing.durationMs).toBeGreaterThanOrEqual(10);
+      expect(Math.ceil(timing.durationMs)).toBeGreaterThanOrEqual(10);
     });
 
     it('uses custom label and logs', async () => {

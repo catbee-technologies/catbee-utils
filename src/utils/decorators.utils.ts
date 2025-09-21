@@ -86,7 +86,7 @@ type CachedRateLimiter = {
 /**
  * RateLimiter cache that uses TTLCache for automatic TTL and LRU handling.
  */
-export class RateLimiterCache {
+class RateLimiterCache {
   private cache: TTLCache<string, CachedRateLimiter>;
 
   constructor(maxSize = 100, ttlMs = 5 * 60 * 1000) {
@@ -1041,6 +1041,3 @@ export function registerControllers(router: Router, controllers: any[]) {
     });
   });
 }
-
-// Export for testing purposes
-export { rateLimiterCache };
