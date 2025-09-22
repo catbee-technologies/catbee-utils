@@ -77,6 +77,13 @@ describe('debounce', () => {
     expect(fn).toHaveBeenCalledWith('z');
     expect(fn).toHaveBeenCalledTimes(1);
   });
+
+  it('handles flush when no pending args', () => {
+    const fn = jest.fn();
+    const deb = debounce(fn, 100);
+    deb.flush(); // Should not call fn when no pending args
+    expect(fn).not.toHaveBeenCalled();
+  });
 });
 
 describe('throttle', () => {
@@ -108,6 +115,32 @@ describe('throttle', () => {
     await Promise.resolve();
     expect(fn).toHaveBeenCalledWith('b');
     expect(fn).toHaveBeenCalledTimes(1);
+  });
+
+  it('handles timer cleanup when remaining <= 0', () => {
+    const fn = jest.fn();
+    const thr = throttle(fn, 100, { leading: true, trailing: true });
+
+    // First call should execute immediately
+    thr('first');
+    expect(fn).toHaveBeenCalledWith('first');
+    expect(fn).toHaveBeenCalledTimes(1);
+
+    // Wait for throttle period to expire
+    jest.advanceTimersByTime(100);
+
+    // This call should execute immediately since enough time has passed
+    thr('second');
+    expect(fn).toHaveBeenCalledWith('second');
+    expect(fn).toHaveBeenCalledTimes(2);
+  });
+
+  it('does nothing when both leading and trailing are false', () => {
+    const fn = jest.fn();
+    const thr = throttle(fn, 100, { leading: false, trailing: false });
+    thr('test');
+    jest.advanceTimersByTime(200);
+    expect(fn).not.toHaveBeenCalled();
   });
 });
 
@@ -163,6 +196,11 @@ describe('withTimeout', () => {
   it('rejects if promise does not resolve in time', async () => {
     const slow = new Promise<void>(() => {});
     await expect(withTimeout(slow, 10, 'timeout!')).rejects.toThrow('timeout!');
+  });
+
+  it('rejects if promise rejects before timeout', async () => {
+    const failing = Promise.reject(new Error('original error'));
+    await expect(withTimeout(failing, 100)).rejects.toThrow('original error');
   });
 });
 
@@ -255,6 +293,16 @@ describe('createTaskQueue', () => {
     expect(q.length).toBe(1);
     expect(q['isPaused']).toBe(true);
   });
+
+  it('handles task rejection properly', async () => {
+    const q = createTaskQueue(1);
+    const error = new Error('task failed');
+    await expect(
+      q(async () => {
+        throw error;
+      })
+    ).rejects.toBe(error);
+  });
 });
 
 describe('runInSeries', () => {
@@ -293,6 +341,29 @@ describe('memoizeAsync', () => {
     await expect(memo(1, 2)).resolves.toBe(3);
     await expect(memo(1, 2)).resolves.toBe(3);
     expect(fn).toHaveBeenCalledTimes(1);
+  });
+
+  it('cleans up expired cache entries properly', async () => {
+    jest.useFakeTimers();
+    let callCount = 0;
+    const fn = jest.fn(async (x: number) => {
+      callCount++;
+      return x + callCount;
+    });
+    const memo = memoizeAsync(fn, { ttl: 100 });
+
+    // First call
+    await expect(memo(1)).resolves.toBe(2); // 1 + 1
+    expect(fn).toHaveBeenCalledTimes(1);
+
+    // Expire the cache
+    jest.advanceTimersByTime(101);
+
+    // Second call should not use cache
+    await expect(memo(1)).resolves.toBe(3); // 1 + 2
+    expect(fn).toHaveBeenCalledTimes(2);
+
+    jest.useRealTimers();
   });
 });
 
@@ -351,6 +422,25 @@ describe('rateLimit', () => {
     jest.advanceTimersByTime(101);
     await expect(Promise.all([p1, p2, p3, p4])).resolves.toEqual([1, 2, 3, 4]);
     expect(fn).toHaveBeenCalledTimes(4);
+    jest.useRealTimers();
+  });
+
+  it('handles edge case where delay calculation results in very small values', async () => {
+    jest.useFakeTimers();
+    const fn = jest.fn(async (x: number) => x);
+    const limited = rateLimit(fn, 1, 100);
+
+    // Make first call
+    const p1 = limited(1);
+
+    // Advance time to make delay calculation very small
+    jest.advanceTimersByTime(99);
+    const p2 = limited(2);
+
+    jest.advanceTimersByTime(2); // Should use Math.max(1, delay)
+
+    await expect(Promise.all([p1, p2])).resolves.toEqual([1, 2]);
+    expect(fn).toHaveBeenCalledTimes(2);
     jest.useRealTimers();
   });
 });
@@ -470,5 +560,21 @@ describe('runWithConcurrency', () => {
     const ctrl = new AbortController();
     ctrl.abort();
     await expect(runWithConcurrency([async () => 1], { signal: ctrl.signal })).rejects.toThrow('Aborted');
+  });
+
+  it('handles error in onProgress callback gracefully', async () => {
+    const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+    const tasks = [1, 2].map(n => async () => n);
+
+    await expect(
+      runWithConcurrency(tasks, {
+        concurrency: 2,
+        onProgress: () => {
+          throw new Error('Progress callback error');
+        }
+      })
+    ).resolves.toEqual([1, 2]);
+
+    consoleSpy.mockRestore();
   });
 });

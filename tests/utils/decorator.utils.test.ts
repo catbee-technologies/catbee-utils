@@ -4,6 +4,7 @@ import 'reflect-metadata';
 import {
   Controller,
   Get,
+  Post,
   Use,
   Query,
   Param,
@@ -900,6 +901,489 @@ describe('Decorators and registerControllers', () => {
       expect(y.x).toBeInstanceOf(CircularXClass);
       expect(x.getName()).toBe('X');
       expect(y.getName()).toBe('Y');
+    });
+  });
+
+  describe('DIContainer edge cases', () => {
+    it('should handle circular dependencies in property injection', () => {
+      @Injectable()
+      class ServiceX {
+        @Inject((() => ServiceY) as any)
+        serviceY!: any;
+
+        getValue() {
+          return 'X';
+        }
+      }
+
+      @Injectable()
+      class ServiceY {
+        @Inject((() => ServiceX) as any)
+        serviceX!: any;
+
+        getValue() {
+          return 'Y';
+        }
+      }
+
+      const { DIContainer } = require('../../src/utils/decorators.utils');
+      const di = new DIContainer();
+      di.register(ServiceX);
+      di.register(ServiceY);
+
+      const x = di.get(ServiceX);
+      const y = di.get(ServiceY);
+
+      expect(x).toBeInstanceOf(ServiceX);
+      expect(y).toBeInstanceOf(ServiceY);
+    });
+
+    it('should clear all instances and constructing references', () => {
+      @Injectable()
+      class TestService {
+        getValue() {
+          return 'test';
+        }
+      }
+
+      const { DIContainer } = require('../../src/utils/decorators.utils');
+      const di = new DIContainer();
+      di.register(TestService);
+      const instance = di.get(TestService);
+
+      expect(instance).toBeInstanceOf(TestService);
+
+      di.clear();
+      const newInstance = di.get(TestService);
+      expect(newInstance).not.toBe(instance);
+    });
+  });
+
+  describe('Header value normalization edge cases', () => {
+    it('should handle undefined header values', async () => {
+      @Controller('/headers')
+      class HeaderController {
+        @Get('/undefined')
+        @Headers({ 'X-Undefined': undefined as any })
+        undefinedHeader() {
+          return { test: true };
+        }
+      }
+
+      registerControllers(mockRouter, [HeaderController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      expect(mockRes.set).not.toHaveBeenCalledWith('X-Undefined', undefined);
+      expect(mockRes.json).toHaveBeenCalledWith({ test: true });
+    });
+
+    it('should handle array header values', async () => {
+      @Controller('/headers')
+      class ArrayHeaderController {
+        @Get('/array')
+        @Headers({ 'X-Array': ['value1', 'value2'] as any })
+        arrayHeader() {
+          return { test: true };
+        }
+      }
+
+      registerControllers(mockRouter, [ArrayHeaderController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      expect(mockRes.set).toHaveBeenCalledWith('X-Array', ['value1', 'value2']);
+    });
+
+    it('should handle non-string header values by converting to string', async () => {
+      @Controller('/headers')
+      class NumberHeaderController {
+        @Get('/number')
+        @Headers({ 'X-Number': 123 as any })
+        numberHeader() {
+          return { test: true };
+        }
+      }
+
+      registerControllers(mockRouter, [NumberHeaderController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      expect(mockRes.set).toHaveBeenCalledWith('X-Number', '123');
+    });
+
+    it('should handle mixed array header values by converting to string', async () => {
+      @Controller('/headers')
+      class MixedArrayHeaderController {
+        @Get('/mixed')
+        @Headers({ 'X-Mixed': ['string', 123, true] as any })
+        mixedHeader() {
+          return { test: true };
+        }
+      }
+
+      registerControllers(mockRouter, [MixedArrayHeaderController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      expect(mockRes.set).toHaveBeenCalledWith('X-Mixed', 'string,123,true');
+    });
+  });
+
+  describe('Timeout edge cases', () => {
+    it('should handle timeout when response headers are already sent', async () => {
+      @Controller('/timeout-edge')
+      class TimeoutEdgeController {
+        @Get('/headers-sent')
+        @Timeout(10)
+        async headersSent(@Res() res: Response) {
+          res.json({ started: true });
+          await new Promise(resolve => setTimeout(resolve, 50));
+          return { finished: true };
+        }
+      }
+
+      registerControllers(mockRouter, [TimeoutEdgeController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      mockRes.headersSent = true;
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      // Should not send timeout response when headers already sent
+      expect(mockRes.status).not.toHaveBeenCalledWith(408);
+    });
+
+    it('should clear timeout when operation completes before timeout', async () => {
+      const clearTimeoutSpy = jest.spyOn(global, 'clearTimeout');
+
+      @Controller('/timeout-clear')
+      class TimeoutClearController {
+        @Get('/fast')
+        @Timeout(1000)
+        async fastOperation() {
+          return { fast: true };
+        }
+      }
+
+      registerControllers(mockRouter, [TimeoutClearController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      expect(clearTimeoutSpy).toHaveBeenCalled();
+      expect(mockRes.json).toHaveBeenCalledWith({ fast: true });
+
+      clearTimeoutSpy.mockRestore();
+    });
+
+    it('should clear timeout when error occurs', async () => {
+      const clearTimeoutSpy = jest.spyOn(global, 'clearTimeout');
+
+      @Controller('/timeout-error')
+      class TimeoutErrorController {
+        @Get('/error')
+        @Timeout(1000)
+        async errorOperation() {
+          throw new Error('Operation failed');
+        }
+      }
+
+      registerControllers(mockRouter, [TimeoutErrorController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      expect(clearTimeoutSpy).toHaveBeenCalled();
+      expect(mockNext).toHaveBeenCalledWith(expect.any(Error));
+
+      clearTimeoutSpy.mockRestore();
+    });
+  });
+
+  describe('Rate limiter cache scenarios', () => {
+    it('should handle rate limiter creation errors gracefully', async () => {
+      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
+
+      // Mock rateLimit to throw an error
+      jest.doMock('express-rate-limit', () => {
+        throw new Error('express-rate-limit not found');
+      });
+
+      @Controller('/rate-error')
+      class RateErrorController {
+        @Get('/test')
+        @RateLimit({ max: 1, windowMs: 1000 })
+        testEndpoint() {
+          return { success: true };
+        }
+      }
+
+      // Should not throw when registering
+      expect(() => {
+        registerControllers(mockRouter, [RateErrorController]);
+      }).not.toThrow();
+
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+      expect(mockRes.json).toHaveBeenCalledWith({ success: true });
+
+      consoleWarnSpy.mockRestore();
+      jest.unmock('express-rate-limit');
+    });
+  });
+
+  describe('Version decorator edge cases', () => {
+    it('should handle version without adding prefix when addPrefix is false', async () => {
+      @Controller('/api')
+      class NoVersionPrefixController {
+        @Get('/data')
+        @Version('v3', { addPrefix: false, addHeader: false })
+        getData() {
+          return { data: 'test' };
+        }
+      }
+
+      registerControllers(mockRouter, [NoVersionPrefixController]);
+      const [path, ...handlers] = mockRouter.get.mock.calls[0];
+      expect(path).toBe('/api/data'); // No version prefix
+
+      const routeHandler = handlers[handlers.length - 1];
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      expect(mockRes.setHeader).not.toHaveBeenCalledWith('X-API-Version', 'v3');
+      expect(mockRes.json).toHaveBeenCalledWith({ data: 'test' });
+    });
+
+    it('should not add version header when headers already sent', async () => {
+      mockRes.headersSent = true;
+
+      @Controller('/api')
+      class HeadersSentVersionController {
+        @Get('/data')
+        @Version('v1')
+        getData() {
+          return { data: 'test' };
+        }
+      }
+
+      registerControllers(mockRouter, [HeadersSentVersionController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      expect(mockRes.setHeader).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Parameter extraction edge cases', () => {
+    it('should handle missing body property gracefully', async () => {
+      mockReq.body = null;
+
+      @Controller('/params')
+      class ParamsController {
+        @Post('/test')
+        testMethod(@Body('missing') missing: any) {
+          return { missing };
+        }
+      }
+
+      registerControllers(mockRouter, [ParamsController]);
+      const [, ...handlers] = mockRouter.post.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      expect(mockRes.json).toHaveBeenCalledWith({ missing: undefined });
+    });
+  });
+
+  describe('Cache handling edge cases', () => {
+    it('should not set cache headers when response headers already sent', async () => {
+      mockRes.headersSent = true;
+
+      @Controller('/cache-edge')
+      class CacheEdgeController {
+        @Get('/test')
+        @Cache(300)
+        testMethod() {
+          return { cached: true };
+        }
+      }
+
+      registerControllers(mockRouter, [CacheEdgeController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      expect(mockRes.setHeader).not.toHaveBeenCalledWith('Cache-Control', 'public, max-age=300');
+    });
+  });
+
+  describe('Content type edge cases', () => {
+    it('should not set content type when headers already sent', async () => {
+      mockRes.headersSent = true;
+
+      @Controller('/content-edge')
+      class ContentEdgeController {
+        @Get('/test')
+        @ContentType('text/plain')
+        testMethod() {
+          return { test: true };
+        }
+      }
+
+      registerControllers(mockRouter, [ContentEdgeController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      expect(mockRes.setHeader).not.toHaveBeenCalledWith('Content-Type', 'text/plain');
+    });
+  });
+
+  describe('Empty controller scenarios', () => {
+    it('should handle controller with no routes', () => {
+      @Controller('/empty')
+      class EmptyController {
+        // No route methods
+      }
+
+      expect(() => {
+        registerControllers(mockRouter, [EmptyController]);
+      }).not.toThrow();
+
+      // No routes should be registered
+      expect(mockRouter.get).not.toHaveBeenCalled();
+    });
+
+    it('should handle controller with no base path metadata', () => {
+      class NoBasePathController {
+        @Get('/test')
+        testMethod() {
+          return { test: true };
+        }
+      }
+
+      expect(() => {
+        registerControllers(mockRouter, [NoBasePathController]);
+      }).not.toThrow();
+    });
+  });
+
+  describe('Logging error handling', () => {
+    it('should handle logger errors gracefully', async () => {
+      const errorLogger = {
+        info: jest.fn().mockImplementation(() => {
+          throw new Error('Logger error');
+        }),
+        error: jest.fn(),
+        warn: jest.fn(),
+        debug: jest.fn(),
+        trace: jest.fn(),
+        child: jest.fn().mockReturnThis()
+      };
+
+      (getLogger as jest.Mock).mockReturnValue(errorLogger);
+
+      @Controller('/log-error')
+      class LogErrorController {
+        @Get('/test')
+        @Log({ logEntry: true })
+        testMethod() {
+          return { test: true };
+        }
+      }
+
+      registerControllers(mockRouter, [LogErrorController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      // Should not throw even if logger throws
+      await expect(routeHandler(mockReq, mockRes, mockNext)).resolves.toBeUndefined();
+    });
+  });
+
+  describe('Async hook error handling', () => {
+    it('should handle async before hook errors', async () => {
+      const failingBeforeHook = jest.fn().mockRejectedValue(new Error('Before hook failed'));
+
+      @Controller('/hook-error')
+      class HookErrorController {
+        @Get('/test')
+        @Before(failingBeforeHook)
+        testMethod() {
+          return { test: true };
+        }
+      }
+
+      registerControllers(mockRouter, [HookErrorController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      expect(mockNext).toHaveBeenCalledWith(expect.any(Error));
+      expect(mockRes.json).not.toHaveBeenCalled();
+    });
+
+    it('should handle async after hook errors', async () => {
+      const failingAfterHook = jest.fn().mockRejectedValue(new Error('After hook failed'));
+
+      @Controller('/after-hook-error')
+      class AfterHookErrorController {
+        @Get('/test')
+        @After(failingAfterHook)
+        testMethod() {
+          return { test: true };
+        }
+      }
+
+      registerControllers(mockRouter, [AfterHookErrorController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      expect(mockNext).toHaveBeenCalledWith(expect.any(Error));
+    });
+  });
+
+  describe('Response already sent scenarios', () => {
+    it('should not send response when headers already sent and undefined result', async () => {
+      mockRes.headersSent = true;
+
+      @Controller('/sent')
+      class SentController {
+        @Get('/test')
+        testMethod() {
+          return undefined;
+        }
+      }
+
+      registerControllers(mockRouter, [SentController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      expect(mockRes.json).not.toHaveBeenCalled();
+      expect(mockRes.status).not.toHaveBeenCalled();
     });
   });
 });

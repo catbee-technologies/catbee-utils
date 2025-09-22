@@ -195,6 +195,20 @@ describe('EnvUtils', () => {
       Env.set('DATE3', 'not-a-date');
       expect(() => Env.getDate('DATE3')).toThrow(`Environment variable 'DATE3' is not a valid date: "not-a-date"`);
     });
+
+    // Add test for empty value with default Date object
+    it('returns default Date when value is empty and default is a Date object', () => {
+      Env.delete('EMPTY_DATE');
+      const defaultDate = new Date('2023-01-01');
+      expect(Env.getDate('EMPTY_DATE', defaultDate)).toEqual(defaultDate);
+    });
+
+    // Add test for empty value with default ISO string
+    it('returns Date from default ISO string when value is empty', () => {
+      Env.delete('EMPTY_DATE_STRING');
+      const defaultDateString = '2023-02-01T00:00:00Z';
+      expect(Env.getDate('EMPTY_DATE_STRING', defaultDateString)).toEqual(new Date(defaultDateString));
+    });
   });
 
   describe('getInteger', () => {
@@ -416,6 +430,18 @@ describe('EnvUtils', () => {
       Env.set('EMAIL', 'not-an-email');
       expect(() => Env.getEmail('EMAIL', '')).toThrow(/not a valid email address/);
     });
+
+    // Add test for default value when key is missing
+    it('returns default value when email is missing', () => {
+      Env.delete('EMAIL_DEFAULT');
+      const defaultEmail = 'default@example.com';
+      expect(Env.getEmail('EMAIL_DEFAULT', defaultEmail)).toBe(defaultEmail);
+    });
+
+    it('throws if email is missing and no default provided', () => {
+      Env.delete('EMAIL_REQUIRED');
+      expect(() => Env.getEmail('EMAIL_REQUIRED', undefined as any)).toThrow(/is missing/);
+    });
   });
 
   describe('getPath', () => {
@@ -423,6 +449,13 @@ describe('EnvUtils', () => {
       Env.set('PATHVAR', __filename);
       expect(Env.getPath('PATHVAR', '', { mustExist: true })).toBe(__filename);
     });
+
+    // Add test for missing path with undefined default
+    it('throws if path is missing and no default provided', () => {
+      Env.delete('MISSING_PATH');
+      expect(() => Env.getPath('MISSING_PATH', undefined as any)).toThrow(/is missing/);
+    });
+
     it('throws if mustExist and not found', () => {
       Env.set('PATHVAR', '/no/such/file');
       expect(() => Env.getPath('PATHVAR', '', { mustExist: true })).toThrow(/does not exist/);
@@ -460,6 +493,12 @@ describe('EnvUtils', () => {
       Env.set('PORT', '70000');
       expect(() => Env.getPort('PORT', -10)).toThrow(/must be a valid port number/);
     });
+
+    // Add test for port value below min
+    it('throws if port is below minimum range', () => {
+      Env.set('PORT_LOW', '-10');
+      expect(() => Env.getPort('PORT_LOW', 1000)).toThrow(/must be at least 0/);
+    });
   });
 
   describe('getDuration', () => {
@@ -472,6 +511,22 @@ describe('EnvUtils', () => {
     it('throws on invalid duration', () => {
       Env.set('DUR', 'notaduration');
       expect(() => Env.getDuration('DUR')).toThrow(/invalid duration format/);
+    });
+
+    // Add test for empty value
+    it('returns 0 when value is empty', () => {
+      Env.set('EMPTY_DURATION', '');
+      expect(Env.getDuration('EMPTY_DURATION')).toBe(0);
+    });
+
+    // Add test for years and weeks
+    it('parses years and weeks in duration', () => {
+      Env.set('LONG_DUR', '1y2w3d');
+      const expected =
+        1 * 31536000000 + // 1 year
+        2 * 604800000 + // 2 weeks
+        3 * 86400000; // 3 days
+      expect(Env.getDuration('LONG_DUR')).toBe(expected);
     });
   });
 
@@ -499,17 +554,8 @@ describe('EnvUtils', () => {
 
     beforeEach(() => {
       existsSyncMock = jest.spyOn(fs, 'existsSync').mockReturnValue(true);
-      readFileSyncMock = jest
-        .spyOn(fs, 'readFileSync')
-        .mockReturnValue(
-          'BASIC=value\n' +
-            'QUOTED="quoted value"\n' +
-            '# Comment line\n' +
-            'MULTILINE=line 1\nline 2\n' +
-            'WITH_COMMENT=value # end comment\n' +
-            '\n' +
-            'EMPTY=\n'
-        );
+      // Don't set a default return value here - each test should set its own mock return
+      readFileSyncMock = jest.spyOn(fs, 'readFileSync');
     });
 
     afterEach(() => {
@@ -518,6 +564,17 @@ describe('EnvUtils', () => {
     });
 
     it('loads variables from env file', () => {
+      // Set the mock return value for this specific test
+      readFileSyncMock.mockReturnValue(
+        'BASIC=value\n' +
+          'QUOTED="quoted value"\n' +
+          '# Comment line\n' +
+          'MULTILINE=line 1\nline 2\n' +
+          'WITH_COMMENT=value # end comment\n' +
+          '\n' +
+          'EMPTY=\n'
+      );
+
       const result = Env.loadFromFile('.env.test');
 
       expect(result).toHaveProperty('BASIC', 'value');
@@ -528,6 +585,44 @@ describe('EnvUtils', () => {
 
       // Verify process.env was updated
       expect(process.env.BASIC).toBe('value');
+    });
+
+    // Add test for multiline quoted values
+    it('handles multiline quoted values', () => {
+      readFileSyncMock.mockReturnValue(
+        'BASIC=value\n' + 'MULTILINE_QUOTED="first line\n' + 'second line\n' + 'third line"'
+      );
+
+      const result = Env.loadFromFile('.env.multiline');
+
+      expect(result).toHaveProperty('MULTILINE_QUOTED', 'first line\nsecond line\nthird line');
+      expect(process.env.MULTILINE_QUOTED).toBe('first line\nsecond line\nthird line');
+    });
+
+    // Add test for single quoted values
+    it('handles single quoted values', () => {
+      readFileSyncMock.mockReturnValue("SINGLE_QUOTED='value with spaces'\n" + "WITH_SPECIAL='special ${{value}}'");
+
+      const result = Env.loadFromFile('.env.quotes');
+
+      expect(result).toHaveProperty('SINGLE_QUOTED', 'value with spaces');
+      expect(result).toHaveProperty('WITH_SPECIAL', 'special ${{value}}');
+    });
+
+    it('handles inline comments correctly', () => {
+      readFileSyncMock.mockReturnValue(
+        'NO_COMMENT=plain value\n' +
+          'WITH_HASH=value with # hash\n' +
+          'WITH_COMMENT=actual value # this is a comment\n' +
+          'QUOTED_COMMENT="# this is not a comment"'
+      );
+
+      const result = Env.loadFromFile('.env.comments');
+
+      expect(result).toHaveProperty('NO_COMMENT', 'plain value');
+      expect(result).toHaveProperty('WITH_HASH', 'value with');
+      expect(result).toHaveProperty('WITH_COMMENT', 'actual value');
+      expect(result).toHaveProperty('QUOTED_COMMENT', '# this is not a comment');
     });
 
     it('throws if file does not exist', () => {
