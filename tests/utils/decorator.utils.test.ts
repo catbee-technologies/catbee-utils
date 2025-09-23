@@ -26,7 +26,8 @@ import {
   Log,
   registerControllers,
   Injectable,
-  Inject
+  Inject,
+  ReqHeader
 } from '../../src/utils/decorators.utils';
 import { jest } from '@jest/globals';
 import { HttpStatusCodes } from '../../src/utils/http-status-codes';
@@ -1384,6 +1385,1119 @@ describe('Decorators and registerControllers', () => {
 
       expect(mockRes.json).not.toHaveBeenCalled();
       expect(mockRes.status).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Parameter Options Tests', () => {
+    beforeEach(() => {
+      mockRouter = createMockRouter();
+      mockReq = {
+        method: 'GET',
+        originalUrl: '/api/params-test',
+        url: '/params-test',
+        query: {
+          stringVal: 'test',
+          numberVal: '42',
+          boolVal: 'true',
+          arrayVal: '1,2,3',
+          customArray: '1|2|3',
+          emptyVal: '',
+          objectVal: '{"name":"John","age":30}',
+          invalidJson: '{name:John}'
+        },
+        params: {
+          stringId: 'abc123',
+          numberId: '987',
+          boolId: 'false',
+          missingVal: undefined
+        },
+        body: {
+          string: 'body-test',
+          number: 42,
+          boolean: true,
+          nested: {
+            value: 'nested-value'
+          },
+          array: [1, 2, 3]
+        },
+        headers: {
+          'content-type': 'application/json',
+          authorization: 'Bearer token123',
+          'x-api-key': 'abc123',
+          'accept-language': 'en-US,en;q=0.9'
+        }
+      } as any;
+      mockRes = {
+        json: jest.fn(),
+        send: jest.fn(),
+        status: jest.fn().mockReturnThis(),
+        set: jest.fn().mockReturnThis(),
+        setHeader: jest.fn().mockReturnThis()
+      } as unknown as Response;
+      mockNext = jest.fn();
+    });
+
+    it('should apply string type conversion', async () => {
+      @Controller('/params')
+      class StringParamsController {
+        @Get('/string')
+        testString(
+          @Query('numberVal', { type: 'string' }) numberAsString: string,
+          @Param('numberId', { type: 'string' }) idAsString: string,
+          @Body('number') bodyNumberAsString: any // Remove type option from Body
+        ) {
+          return {
+            numberAsString,
+            idAsString,
+            bodyNumberAsString,
+            numberAsStringType: typeof numberAsString,
+            idAsStringType: typeof idAsString,
+            bodyNumberAsStringType: typeof bodyNumberAsString
+          };
+        }
+      }
+
+      registerControllers(mockRouter, [StringParamsController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      expect(mockRes.json).toHaveBeenCalledWith({
+        numberAsString: '42',
+        idAsString: '987',
+        bodyNumberAsString: 42,
+        numberAsStringType: 'string',
+        idAsStringType: 'string',
+        bodyNumberAsStringType: 'number'
+      });
+    });
+
+    it('should apply number type conversion', async () => {
+      @Controller('/params')
+      class NumberParamsController {
+        @Get('/number')
+        testNumber(
+          @Query('numberVal', { type: 'number' }) num: number,
+          @Param('numberId', { type: 'number' }) id: number,
+          @Body('string') invalidNumber: any
+        ) {
+          return {
+            num,
+            id,
+            invalidNumber,
+            numType: typeof num,
+            idType: typeof id,
+            invalidNumberType: typeof invalidNumber
+          };
+        }
+      }
+
+      registerControllers(mockRouter, [NumberParamsController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      expect(mockRes.json).toHaveBeenCalledWith({
+        num: 42,
+        id: 987,
+        invalidNumber: 'body-test',
+        numType: 'number',
+        idType: 'number',
+        invalidNumberType: 'string' // Type is now string, not number
+      });
+    });
+
+    it('should apply boolean type conversion', async () => {
+      @Controller('/params')
+      class BooleanParamsController {
+        @Get('/boolean')
+        testBoolean(
+          @Query('boolVal', { type: 'boolean' }) queryBool: boolean,
+          @Param('boolId', { type: 'boolean' }) paramBool: boolean,
+          @Body('boolean') bodyBool: any
+        ) {
+          return {
+            queryBool,
+            paramBool,
+            bodyBool,
+            queryBoolType: typeof queryBool,
+            paramBoolType: typeof paramBool,
+            bodyBoolType: typeof bodyBool
+          };
+        }
+      }
+
+      registerControllers(mockRouter, [BooleanParamsController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      expect(mockRes.json).toHaveBeenCalledWith({
+        queryBool: true,
+        paramBool: false,
+        bodyBool: true,
+        queryBoolType: 'boolean',
+        paramBoolType: 'boolean',
+        bodyBoolType: 'boolean'
+      });
+    });
+
+    it('should handle array type conversion with default delimiter', async () => {
+      @Controller('/params')
+      class ArrayParamsController {
+        @Get('/array')
+        testArray(
+          @Query('arrayVal', { type: 'number', dataType: 'array' }) numberArray: number[],
+          @Body('array') bodyArray: any
+        ) {
+          return {
+            numberArray,
+            stringArray: bodyArray,
+            numberArrayType: typeof numberArray,
+            stringArrayType: typeof bodyArray,
+            isNumberArray: Array.isArray(numberArray),
+            isStringArray: Array.isArray(bodyArray)
+          };
+        }
+      }
+
+      registerControllers(mockRouter, [ArrayParamsController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      expect(mockRes.json).toHaveBeenCalledWith({
+        numberArray: [1, 2, 3],
+        stringArray: [1, 2, 3], // Still an array but without string conversion
+        numberArrayType: 'object',
+        stringArrayType: 'object',
+        isNumberArray: true,
+        isStringArray: true
+      });
+    });
+
+    it('should handle array type with custom delimiter', async () => {
+      @Controller('/params')
+      class CustomDelimiterController {
+        @Get('/delimiter')
+        testDelimiter(
+          @Query('customArray', { type: 'number', dataType: 'array', delimiter: '|' }) customArray: number[]
+        ) {
+          return { customArray };
+        }
+      }
+
+      registerControllers(mockRouter, [CustomDelimiterController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      expect(mockRes.json).toHaveBeenCalledWith({
+        customArray: [1, 2, 3]
+      });
+    });
+
+    it('should apply default values for missing parameters', async () => {
+      @Controller('/params')
+      class DefaultValueController {
+        @Get('/defaults')
+        testDefaults(
+          @Query('missingQuery', { default: 'default-query' }) defaultQuery: string,
+          @Param('missingVal', { default: 'default-param' }) defaultParam: string,
+          @Body('missingProp') defaultBody: any,
+          @Query('emptyVal', { default: 'default-for-empty' }) defaultForEmpty: string
+        ) {
+          return {
+            defaultQuery,
+            defaultParam,
+            defaultBody,
+            defaultForEmpty
+          };
+        }
+      }
+
+      registerControllers(mockRouter, [DefaultValueController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      expect(mockRes.json).toHaveBeenCalledWith({
+        defaultQuery: 'default-query',
+        defaultParam: 'default-param',
+        defaultBody: undefined,
+        defaultForEmpty: 'default-for-empty'
+      });
+    });
+
+    it('should throw error for missing required parameters', async () => {
+      @Controller('/params')
+      class RequiredParamsController {
+        @Get('/required')
+        testRequired(@Query('missingQuery', { required: true }) requiredQuery: string) {
+          return { success: true };
+        }
+      }
+
+      registerControllers(mockRouter, [RequiredParamsController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      expect(mockNext).toHaveBeenCalledWith(expect.any(Error));
+      expect(mockNext.mock.calls[0][0].message).toBe('Required parameter missing: missingQuery');
+      expect(mockRes.json).not.toHaveBeenCalled();
+    });
+
+    it('should throw error for missing required parameters even when throwError is false', async () => {
+      @Controller('/params')
+      class SilentRequiredParamsController {
+        @Get('/silent-required')
+        testSilentRequired(@Query('missingQuery', { required: true, throwError: false }) requiredQuery: string) {
+          return { requiredQuery };
+        }
+      }
+
+      registerControllers(mockRouter, [SilentRequiredParamsController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      expect(mockNext).toHaveBeenCalledWith(expect.any(Error));
+    });
+
+    it('should apply custom validation functions', async () => {
+      @Controller('/params')
+      class ValidationController {
+        @Get('/validation')
+        testValidation(
+          @Query('numberVal', {
+            validate: val => Number(val) > 40 && Number(val) < 50
+          })
+          validNumber: string,
+          @Query('stringVal', {
+            validate: val => val.length > 10,
+            throwError: false
+          })
+          invalidString: string
+        ) {
+          return { validNumber, invalidString };
+        }
+      }
+
+      registerControllers(mockRouter, [ValidationController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      expect(mockRes.json).toHaveBeenCalledWith({
+        validNumber: '42',
+        invalidString: undefined // validation failed, but throwError is false
+      });
+    });
+
+    it('should throw error when validation fails and throwError is true', async () => {
+      @Controller('/params')
+      class FailingValidationController {
+        @Get('/failing-validation')
+        testFailingValidation(
+          @Query('stringVal', {
+            validate: val => val.length > 10
+          })
+          invalidString: string
+        ) {
+          return { invalidString };
+        }
+      }
+
+      registerControllers(mockRouter, [FailingValidationController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      expect(mockNext).toHaveBeenCalledWith(expect.any(Error));
+      expect(mockNext.mock.calls[0][0].message).toBe('Parameter validation failed: stringVal');
+      expect(mockRes.json).not.toHaveBeenCalled();
+    });
+
+    it('should apply custom transform functions', async () => {
+      @Controller('/params')
+      class TransformController {
+        @Get('/transform')
+        testTransform(
+          @Query('numberVal', {
+            transform: val => Number(val) * 2
+          })
+          doubledNumber: number,
+          @Query('stringVal', {
+            transform: val => val.toUpperCase()
+          })
+          uppercaseString: string,
+          @Body('nested') nestedValue: any
+        ) {
+          return {
+            doubledNumber,
+            uppercaseString,
+            transformedNested: nestedValue ? nestedValue.value + '-transformed' : undefined
+          };
+        }
+      }
+
+      registerControllers(mockRouter, [TransformController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      expect(mockRes.json).toHaveBeenCalledWith({
+        doubledNumber: 84,
+        uppercaseString: 'TEST',
+        transformedNested: 'nested-value-transformed' // Transformation done manually
+      });
+    });
+
+    it('should handle complex combinations of options', async () => {
+      @Controller('/params')
+      class ComplexParamsController {
+        @Get('/complex')
+        testComplex(
+          @Query('arrayVal', {
+            type: 'number',
+            dataType: 'array',
+            transform: arr => arr.map((n: number) => n * 10),
+            validate: arr => arr.every((n: number) => n > 5)
+          })
+          transformedArray: number[],
+          @Body('nested') nestedObject: any
+        ) {
+          const transformedObject = nestedObject ? { ...nestedObject, extra: 'added' } : { fallback: true };
+
+          return {
+            transformedArray,
+            transformedObject
+          };
+        }
+      }
+
+      registerControllers(mockRouter, [ComplexParamsController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      expect(mockRes.json).toHaveBeenCalledWith({
+        transformedArray: [10, 20, 30],
+        transformedObject: {
+          value: 'nested-value',
+          extra: 'added'
+        }
+      });
+    });
+
+    it('should handle edge cases and null values', async () => {
+      // Update mockReq to include edge cases
+      mockReq.query.nullValue = null;
+      mockReq.body.nullValue = null;
+
+      @Controller('/params')
+      class EdgeCaseController {
+        @Get('/edge-cases')
+        testEdgeCases(
+          @Query('nullValue', { default: 'null-default' }) nullQueryWithDefault: string,
+          @Query('undefinedValue', { type: 'number', default: 999 }) undefinedWithDefault: number,
+          @Body('nullValue') nullBodyValue: any
+        ) {
+          return {
+            nullQueryWithDefault,
+            nullBodyWithDefault: nullBodyValue === null ? true : nullBodyValue,
+            undefinedWithDefault
+          };
+        }
+      }
+
+      registerControllers(mockRouter, [EdgeCaseController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      expect(mockRes.json).toHaveBeenCalledWith({
+        nullQueryWithDefault: 'null-default',
+        nullBodyWithDefault: true,
+        undefinedWithDefault: 999
+      });
+    });
+
+    it('should handle arrays passed directly in query/body', async () => {
+      // Update mockReq to include direct arrays
+      mockReq.query.directArray = ['a', 'b', 'c'];
+      mockReq.body.directArray = [1, 2, 3];
+
+      @Controller('/params')
+      class DirectArrayController {
+        @Get('/direct-arrays')
+        testDirectArrays(
+          @Query('directArray', { type: 'string', dataType: 'array' }) queryArray: string[],
+          @Body('directArray') bodyArray: any
+        ) {
+          return {
+            queryArray,
+            bodyArray
+          };
+        }
+      }
+
+      registerControllers(mockRouter, [DirectArrayController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      expect(mockRes.json).toHaveBeenCalledWith({
+        queryArray: ['a', 'b', 'c'],
+        bodyArray: [1, 2, 3]
+      });
+    });
+
+    it('should handle non-string values in type conversion', async () => {
+      // Update mockReq with non-string values
+      mockReq.query.numberObject = 42;
+      mockReq.query.booleanObject = true;
+
+      @Controller('/params')
+      class NonStringController {
+        @Get('/non-string')
+        testNonString(
+          @Query('numberObject', { type: 'string' }) numberAsString: string,
+          @Query('booleanObject', { type: 'string' }) booleanAsString: string
+        ) {
+          return {
+            numberAsString,
+            booleanAsString,
+            numberAsStringType: typeof numberAsString,
+            booleanAsStringType: typeof booleanAsString
+          };
+        }
+      }
+
+      registerControllers(mockRouter, [NonStringController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      expect(mockRes.json).toHaveBeenCalledWith({
+        numberAsString: '42',
+        booleanAsString: 'true',
+        numberAsStringType: 'string',
+        booleanAsStringType: 'string'
+      });
+    });
+
+    it('should extract headers with @ReqHeader decorator', async () => {
+      @Controller('/headers')
+      class HeadersExtractController {
+        @Get('/extract')
+        testHeaders(
+          @ReqHeader('authorization') auth: string,
+          @ReqHeader('x-api-key') apiKey: string,
+          @ReqHeader('content-type') contentType: string,
+          @ReqHeader() allHeaders: any,
+          @ReqHeader('non-existent') missingHeader: string
+        ) {
+          return {
+            auth,
+            apiKey,
+            contentType,
+            acceptLanguage: allHeaders['accept-language'],
+            missingHeader
+          };
+        }
+      }
+
+      registerControllers(mockRouter, [HeadersExtractController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      expect(mockRes.json).toHaveBeenCalledWith({
+        auth: 'Bearer token123',
+        apiKey: 'abc123',
+        contentType: 'application/json',
+        acceptLanguage: 'en-US,en;q=0.9',
+        missingHeader: undefined
+      });
+    });
+
+    it('should handle case-insensitive headers with @ReqHeader decorator', async () => {
+      @Controller('/headers')
+      class CaseSensitiveHeadersController {
+        @Get('/case-insensitive')
+        testCaseInsensitive(
+          @ReqHeader('CONTENT-TYPE') uppercaseHeader: string,
+          @ReqHeader('Authorization') mixedCaseHeader: string
+        ) {
+          return {
+            uppercaseHeader,
+            mixedCaseHeader
+          };
+        }
+      }
+
+      registerControllers(mockRouter, [CaseSensitiveHeadersController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      expect(mockRes.json).toHaveBeenCalledWith({
+        uppercaseHeader: 'application/json',
+        mixedCaseHeader: 'Bearer token123'
+      });
+    });
+  });
+
+  describe('Parameter Validation Error Tests', () => {
+    beforeEach(() => {
+      mockRouter = createMockRouter();
+      mockReq = {
+        method: 'GET',
+        originalUrl: '/api/validation-test',
+        url: '/validation-test',
+        query: {
+          validNumber: '123',
+          invalidNumber: 'not-a-number',
+          arrayWithInvalidNumber: '1,two,3',
+          validBoolean: 'true',
+          invalidBoolean: 'not-a-boolean',
+          arrayWithInvalidBoolean: 'true,maybe,false',
+          validBoolStrings: ['true', 'yes', '1', 'false', 'no', '0']
+        },
+        params: {},
+        body: {},
+        headers: {}
+      } as any;
+      mockRes = {
+        json: jest.fn(),
+        send: jest.fn(),
+        status: jest.fn().mockReturnThis(),
+        set: jest.fn().mockReturnThis(),
+        setHeader: jest.fn().mockReturnThis()
+      } as unknown as Response;
+      mockNext = jest.fn();
+    });
+
+    it('should throw error for invalid number parameter', async () => {
+      @Controller('/validation')
+      class NumberValidationController {
+        @Get('/number')
+        testInvalidNumber(@Query('invalidNumber', { type: 'number' }) num: number) {
+          return { num };
+        }
+      }
+
+      registerControllers(mockRouter, [NumberValidationController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      expect(mockNext).toHaveBeenCalledWith(expect.any(Error));
+      expect(mockNext.mock.calls[0][0].message).toBe('Type error: expected number: invalidNumber');
+    });
+
+    it('should throw error for invalid boolean parameter', async () => {
+      @Controller('/validation')
+      class BooleanValidationController {
+        @Get('/boolean')
+        testInvalidBoolean(@Query('invalidBoolean', { type: 'boolean' }) bool: boolean) {
+          return { bool };
+        }
+      }
+
+      registerControllers(mockRouter, [BooleanValidationController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      expect(mockNext).toHaveBeenCalledWith(expect.any(Error));
+      expect(mockNext.mock.calls[0][0].message).toBe('Type error: expected boolean: invalidBoolean');
+    });
+
+    it('should throw error for array with invalid number elements', async () => {
+      @Controller('/validation')
+      class ArrayNumberValidationController {
+        @Get('/array-number')
+        testInvalidArrayNumber(
+          @Query('arrayWithInvalidNumber', { type: 'number', dataType: 'array' }) numbers: number[]
+        ) {
+          return { numbers };
+        }
+      }
+
+      registerControllers(mockRouter, [ArrayNumberValidationController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      expect(mockNext).toHaveBeenCalledWith(expect.any(Error));
+      expect(mockNext.mock.calls[0][0].message).toBe('Type error: expected number array: arrayWithInvalidNumber');
+    });
+
+    it('should throw error for array with invalid boolean elements', async () => {
+      @Controller('/validation')
+      class ArrayBooleanValidationController {
+        @Get('/array-boolean')
+        testInvalidArrayBoolean(
+          @Query('arrayWithInvalidBoolean', { type: 'boolean', dataType: 'array' }) booleans: boolean[]
+        ) {
+          return { booleans };
+        }
+      }
+
+      registerControllers(mockRouter, [ArrayBooleanValidationController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      expect(mockNext).toHaveBeenCalledWith(expect.any(Error));
+      expect(mockNext.mock.calls[0][0].message).toBe('Type error: expected boolean array: arrayWithInvalidBoolean');
+    });
+
+    it('should not throw error when throwError is false', async () => {
+      @Controller('/validation')
+      class NoErrorController {
+        @Get('/no-error')
+        testNoError(
+          @Query('invalidNumber', { type: 'number', throwError: false }) num: number,
+          @Query('invalidBoolean', { type: 'boolean', throwError: false }) bool: boolean
+        ) {
+          return { num, bool };
+        }
+      }
+
+      registerControllers(mockRouter, [NoErrorController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      expect(mockNext).not.toHaveBeenCalled();
+      expect(mockRes.json).toHaveBeenCalledWith({
+        // Values will be NaN and false but not trigger errors
+        num: NaN,
+        bool: false
+      });
+    });
+
+    it('should handle different valid string representations of boolean values', async () => {
+      @Controller('/validation')
+      class BooleanStringsController {
+        @Get('/boolean-strings')
+        testBooleanStrings(@Query('validBoolStrings', { type: 'boolean', dataType: 'array' }) booleans: boolean[]) {
+          return { booleans };
+        }
+      }
+
+      registerControllers(mockRouter, [BooleanStringsController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      expect(mockNext).not.toHaveBeenCalled();
+      expect(mockRes.json).toHaveBeenCalledWith({
+        booleans: [true, true, true, false, false, false]
+      });
+    });
+
+    it('should validate number min/max constraints', async () => {
+      mockReq.query = {
+        validNumber: '50',
+        belowMin: '5',
+        aboveMax: '105'
+      };
+
+      @Controller('/validation')
+      class NumberConstraintController {
+        @Get('/min-max')
+        testMinMax(
+          @Query('validNumber', { type: 'number', min: 10, max: 100 }) validNumber: number,
+          @Query('belowMin', { type: 'number', min: 10, max: 100 }) belowMin: number,
+          @Query('aboveMax', { type: 'number', min: 10, max: 100 }) aboveMax: number
+        ) {
+          return { validNumber, belowMin, aboveMax };
+        }
+      }
+
+      registerControllers(mockRouter, [NumberConstraintController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      expect(mockNext).toHaveBeenCalledTimes(1);
+      expect(mockNext.mock.calls[0][0].message).toBe('Validation error: number must be >= 10: belowMin');
+
+      // Reset for next test
+      mockNext.mockReset();
+
+      // Test above max
+      await routeHandler({ ...mockReq, query: { validNumber: '50', aboveMax: '105' } }, mockRes, mockNext);
+
+      expect(mockNext).toHaveBeenCalledTimes(1);
+      expect(mockNext.mock.calls[0][0].message).toBe('Validation error: number must be <= 100: aboveMax');
+    });
+
+    it('should validate number array min/max constraints', async () => {
+      mockReq.query = {
+        validArray: '20,30,40',
+        invalidBelowMin: '5,30,40',
+        invalidAboveMax: '20,30,110'
+      };
+
+      @Controller('/validation')
+      class ArrayConstraintController {
+        @Get('/array-min-max')
+        testArrayMinMax(
+          @Query('validArray', { type: 'number', dataType: 'array', min: 10, max: 100 }) validArray: number[],
+          @Query('invalidBelowMin', { type: 'number', dataType: 'array', min: 10, max: 100 }) invalidBelowMin: number[],
+          @Query('invalidAboveMax', { type: 'number', dataType: 'array', min: 10, max: 100 }) invalidAboveMax: number[]
+        ) {
+          return { validArray, invalidBelowMin, invalidAboveMax };
+        }
+      }
+
+      registerControllers(mockRouter, [ArrayConstraintController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      expect(mockNext).toHaveBeenCalledTimes(1);
+      expect(mockNext.mock.calls[0][0].message).toBe(
+        'Validation error: number array values must be >= 10: invalidBelowMin'
+      );
+
+      // Reset for next test
+      mockNext.mockReset();
+
+      // Test above max
+      await routeHandler(
+        { ...mockReq, query: { validArray: '20,30,40', invalidAboveMax: '20,30,110' } },
+        mockRes,
+        mockNext
+      );
+
+      expect(mockNext).toHaveBeenCalledTimes(1);
+      expect(mockNext.mock.calls[0][0].message).toBe(
+        'Validation error: number array values must be <= 100: invalidAboveMax'
+      );
+    });
+
+    it('should apply min/max with throwError: false option', async () => {
+      mockReq.query = {
+        belowMin: '5',
+        aboveMax: '105'
+      };
+
+      @Controller('/validation')
+      class NoThrowConstraintController {
+        @Get('/no-throw-min-max')
+        testNoThrow(
+          @Query('belowMin', { type: 'number', min: 10, max: 100, throwError: false }) belowMin: number,
+          @Query('aboveMax', { type: 'number', min: 10, max: 100, throwError: false }) aboveMax: number
+        ) {
+          return { belowMin, aboveMax };
+        }
+      }
+
+      registerControllers(mockRouter, [NoThrowConstraintController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      expect(mockNext).not.toHaveBeenCalled();
+      expect(mockRes.json).toHaveBeenCalledWith({
+        belowMin: undefined,
+        aboveMax: undefined
+      });
+    });
+
+    it('should apply min/max with default values', async () => {
+      mockReq.query = {
+        // Empty query
+      };
+
+      @Controller('/validation')
+      class DefaultWithConstraintController {
+        @Get('/default-with-constraint')
+        testDefaultWithConstraint(
+          @Query('missingValue', { type: 'number', min: 10, max: 100, default: 50 }) withDefault: number,
+          @Query('missingValue2', { type: 'number', min: 10, max: 100, default: 5 }) invalidDefault: number
+        ) {
+          return { withDefault, invalidDefault };
+        }
+      }
+
+      registerControllers(mockRouter, [DefaultWithConstraintController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      // Should validate the default value against min constraint
+      expect(mockNext).toHaveBeenCalledTimes(1);
+      expect(mockNext.mock.calls[0][0].message).toBe('Validation error: number must be >= 10: missingValue2');
+    });
+
+    it('should apply min/max with transform function', async () => {
+      mockReq.query = {
+        transformedNumber: '15'
+      };
+
+      @Controller('/validation')
+      class TransformWithConstraintController {
+        @Get('/transform-with-constraint')
+        testTransformWithConstraint(
+          @Query('transformedNumber', {
+            type: 'number',
+            min: 10,
+            max: 100,
+            transform: (val: number) => val * 2
+          })
+          transformedNumber: number
+        ) {
+          return { transformedNumber };
+        }
+      }
+
+      registerControllers(mockRouter, [TransformWithConstraintController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      expect(mockNext).not.toHaveBeenCalled();
+      expect(mockRes.json).toHaveBeenCalledWith({
+        transformedNumber: 30 // 15 * 2 = 30
+      });
+
+      // Test with a value that would be below min after transform
+      await routeHandler({ ...mockReq, query: { transformedNumber: '4' } }, mockRes, mockNext);
+
+      // The validation happens after transform, so 4 * 2 = 8, which is below min: 10
+      expect(mockNext).toHaveBeenCalledTimes(1);
+      expect(mockNext.mock.calls[0][0].message).toBe('Validation error: number must be >= 10: transformedNumber');
+    });
+
+    it('should validate string pattern matching', async () => {
+      mockReq.query = {
+        validEmail: 'test@example.com',
+        invalidEmail: 'not-an-email',
+        zipCode: '12345',
+        invalidZip: '1234'
+      };
+
+      @Controller('/validation')
+      class PatternMatchingController {
+        @Get('/pattern-match')
+        testPatternMatch(
+          @Query('validEmail', {
+            pattern: /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
+          })
+          validEmail: string,
+          @Query('invalidEmail', {
+            pattern: /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
+          })
+          invalidEmail: string,
+          @Query('zipCode', {
+            pattern: /^\d{5}$/
+          })
+          zipCode: string,
+          @Query('invalidZip', {
+            pattern: /^\d{5}$/
+          })
+          invalidZip: string
+        ) {
+          return { validEmail, invalidEmail, zipCode, invalidZip };
+        }
+      }
+
+      registerControllers(mockRouter, [PatternMatchingController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      expect(mockNext).toHaveBeenCalledTimes(1);
+      expect(mockNext).toHaveBeenCalledWith(expect.any(Error));
+      expect(mockNext.mock.calls[0][0].message).toBe(
+        `Parameter 'invalidEmail' does not match pattern: /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$/`
+      );
+    });
+
+    it('should validate string pattern matching even with throwError: false', async () => {
+      mockReq.query = {
+        validEmail: 'test@example.com',
+        invalidEmail: 'not-an-email'
+      };
+
+      @Controller('/validation')
+      class NoThrowPatternController {
+        @Get('/no-throw-pattern')
+        testNoThrowPattern(
+          @Query('validEmail', {
+            pattern: /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/,
+            throwError: false
+          })
+          validEmail: string,
+          @Query('invalidEmail', {
+            pattern: /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/,
+            throwError: false
+          })
+          invalidEmail: string
+        ) {
+          return { validEmail, invalidEmail };
+        }
+      }
+
+      registerControllers(mockRouter, [NoThrowPatternController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      expect(mockNext).toHaveBeenCalledWith(expect.any(Error));
+      expect(mockNext.mock.calls[0][0].message).toBe(
+        `Parameter 'invalidEmail' does not match pattern: /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$/`
+      );
+    });
+
+    it('should validate array of strings with pattern', async () => {
+      mockReq.query = {
+        validEmails: 'test@example.com,admin@example.com,user@test.org',
+        invalidEmails: 'test@example.com,invalid-email,user@test.org'
+      };
+
+      @Controller('/validation')
+      class ArrayPatternController {
+        @Get('/array-pattern')
+        testArrayPattern(
+          @Query('validEmails', {
+            pattern: /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/,
+            dataType: 'array'
+          })
+          validEmails: string[],
+          @Query('invalidEmails', {
+            pattern: /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/,
+            dataType: 'array'
+          })
+          invalidEmails: string[]
+        ) {
+          return { validEmails, invalidEmails };
+        }
+      }
+
+      registerControllers(mockRouter, [ArrayPatternController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      expect(mockNext).toHaveBeenCalledTimes(1);
+      expect(mockNext.mock.calls[0][0].message).toBe(
+        `Parameter 'invalidEmails' array contains values that do not match pattern: /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$/`
+      );
+    });
+
+    it('should validate pattern with string type conversion', async () => {
+      mockReq.query = {
+        numericId: 12345,
+        invalidNumericId: 123
+      };
+
+      @Controller('/validation')
+      class TypePatternController {
+        @Get('/type-pattern')
+        testTypePattern(
+          @Query('numericId', {
+            type: 'string',
+            pattern: /^\d{5}$/
+          })
+          numericId: string,
+          @Query('invalidNumericId', {
+            type: 'string',
+            pattern: /^\d{5}$/
+          })
+          invalidNumericId: string
+        ) {
+          return { numericId, invalidNumericId };
+        }
+      }
+
+      registerControllers(mockRouter, [TypePatternController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      expect(mockNext).toHaveBeenCalledTimes(1);
+      expect(mockNext.mock.calls[0][0].message).toBe(`Parameter 'invalidNumericId' does not match pattern: /^\\d{5}$/`);
+    });
+
+    it('should correctly validate patterns with existing validation options', async () => {
+      mockReq.query = {
+        email: 'test@example.com',
+        value: '25'
+      };
+
+      @Controller('/validation')
+      class CombinedValidationController {
+        @Get('/combined')
+        testCombined(
+          @Query('email', {
+            pattern: /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/,
+            required: true
+          })
+          email: string,
+          @Query('value', {
+            type: 'number',
+            min: 10,
+            max: 100,
+            pattern: /^[1-9][0-9]$/ // Must be 10-99
+          })
+          value: number
+        ) {
+          return { email, value };
+        }
+      }
+
+      registerControllers(mockRouter, [CombinedValidationController]);
+      const [, ...handlers] = mockRouter.get.mock.calls[0];
+      const routeHandler = handlers[handlers.length - 1];
+
+      await routeHandler(mockReq, mockRes, mockNext);
+
+      expect(mockNext).not.toHaveBeenCalled();
+      expect(mockRes.json).toHaveBeenCalledWith({
+        email: 'test@example.com',
+        value: 25
+      });
     });
   });
 });

@@ -4,7 +4,7 @@ Structured logging with Pino. This module provides a robust logging system with 
 
 ## API Summary
 
-- [**`getLogger(): Logger`**](#getlogger) - Retrieves the current logger instance from the request context or falls back to the global logger.
+- [**`getLogger(newInstance?: boolean): Logger`**](#getlogger) - Retrieves the current logger instance from the request context or falls back to the global logger.
 - [**`createChildLogger(bindings: Record<string, any>, parentLogger?: Logger): Logger`**](#createchildlogger) - Creates a child logger with additional context that will be included in all log entries.
 - [**`createRequestLogger(requestId: string, additionalContext?: Record<string, any>): Logger`**](#createrequestlogger) - Creates a request-scoped logger with request ID and stores it in the async context.
 - [**`logError(error: Error | unknown, message?: string, context?: Record<string, any>): void`**](#logerror) - Utility to safely log errors with proper stack trace extraction
@@ -61,11 +61,14 @@ Retrieves the current logger instance from the request context or falls back to 
 
 **Method Signature:**
 ```ts
-function getLogger(): Logger
+function getLogger(newInstance?: boolean): Logger
 ```
 
+**Parameters:**
+- `newInstance` (optional): If `true`, returns a fresh logger instance without any request context or global configuration. Default is `false`.
+
 **Returns:**
-- The current `Logger` instance.
+- The current `Logger` instance, or a new instance if `newInstance` is `true`.
 
 **Example:**
 ```ts
@@ -75,6 +78,10 @@ import { getLogger } from "@catbee/utils";
 const logger = getLogger();
 logger.info("App started");
 logger.debug({ user: "john" }, "User logged in");
+
+// Create a completely fresh logger instance without request context
+const freshLogger = getLogger(true);
+freshLogger.info("Logging outside of request context");
 ```
 
 ---

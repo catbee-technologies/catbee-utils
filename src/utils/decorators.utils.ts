@@ -29,6 +29,7 @@ import { createFinalErrorResponse } from './response.utils';
 import { HttpStatusCodes } from './http-status-codes';
 import { rateLimit } from 'express-rate-limit';
 import { TTLCache } from './cache.utils';
+import { BadRequestException } from './exception.utils';
 
 // Metadata keys
 const ROUTES_KEY = Symbol('routes');
@@ -71,9 +72,11 @@ interface ParamDefinition {
   /** Parameter position in method signature */
   index: number;
   /** Type of parameter (query, body, etc.) */
-  type: 'query' | 'param' | 'body' | 'req' | 'res';
+  type: 'query' | 'param' | 'body' | 'req' | 'res' | 'logger' | 'reqHeader';
   /** Optional key for extracting specific property */
   key?: string;
+  /** Optional ParamOptions for advanced extraction */
+  options?: ParamOptions;
 }
 
 type CachedRateLimiter = {
@@ -153,15 +156,37 @@ const rateLimiterCache = new RateLimiterCache();
 // di.container.ts
 type Constructor<T = any> = new (...args: any[]) => T;
 
+// Add this interface to track property injections
+interface PropertyInjection {
+  targetClass: Constructor;
+  propertyKey: string | symbol;
+}
+
 export class DIContainer {
   private instances = new Map<Constructor, any>();
   private constructing = new Map<Constructor, any>();
+  private propertyInjections = new Map<Constructor, PropertyInjection[]>();
 
   register<T>(target: Constructor<T>) {
     // Mark as injectable, but do not instantiate yet
     if (!this.instances.has(target) && !this.constructing.has(target)) {
       // No-op: instantiation is deferred until get()
     }
+  }
+
+  /**
+   * Register a property injection to be resolved when the target class is instantiated
+   */
+  registerPropertyInjection(target: object, propertyKey: string | symbol, injectClass: Constructor) {
+    const targetClass = target.constructor as Constructor;
+    if (!this.propertyInjections.has(targetClass)) {
+      this.propertyInjections.set(targetClass, []);
+    }
+
+    this.propertyInjections.get(targetClass)!.push({
+      targetClass: injectClass,
+      propertyKey
+    });
   }
 
   get<T>(target: Constructor<T>): T {
@@ -184,6 +209,9 @@ export class DIContainer {
     const dependencies = paramTypes.map(dep => this.get(dep));
     const instance = new target(...dependencies);
 
+    // Apply property injections
+    this.applyPropertyInjections(target, instance);
+
     // Copy instance properties to proxy (for circular refs)
     Object.assign(proxy, instance);
 
@@ -197,9 +225,23 @@ export class DIContainer {
     return proxy;
   }
 
+  private applyPropertyInjections(targetClass: Constructor, instance: any) {
+    // Get property injections for this class
+    const injections = this.propertyInjections.get(targetClass) || [];
+
+    for (const injection of injections) {
+      // Get the dependency instance
+      const dependency = this.get(injection.targetClass);
+
+      // Apply the dependency to the instance
+      instance[injection.propertyKey] = dependency;
+    }
+  }
+
   clear() {
     this.instances.clear();
     this.constructing.clear();
+    this.propertyInjections.clear();
   }
 }
 
@@ -234,14 +276,52 @@ export function Injectable(): ClassDecorator {
  */
 export function Inject<T>(targetClass: new (...args: any[]) => T): PropertyDecorator {
   return (target, propertyKey) => {
+    // Register the property injection for resolution during instantiation
+    diContainer.registerPropertyInjection(target, propertyKey, targetClass);
+
+    // Also define a property getter for immediate access if needed
     Object.defineProperty(target, propertyKey, {
+      configurable: true,
       get: function () {
-        return diContainer.get(targetClass);
+        // Try to get existing property value first (might be already set)
+        const value = Object.getOwnPropertyDescriptor(this, propertyKey)?.value;
+        if (value !== undefined) return value;
+
+        // Otherwise get from container
+        const injectedValue = diContainer.get(targetClass);
+
+        // Store the value directly on the instance to avoid repeated lookups
+        Object.defineProperty(this, propertyKey, {
+          value: injectedValue,
+          writable: true,
+          configurable: true
+        });
+
+        return injectedValue;
       },
-      enumerable: true,
-      configurable: true
+      set: function (value) {
+        // Allow overwriting the injected value
+        Object.defineProperty(this, propertyKey, {
+          value,
+          writable: true,
+          configurable: true
+        });
+      }
     });
   };
+}
+
+/**
+ * Inject function for retrieving instances from the DI container.
+ * @param targetClass - The class to inject
+ *
+ * @returns The instance of the requested class
+ *
+ * @example
+ * const a = inject(TestClass);
+ */
+export function inject<T>(targetClass: new (...args: any[]) => T): T {
+  return diContainer.get(targetClass);
 }
 
 /**
@@ -374,11 +454,11 @@ export function Controller(basePath: string): ClassDecorator {
 }
 
 /**
- * Decorator that applies middleware to a controller method.
+ * Decorator that applies middleware to a controller method or an entire controller.
  * Multiple middlewares can be applied and will execute in order.
  *
  * @param middlewares - Express middleware functions to apply
- * @returns Method decorator
+ * @returns Method decorator or Class decorator
  *
  * @example
  * ```ts
@@ -387,23 +467,79 @@ export function Controller(basePath: string): ClassDecorator {
  * getProtectedResource() {
  *   // This route is protected by auth middleware
  * }
+ *
+ * @Controller('/api')
+ * @Use(commonMiddleware)
+ * class ApiController {
+ *   // All routes in this controller use the middleware
+ * }
  * ```
  */
-export function Use(...middlewares: RequestHandler[]): MethodDecorator {
-  return (target, propertyKey, _descriptor) => {
-    const existing: RequestHandler[] =
-      Reflect.getMetadata(MIDDLEWARE_KEY, target as object, propertyKey as string) || [];
-    Reflect.defineMetadata(MIDDLEWARE_KEY, [...existing, ...middlewares], target as object, propertyKey as string);
+export function Use(...middlewares: RequestHandler[]): MethodDecorator & ClassDecorator {
+  return (target: any, propertyKey?: string | symbol, _descriptor?: PropertyDescriptor) => {
+    if (typeof propertyKey === 'undefined') {
+      // Class decorator
+      const existing: RequestHandler[] = Reflect.getMetadata(MIDDLEWARE_KEY, target as object) || [];
+      Reflect.defineMetadata(MIDDLEWARE_KEY, [...existing, ...middlewares], target as object);
+    } else {
+      // Method decorator
+      const existing: RequestHandler[] = Reflect.getMetadata(MIDDLEWARE_KEY, target as object, propertyKey) || [];
+      Reflect.defineMetadata(MIDDLEWARE_KEY, [...existing, ...middlewares], target as object, propertyKey);
+    }
   };
 }
 
 /**
- * Factory function that creates parameter decorators.
+ * Options for parameter decorators
+ * @template T - Type of the parameter value after transformation
  *
- * @param type - Parameter type to extract from request
- * @param key - Optional fixed key for extraction
- * @returns Parameter decorator function
+ * @property type - Base type of the parameter (default: 'string')'
+ * @property dataType - Data structure type (single, array, object)
+ * @property delimiter - Delimiter for array types
+ * @property default - Default value if parameter is missing
+ * @property required - Whether the parameter is required
+ * @property throwError - Throw error on validation failure
+ * @property validate - Custom validation function
+ * @property transform - Custom transformation function
  */
+export interface ParamOptions<T = any> {
+  /** Base type of the parameter (default: 'string') */
+  type: 'string' | 'number' | 'boolean';
+
+  /** Data structure type (default: 'single') */
+  dataType?: 'single' | 'array' | 'object';
+
+  /** Delimiter for array types (default: ',') */
+  delimiter?: string;
+
+  /** Default value if parameter is missing */
+  default?: T;
+
+  /** Whether the parameter is required (default: false) */
+  required?: boolean;
+
+  /** Throw error on validation failure (default: true) */
+  throwError?: boolean;
+
+  /** Minimum value for number type */
+  min?: number;
+
+  /** Maximum value for number type */
+  max?: number;
+
+  /** Regex pattern the value must match */
+  pattern?: RegExp;
+
+  /** Name of the pattern for error messages */
+  patternName?: string;
+
+  /** Custom validation function */
+  validate?: (value: any) => boolean;
+
+  /** Custom transformation function */
+  transform?: (value: any) => any;
+}
+
 function createParamDecorator(type: ParamDefinition['type'], key?: string) {
   return (paramKey?: string): ParameterDecorator => {
     return (target, propertyKey, parameterIndex) => {
@@ -417,36 +553,71 @@ function createParamDecorator(type: ParamDefinition['type'], key?: string) {
 }
 
 /**
+ * Factory function that creates parameter decorators.
+ *
+ * @param type - Parameter type to extract from request
+ * @param key - Optional fixed key for extraction
+ * @returns Parameter decorator function
+ */
+function createApiUrlParamDecorator(type: ParamDefinition['type'], key?: string) {
+  return (paramKey?: string, options?: ParamOptions): ParameterDecorator => {
+    return (target, propertyKey, parameterIndex) => {
+      const params: ParamDefinition[] = Reflect.getMetadata(PARAMS_KEY, target as object, propertyKey as string) || [];
+      // Ensure parameters are ordered by index
+      let paramOptions: ParamOptions | undefined = undefined;
+      if (typeof options === 'object') {
+        paramOptions = {} as ParamOptions;
+        paramOptions.type = 'string';
+        paramOptions.dataType = 'single';
+        paramOptions.delimiter = ',';
+        paramOptions.required = false;
+        paramOptions.throwError = true;
+        paramOptions = {
+          ...paramOptions,
+          ...options
+        };
+      }
+      params.push({ index: parameterIndex, type, key: paramKey || key, options: paramOptions });
+      params.sort((a, b) => a.index - b.index);
+      Reflect.defineMetadata(PARAMS_KEY, params, target as object, propertyKey as string);
+    };
+  };
+}
+
+/**
  * Decorator that extracts query parameters from request.
  *
  * @param paramKey - Optional key to extract specific query parameter
+ * @param options - Optional ParamOptions
  * @returns Parameter decorator
  *
  * @example
  * ```ts
  * @Get('/search')
- * search(@Query('term') searchTerm: string) {
- *   // searchTerm will contain the value of req.query.term
+ * search(@Query('term') term: string, @Query('page', { type: 'number', default: 1 }) page: number) {
+ *   // term will contain the value of req.query.term
+ *   // page will contain the numeric value of req.query.page or default to 1
  * }
  * ```
  */
-export const Query = createParamDecorator('query');
+export const Query = createApiUrlParamDecorator('query');
 
 /**
  * Decorator that extracts route parameters from request.
  *
  * @param paramKey - Optional key to extract specific route parameter
+ * @param options - Optional ParamOptions
  * @returns Parameter decorator
  *
- * @example
+ *  @example
  * ```ts
  * @Get('/users/:id')
- * getUser(@Param('id') userId: string) {
- *   // userId will contain the value of req.params.id
+ * getUser(@Param('id') id: string) {
+ *   // id will contain the value of req.params.id
  * }
  * ```
  */
-export const Param = createParamDecorator('param');
+export const Param = createApiUrlParamDecorator('param');
 
 /**
  * Decorator that extracts body or body property from request.
@@ -468,6 +639,35 @@ export const Param = createParamDecorator('param');
  * ```
  */
 export const Body = createParamDecorator('body');
+
+/**
+ * Decorator that injects a logger instance.
+ * @returns Parameter decorator
+ *
+ * @example
+ * ```ts
+ * @Get('/log')
+ * log(@ReqLogger() logger: Logger) {
+ *   logger.info('Logging request...');
+ * }
+ * ```
+ */
+export const ReqLogger = createParamDecorator('logger');
+
+/**
+ * Decorator that extracts request headers.
+ * @param key - Optional key to extract specific header
+ * @returns Parameter decorator
+ *
+ * @example
+ * ```ts
+ * @Get('/data')
+ * getData(@ReqHeader('Authorization') authHeader: string) {
+ *   // authHeader will contain the value of req.headers['authorization']
+ * }
+ * ```
+ */
+export const ReqHeader = createParamDecorator('reqHeader');
 
 /**
  * Decorator that injects the entire request object.
@@ -593,7 +793,7 @@ export function Headers(headers: Record<string, string> | string, value?: string
  * Useful for pre-processing or logging.
  *
  * @param fn - Function to execute before the handler
- * @returns Method decorator
+ * @returns Method decorator or Class decorator
  *
  * @example
  * ```ts
@@ -602,13 +802,27 @@ export function Headers(headers: Record<string, string> | string, value?: string
  * getUser(@Param('id') id: string) {
  *   // Function will log before this handler runs
  * }
+ *
+ * @Controller('/api')
+ * @Before((req, res) => console.log(`API access: ${req.path}`))
+ * class ApiController {
+ *   // Hook runs before all routes in this controller
+ * }
  * ```
  */
-export function Before(fn: Function): MethodDecorator {
-  return (target, propertyKey, _descriptor) => {
-    const hooks: Function[] = Reflect.getMetadata(BEFORE_KEY, target as object, propertyKey as string) || [];
-    hooks.push(fn);
-    Reflect.defineMetadata(BEFORE_KEY, hooks, target as object, propertyKey as string);
+export function Before(fn: Function): MethodDecorator & ClassDecorator {
+  return (target: any, propertyKey?: string | symbol, _descriptor?: PropertyDescriptor) => {
+    if (typeof propertyKey === 'undefined') {
+      // Class decorator
+      const hooks: Function[] = Reflect.getMetadata(BEFORE_KEY, target as object) || [];
+      hooks.push(fn);
+      Reflect.defineMetadata(BEFORE_KEY, hooks, target as object);
+    } else {
+      // Method decorator
+      const hooks: Function[] = Reflect.getMetadata(BEFORE_KEY, target as object, propertyKey as string) || [];
+      hooks.push(fn);
+      Reflect.defineMetadata(BEFORE_KEY, hooks, target as object, propertyKey as string);
+    }
   };
 }
 
@@ -617,7 +831,7 @@ export function Before(fn: Function): MethodDecorator {
  * Can access the handler's result.
  *
  * @param fn - Function to execute after the handler
- * @returns Method decorator
+ * @returns Method decorator or Class decorator
  *
  * @example
  * ```ts
@@ -627,13 +841,27 @@ export function Before(fn: Function): MethodDecorator {
  *   // After this handler, the function will log the returned data
  *   return { id, name: 'Example' };
  * }
+ *
+ * @Controller('/api')
+ * @After((req, res, result) => console.log(`API response: ${JSON.stringify(result)}`))
+ * class ApiController {
+ *   // Hook runs after all routes in this controller
+ * }
  * ```
  */
-export function After(fn: Function): MethodDecorator {
-  return (target, propertyKey, _descriptor) => {
-    const hooks: Function[] = Reflect.getMetadata(AFTER_KEY, target as object, propertyKey as string) || [];
-    hooks.push(fn);
-    Reflect.defineMetadata(AFTER_KEY, hooks, target as object, propertyKey as string);
+export function After(fn: Function): MethodDecorator & ClassDecorator {
+  return (target: any, propertyKey?: string | symbol, _descriptor?: PropertyDescriptor) => {
+    if (typeof propertyKey === 'undefined') {
+      // Class decorator
+      const hooks: Function[] = Reflect.getMetadata(AFTER_KEY, target as object) || [];
+      hooks.push(fn);
+      Reflect.defineMetadata(AFTER_KEY, hooks, target as object);
+    } else {
+      // Method decorator
+      const hooks: Function[] = Reflect.getMetadata(AFTER_KEY, target as object, propertyKey as string) || [];
+      hooks.push(fn);
+      Reflect.defineMetadata(AFTER_KEY, hooks, target as object, propertyKey as string);
+    }
   };
 }
 
@@ -773,7 +1001,7 @@ export function RateLimit(options: {
  * Decorator that sets the content type for the response.
  *
  * @param type - MIME type for the response
- * @returns Method decorator
+ * @returns Method decorator or Class decorator
  *
  * @example
  * ```ts
@@ -782,11 +1010,23 @@ export function RateLimit(options: {
  * downloadPdf() {
  *   return this.fileService.generatePdf();
  * }
+ *
+ * @Controller('/api/json')
+ * @ContentType('application/json')
+ * class JsonApiController {
+ *   // All routes in this controller use this content type
+ * }
  * ```
  */
-export function ContentType(type: string): MethodDecorator {
-  return (target, propertyKey, _descriptor) => {
-    Reflect.defineMetadata(CONTENT_TYPE_KEY, { type }, target, propertyKey as string);
+export function ContentType(type: string): MethodDecorator & ClassDecorator {
+  return (target: any, propertyKey?: string | symbol, _descriptor?: PropertyDescriptor) => {
+    if (typeof propertyKey === 'undefined') {
+      // Class decorator
+      Reflect.defineMetadata(CONTENT_TYPE_KEY, { type }, target as object);
+    } else {
+      // Method decorator
+      Reflect.defineMetadata(CONTENT_TYPE_KEY, { type }, target, propertyKey as string);
+    }
   };
 }
 
@@ -931,6 +1171,13 @@ export function Log(options?: {
  */
 export function registerControllers(router: Router, controllers: any[]) {
   controllers.forEach(ControllerClass => {
+    // Register the controller class with the container first (important!)
+    if (!Reflect.getMetadata('injectable', ControllerClass)) {
+      // If not already marked as injectable, register it
+      Reflect.defineMetadata('injectable', true, ControllerClass);
+      diContainer.register(ControllerClass);
+    }
+
     // Use DI container to resolve controller (constructor injection + property injection)
     const instance = diContainer.get(ControllerClass);
     const basePath: string = Reflect.getMetadata('basePath', ControllerClass as object) || '';
@@ -944,9 +1191,15 @@ export function registerControllers(router: Router, controllers: any[]) {
     const controllerRoles = Reflect.getMetadata(ROLES_KEY, ControllerClass as object);
     const controllerLogConfig = Reflect.getMetadata(LOG_KEY, ControllerClass as object);
     const controllerHeaders = Reflect.getMetadata(HEADER_KEY, ControllerClass as object) || {};
+    const controllerMiddlewares: RequestHandler[] =
+      Reflect.getMetadata(MIDDLEWARE_KEY, ControllerClass as object) || [];
+    const controllerBeforeHooks: Function[] = Reflect.getMetadata(BEFORE_KEY, ControllerClass as object) || [];
+    const controllerAfterHooks: Function[] = Reflect.getMetadata(AFTER_KEY, ControllerClass as object) || [];
+    const controllerContentType = Reflect.getMetadata(CONTENT_TYPE_KEY, ControllerClass as object);
 
     routes.forEach(({ path, method, handlerName }) => {
-      const middlewares: RequestHandler[] = Reflect.getMetadata(MIDDLEWARE_KEY, instance as object, handlerName) || [];
+      const methodMiddlewares: RequestHandler[] =
+        Reflect.getMetadata(MIDDLEWARE_KEY, instance as object, handlerName) || [];
       const params: ParamDefinition[] = Reflect.getMetadata(PARAMS_KEY, instance as object, handlerName) || [];
 
       const httpCode: number | undefined = Reflect.getMetadata(HTTP_CODE_KEY, instance as object, handlerName);
@@ -956,18 +1209,27 @@ export function registerControllers(router: Router, controllers: any[]) {
         Reflect.getMetadata(HEADER_KEY, instance as object, handlerName) || {};
       const headers = { ...controllerHeaders, ...methodHeaders };
 
-      const beforeHooks: Function[] = Reflect.getMetadata(BEFORE_KEY, instance as object, handlerName) || [];
-      const afterHooks: Function[] = Reflect.getMetadata(AFTER_KEY, instance as object, handlerName) || [];
+      // Merge controller-level and method-level middlewares
+      const middlewares = [...controllerMiddlewares, ...methodMiddlewares];
+
+      // Merge controller-level and method-level hooks
+      const methodBeforeHooks: Function[] = Reflect.getMetadata(BEFORE_KEY, instance as object, handlerName) || [];
+      const methodAfterHooks: Function[] = Reflect.getMetadata(AFTER_KEY, instance as object, handlerName) || [];
+      const beforeHooks = [...controllerBeforeHooks, ...methodBeforeHooks];
+      const afterHooks = [...methodAfterHooks, ...controllerAfterHooks]; // Method hooks should run first, then class hooks
+
       const redirect: { url?: string; statusCode: number } | undefined = Reflect.getMetadata(
         REDIRECT_KEY,
         instance as object,
         handlerName
       );
-      const contentType: { type: string } | undefined = Reflect.getMetadata(
+      const methodContentType: { type: string } | undefined = Reflect.getMetadata(
         CONTENT_TYPE_KEY,
         instance as object,
         handlerName
       );
+      // Method content type overrides controller content type
+      const contentType = methodContentType || controllerContentType;
 
       // Use method-level decorators if present, otherwise fall back to controller-level
       const roles: string[] = Reflect.getMetadata(ROLES_KEY, instance as object, handlerName) || controllerRoles || [];
@@ -1099,13 +1361,16 @@ export function registerControllers(router: Router, controllers: any[]) {
           for (const fn of beforeHooks) await fn(req, res);
           const args: any[] = [];
           if (params.length) {
-            params.forEach(({ index, type, key }) => {
+            params.forEach(({ index, type, key, options }) => {
+              let rawValue: any;
               switch (type) {
                 case 'query':
-                  args[index] = key ? req.query[key] : req.query;
+                  rawValue = key ? req.query[key] : req.query;
+                  args[index] = options ? applyParamOptions(rawValue, options, key) : rawValue;
                   break;
                 case 'param':
-                  args[index] = key ? req.params[key] : req.params;
+                  rawValue = key ? req.params[key] : req.params;
+                  args[index] = options ? applyParamOptions(rawValue, options, key) : rawValue;
                   break;
                 case 'body':
                   args[index] = key ? req.body?.[key] : req.body;
@@ -1115,6 +1380,12 @@ export function registerControllers(router: Router, controllers: any[]) {
                   break;
                 case 'res':
                   args[index] = res;
+                  break;
+                case 'logger':
+                  args[index] = getLogger();
+                  break;
+                case 'reqHeader':
+                  args[index] = key ? req.headers[key.toLowerCase()] : req.headers;
                   break;
               }
             });
@@ -1173,4 +1444,204 @@ export function registerControllers(router: Router, controllers: any[]) {
       (router as any)[method](basePath + finalPath, ...middlewares, handler);
     });
   });
+}
+
+// Helper for type conversion and ParamOptions handling
+function applyParamOptions(rawValue: any, options: ParamOptions, key?: string) {
+  if (!options) return rawValue;
+
+  let value = rawValue;
+  const paramName = key ? `: ${key}` : '';
+
+  // Handle default value for undefined, null, or empty strings
+  if (value === undefined || value === null || value === '') {
+    if ('default' in options) {
+      value = options.default;
+    }
+  }
+
+  // Required check
+  if (options.required && (value === undefined || value === null || value === '')) {
+    throw new BadRequestException(`Required parameter missing${paramName}`);
+  }
+
+  // Apply type conversions only if value is defined
+  if (value !== undefined && value !== null) {
+    if (options.dataType === 'array') {
+      // Handle array data type
+      const delimiter = options.delimiter || ',';
+      if (typeof value === 'string') {
+        value = value.split(delimiter).map(v => v.trim());
+      } else if (!Array.isArray(value)) {
+        value = [value];
+      }
+
+      // Pattern check
+      if (options.type === 'string' && options.pattern) {
+        const hasInvalidPattern = value.some((v: any) => !options.pattern!.test(v));
+        if (hasInvalidPattern) {
+          throw new BadRequestException(
+            `Parameter '${key}' array contains values that do not match pattern: ${options.patternName || options.pattern}`
+          );
+        }
+      }
+
+      // Handle number pattern validation
+      if (options.type === 'number' && options.pattern) {
+        const hasInvalidPattern = value.some((v: any) => !options.pattern!.test(String(v)));
+        if (hasInvalidPattern) {
+          throw new BadRequestException(
+            `Parameter '${key}' array contains values that do not match pattern: ${options.patternName || options.pattern}`
+          );
+        }
+      }
+
+      // Validate array elements BEFORE conversion for better error messages
+      if (options.type === 'number' && options.throwError !== false) {
+        const hasInvalidNumber = value.some((v: any) => isNaN(Number(v)));
+        if (hasInvalidNumber) {
+          throw new BadRequestException(`Type error: expected number array${paramName}`);
+        }
+        if (options.min !== undefined) {
+          const hasBelowMin = value.some((v: any) => Number(v) < options.min!);
+          if (hasBelowMin) {
+            throw new BadRequestException(
+              `Validation error: number array values must be >= ${options.min}${paramName}`
+            );
+          }
+        }
+        if (options.max !== undefined) {
+          const hasAboveMax = value.some((v: any) => Number(v) > options.max!);
+          if (hasAboveMax) {
+            throw new BadRequestException(
+              `Validation error: number array values must be <= ${options.max}${paramName}`
+            );
+          }
+        }
+      }
+
+      if (options.type === 'boolean' && options.throwError !== false) {
+        const hasInvalidBoolean = value.some((v: any) => !isValidBooleanInput(v));
+        if (hasInvalidBoolean) {
+          throw new BadRequestException(`Type error: expected boolean array${paramName}`);
+        }
+      }
+
+      // Apply type conversion to each array element
+      if (options.type) {
+        value = value.map((v: any) => convertType(v, options.type));
+      }
+    } else if (options.dataType === 'object') {
+      // Handle object data type
+      if (typeof value === 'string') {
+        try {
+          value = JSON.parse(value);
+        } catch (_e) {
+          if (options.throwError !== false) {
+            throw new BadRequestException(`Invalid JSON object${paramName}`);
+          }
+        }
+      }
+    } else if (options.type) {
+      // Handle simple type conversion for non-array/object values
+      const originalValue = value;
+      value = convertType(value, options.type);
+
+      if (options.throwError === false) {
+        if (options.type === 'number' && typeof value === 'number') {
+          if (options.min !== undefined && value < options.min) {
+            value = undefined;
+          }
+          if (options.max !== undefined && value > options.max) {
+            value = undefined;
+          }
+        }
+      }
+
+      if (options.type === 'string' && options.pattern && typeof value === 'string' && !options.pattern.test(value)) {
+        throw new BadRequestException(
+          `Parameter '${key}' does not match pattern: ${options.patternName || options.pattern}`
+        );
+      } else if (
+        options.type === 'number' &&
+        options.pattern &&
+        typeof value === 'number' &&
+        !options.pattern.test(String(value))
+      ) {
+        throw new BadRequestException(
+          `Parameter '${key}' does not match pattern: ${options.patternName || options.pattern}`
+        );
+      }
+
+      // Check for type conversion errors
+      if (options.throwError !== false) {
+        if (options.type === 'number' && typeof value === 'number' && isNaN(value)) {
+          throw new BadRequestException(`Type error: expected number${paramName}`);
+        }
+
+        if (options.type === 'number' && typeof value === 'number') {
+          if (options.min !== undefined && value < options.min) {
+            throw new BadRequestException(`Validation error: number must be >= ${options.min}${paramName}`);
+          }
+          if (options.max !== undefined && value > options.max) {
+            throw new BadRequestException(`Validation error: number must be <= ${options.max}${paramName}`);
+          }
+        }
+
+        // Check for boolean type validation
+        if (options.type === 'boolean' && !isValidBooleanInput(originalValue)) {
+          throw new BadRequestException(`Type error: expected boolean${paramName}`);
+        }
+      }
+    }
+  }
+
+  // Apply transform function if provided
+  if (options.transform && typeof options.transform === 'function') {
+    value = options.transform(value);
+  }
+
+  // Apply validation if provided
+  if (options.validate && typeof options.validate === 'function') {
+    if (!options.validate(value)) {
+      if (options.throwError !== false) {
+        throw new BadRequestException(`Parameter validation failed${paramName}`);
+      }
+      return undefined;
+    }
+  }
+
+  return value;
+}
+
+// Helper function to validate boolean inputs
+function isValidBooleanInput(value: any): boolean {
+  if (typeof value === 'boolean') return true;
+  if (typeof value === 'number') return value === 0 || value === 1;
+  if (typeof value === 'string') {
+    const normalizedValue = value.toLowerCase().trim();
+    return ['true', 'false', '0', '1', 'yes', 'no'].includes(normalizedValue);
+  }
+  return false;
+}
+
+// Update the convertType function to be more robust
+function convertType(value: any, type: 'string' | 'number' | 'boolean') {
+  if (value === undefined || value === null) {
+    return value;
+  }
+
+  switch (type) {
+    case 'number':
+      return Number(value);
+    case 'boolean':
+      if (typeof value === 'string') {
+        const normalizedValue = value.toLowerCase().trim();
+        return normalizedValue === 'true' || normalizedValue === '1' || normalizedValue === 'yes';
+      }
+      return value === true || value === 1;
+    case 'string':
+    default:
+      return String(value);
+  }
 }

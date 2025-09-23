@@ -36,7 +36,7 @@ const GLOBAL_LOGGER_KEY = Symbol.for('logger');
 /**
  * Logger type for application-wide logging.
  */
-export type Logger = pino.Logger;
+export type Logger = PinoLogger;
 
 /**
  * Logger levels for application-wide logging.
@@ -232,7 +232,7 @@ const _global = _globalThis as unknown as { [GLOBAL_LOGGER_KEY]: PinoLogger };
  * - Sets log name, level, timestamp, and redaction for sensitive fields.
  * - Uses singleton in global symbol registry.
  */
-function setupLogger(): void {
+function setupLogger(isGlobal: boolean = true): PinoLogger {
   const logParams: LoggerOptions = {
     name: config.logger.name || '@catbee/utils',
     level: config.logger.level || 'info',
@@ -240,14 +240,14 @@ function setupLogger(): void {
       paths: ['req.authorization', 'res.authorization', 'url', 'headers.authorization', 'headers.cookies'],
       censor: (value, path) => redact(value, path)
     },
-    // serializers: {
-    //   req: pino.stdSerializers.req,
-    //   request: pino.stdSerializers.req,
-    //   res: pino.stdSerializers.res,
-    //   response: pino.stdSerializers.res,
-    //   err: pino.stdSerializers.err,
-    //   error: pino.stdSerializers.err
-    // },
+    serializers: {
+      req: pino.stdSerializers.req,
+      request: pino.stdSerializers.req,
+      res: pino.stdSerializers.res,
+      response: pino.stdSerializers.res,
+      err: pino.stdSerializers.err,
+      error: pino.stdSerializers.err
+    },
     timestamp: stdTimeFunctions.isoTime
   };
 
@@ -268,8 +268,12 @@ function setupLogger(): void {
         )
       : pino(logParams);
 
-  _global[GLOBAL_LOGGER_KEY] = logger;
-  _global[GLOBAL_LOGGER_KEY]?.debug('Logger initialized');
+  if (isGlobal) {
+    _global[GLOBAL_LOGGER_KEY] = logger;
+    _global[GLOBAL_LOGGER_KEY]?.debug('Logger initialized');
+  }
+
+  return logger;
 }
 
 /**
@@ -277,10 +281,16 @@ function setupLogger(): void {
  * - Returns a request-scoped logger from AsyncLocalStorage if available
  * - Falls back to the global (singleton) logger
  * - Initializes the global logger if not created yet
+ * - If newInstance is true, returns a fresh logger without any context
  *
- * @returns {Logger} The logger instance (request-bound or global root logger)
+ * @param {boolean} newInstance - If true, returns a fresh logger without any context
+ * @returns {Logger} The logger instance (request-bound or global root logger or fresh instance)
  */
-export function getLogger(): PinoLogger {
+export function getLogger(newInstance: boolean = false): PinoLogger {
+  if (newInstance) {
+    return setupLogger(false);
+  }
+
   const logger = ContextStore.get<PinoLogger>(StoreKeys.LOGGER);
   if (logger) return logger;
 
@@ -292,10 +302,10 @@ export function getLogger(): PinoLogger {
 }
 
 /**
- * Logger instance for the global context.
+ * Returns a fresh logger instance without any request context.
  * This logger is used for logging messages that are not tied to a specific request.
  */
-export const logger = getLogger();
+export const logger = getLogger(false);
 
 /**
  * Creates a child logger with additional context.

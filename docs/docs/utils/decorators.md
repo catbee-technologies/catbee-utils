@@ -16,25 +16,27 @@ These utilities provide a declarative way to define Express routes, middleware, 
 - [**`@Head(path: string): MethodDecorator`**](#head) - Define a route for the HEAD HTTP method.
 - [**`@Trace(path: string): MethodDecorator`**](#trace) - Define a route for the TRACE HTTP method.
 - [**`@Connect(path: string): MethodDecorator`**](#connect) - Define a route for the CONNECT HTTP method.
-- [**`@Use(...middlewares: RequestHandler[]): MethodDecorator`**](#use) - Apply Express middleware(s) to a route.
-- [**`@Query(key?: string): ParameterDecorator`**](#query) - Extract query parameters from the request.
-- [**`@Param(key?: string): ParameterDecorator`**](#param) - Extract route parameters from the request.
+- [**`@Use(...middlewares: RequestHandler[]): MethodDecorator & ClassDecorator`**](#use) - Apply Express middleware(s) to a route or controller.
+- [**`@Query(key?: string, options?: ParamOptions): ParameterDecorator`**](#query) - Extract query parameters from the request.
+- [**`@Param(key?: string, options?: ParamOptions): ParameterDecorator`**](#param) - Extract route parameters from the request.
 - [**`@Body(key?: string): ParameterDecorator`**](#body) - Extract body or body property from the request.
 - [**`@Req(): ParameterDecorator`**](#req) - Extract the request object.
 - [**`@Res(): ParameterDecorator`**](#res) - Extract the response object.
+- [**`@ReqHeader(key?: string): ParameterDecorator`**](#reqheader) - Extract request headers.
+- [**`@ReqLogger(): ParameterDecorator`**](#reqlogger) - Inject a logger instance.
 - [**`@HttpCode(status: number): MethodDecorator`**](#httpcode) - Set a custom HTTP status code for the response.
-- [**`@Header(name: string, value: string): MethodDecorator`**](#header) - Add a custom HTTP header to the response.
-- [**`@Headers(headers: Record<string, string> | string, value?: string): MethodDecorator`**](#headers) - Add multiple custom HTTP headers to the response.
-- [**`@Before(fn: Function): MethodDecorator`**](#before) - Run a function before the route handler.
-- [**`@After(fn: Function): MethodDecorator`**](#after) - Run a function after the route handler.
+- [**`@Header(name: string, value: string): MethodDecorator & ClassDecorator`**](#header) - Add a custom HTTP header to the response.
+- [**`@Headers(headers: Record<string, string> | string, value?: string): MethodDecorator & ClassDecorator`**](#headers) - Add multiple custom HTTP headers to the response.
+- [**`@Before(fn: Function): MethodDecorator & ClassDecorator`**](#before) - Run a function before the route handler.
+- [**`@After(fn: Function): MethodDecorator & ClassDecorator`**](#after) - Run a function after the route handler.
 - [**`@Redirect(url?: string, statusCode?: number): MethodDecorator`**](#redirect) - Redirect to another URL.
-- [**`@Roles(...roles: string[]): MethodDecorator`**](#roles) - Require specific roles for accessing a route.
-- [**`@Cache(ttlSeconds: number): MethodDecorator`**](#cache) - Add caching to route responses.
-- [**`@RateLimit(options: RateLimitOptions): MethodDecorator`**](#ratelimit) - Apply rate limiting to routes.
-- [**`@ContentType(type: string): MethodDecorator`**](#contenttype) - Set the content type for responses.
-- [**`@Version(version: string, options?: VersionOptions): MethodDecorator`**](#version) - Add API versioning to routes.
-- [**`@Timeout(ms: number): MethodDecorator`**](#timeout) - Set execution timeout for routes.
-- [**`@Log(options?: LogOptions): MethodDecorator`**](#log) - Add comprehensive logging to routes.
+- [**`@Roles(...roles: string[]): MethodDecorator & ClassDecorator`**](#roles) - Require specific roles for accessing a route.
+- [**`@Cache(ttlSeconds: number): MethodDecorator & ClassDecorator`**](#cache) - Add caching to route responses.
+- [**`@RateLimit(options: RateLimitOptions): MethodDecorator & ClassDecorator`**](#ratelimit) - Apply rate limiting to routes.
+- [**`@ContentType(type: string): MethodDecorator & ClassDecorator`**](#contenttype) - Set the content type for responses.
+- [**`@Version(version: string, options?: VersionOptions): MethodDecorator & ClassDecorator`**](#version) - Add API versioning to routes.
+- [**`@Timeout(ms: number): MethodDecorator & ClassDecorator`**](#timeout) - Set execution timeout for routes.
+- [**`@Log(options?: LogOptions): MethodDecorator & ClassDecorator`**](#log) - Add comprehensive logging to routes.
 - [**`@Injectable(): ClassDecorator`**](#injectable) - Mark a class as injectable for DI.
 - [**`@Inject(targetClass: Constructor): PropertyDecorator`**](#inject) - Inject a dependency into a class property.
 
@@ -74,8 +76,25 @@ interface RouteDefinition {
 // Parameter decoration definition for method parameters
 interface ParamDefinition {
   index: number;
-  type: 'query' | 'param' | 'body' | 'req' | 'res';
+  type: 'query' | 'param' | 'body' | 'req' | 'res' | 'logger' | 'reqHeader';
   key?: string;
+  options?: ParamOptions;
+}
+
+// Parameter options for advanced extraction
+interface ParamOptions<T = any> {
+  type: 'string' | 'number' | 'boolean';
+  dataType?: 'single' | 'array' | 'object';
+  delimiter?: string;
+  default?: T;
+  required?: boolean;
+  throwError?: boolean;
+  min?: number;
+  max?: number;
+  pattern?: RegExp;
+  patternName?: string;
+  validate?: (value: any) => boolean;
+  transform?: (value: any) => any;
 }
 
 // Rate limiting options interface
@@ -402,43 +421,56 @@ connectRoute() {
 ---
 
 ### `@Use()`
-Applies Express middleware(s) to a route.
+Applies Express middleware(s) to a route or entire controller.
 
 **Method Signature:**
 ```ts
-@Use(...middlewares: RequestHandler[]): MethodDecorator
+@Use(...middlewares: RequestHandler[]): MethodDecorator & ClassDecorator
 ```
 
 **Parameters:**
 - `...middlewares`: One or more Express middleware functions.
 
 **Returns:** 
-- A method decorator.
+- A method decorator or class decorator.
 
 **Examples:**
 ```ts
 import { Use, Get, Req } from '@catbee/utils';
 import { authMiddleware, loggingMiddleware } from './middlewares';
 
-@Use(authMiddleware, loggingMiddleware)
+// Method-level middleware
 @Get('/protected')
+@Use(authMiddleware, loggingMiddleware)
 getProtected(@Req() req: any) {
   return { user: req.user };
+}
+
+// Controller-level middleware
+@Controller('/api')
+@Use(authMiddleware, loggingMiddleware)
+class ApiController {
+  // All routes in this controller will use the middleware
+  @Get('/me')
+  getProfile() {
+    return { profile: 'data' };
+  }
 }
 ```
 
 ---
 
 ### `@Query()`
-Extracts query parameters from the request.
+Extracts query parameters from the request with optional type conversion and validation.
 
 **Method Signature:**
 ```ts
-@Query(key?: string): ParameterDecorator
+@Query(key?: string, options?: ParamOptions): ParameterDecorator
 ```
 
 **Parameters:**
 - `key`: The query parameter key.
+- `options`: Optional parameter options for type conversion, validation, and more.
 
 **Returns:** 
 - A parameter decorator.
@@ -448,23 +480,60 @@ Extracts query parameters from the request.
 import { Get, Query } from '@catbee/utils';
 
 @Get('/search')
-search(@Query('term') term: string) {
-  return { results: [], term };
+search(
+  // Simple usage: Get query parameter as string
+  @Query('term') term: string,
+  
+  // With type conversion: Get page as number with default value
+  @Query('page', { type: 'number', default: 1 }) page: number,
+  
+  // Array conversion: Convert comma-separated list to array of numbers
+  @Query('ids', { type: 'number', dataType: 'array' }) ids: number[],
+  
+  // Required parameter with validation
+  @Query('minPrice', { 
+    type: 'number',
+    required: true, 
+    validate: (price) => price > 0 
+  }) minPrice: number,
+  
+  // With custom transformation
+  @Query('sort', { 
+    transform: (val) => val.toUpperCase(),
+    validate: (val) => ['ASC', 'DESC'].includes(val)
+  }) sort: string
+) {
+  return { results: [], term, page, ids, minPrice, sort };
+}
+
+@Get('/advanced')
+advanced(
+  // Custom delimiter for arrays
+  @Query('tags', { dataType: 'array', delimiter: '|' }) tags: string[],
+  
+  // Parse JSON from query parameter
+  @Query('filter', { dataType: 'object' }) filter: any,
+  
+  // Get all query parameters
+  @Query() allParams: any
+) {
+  return { tags, filter, allParams };
 }
 ```
 
 ---
 
 ### `@Param()`
-Extracts route parameters from the request.
+Extracts route parameters from the request with optional type conversion and validation.
 
 **Method Signature:**
 ```ts
-@Param(key?: string): ParameterDecorator
+@Param(key?: string, options?: ParamOptions): ParameterDecorator
 ```
 
 **Parameters:**
 - `key`: The route parameter key.
+- `options`: Optional parameter options for type conversion, validation, and more.
 
 **Returns:** 
 - A parameter decorator.
@@ -474,8 +543,31 @@ Extracts route parameters from the request.
 import { Get, Param } from '@catbee/utils';
 
 @Get('/users/:id')
-getUser(@Param('id') userId: string) {
-  return { userId };
+getUser(
+  // Basic usage
+  @Param('id') id: string,
+  
+  // Convert to number with validation
+  @Param('id', { 
+    type: 'number', 
+    validate: (id) => id > 0 
+  }) numericId: number
+) {
+  return { userId: id, numericId };
+}
+
+@Get('/items/:category/:itemId')
+getItem(
+  // Required parameter
+  @Param('itemId', { required: true }) itemId: string,
+  
+  // Convert to boolean
+  @Param('inStock', { type: 'boolean' }) inStock: boolean,
+  
+  // Get all route parameters
+  @Param() allParams: any
+) {
+  return { itemId, inStock, allParams };
 }
 ```
 
@@ -558,6 +650,75 @@ custom(@Res() res: any) {
 
 ---
 
+### `@ReqHeader()`
+Extracts headers from the request.
+
+**Method Signature:**
+```ts
+@ReqHeader(key?: string): ParameterDecorator
+```
+
+**Parameters:**
+- `key`: The header name to extract. Case-insensitive.
+
+**Returns:** 
+- A parameter decorator.
+
+**Examples:**
+```ts
+import { Get, ReqHeader } from '@catbee/utils';
+
+@Get('/data')
+getData(
+  // Extract specific header
+  @ReqHeader('authorization') auth: string,
+  
+  // Extract content type
+  @ReqHeader('content-type') contentType: string,
+  
+  // Get all headers
+  @ReqHeader() allHeaders: any
+) {
+  return { 
+    authorized: auth ? 'yes' : 'no', 
+    contentType,
+    headers: allHeaders 
+  };
+}
+```
+
+---
+
+### `@ReqLogger()`
+Injects a logger instance.
+
+**Method Signature:**
+```ts
+@ReqLogger(): ParameterDecorator
+```
+
+**Returns:** 
+- A parameter decorator.
+
+**Examples:**
+```ts
+import { Get, ReqLogger } from '@catbee/utils';
+
+@Get('/log')
+logData(@ReqLogger() logger: any, @Param('id') id: string) {
+  logger.info({ id }, 'Accessing data endpoint');
+  return { logged: true };
+}
+
+@Post('/items')
+createItem(@Body() data: any, @ReqLogger() logger: any) {
+  logger.info({ data }, 'Creating new item');
+  return { created: true };
+}
+```
+
+---
+
 ### `@HttpCode()`
 Sets a custom HTTP status code for the response.
 
@@ -590,7 +751,7 @@ Adds a custom HTTP header to the response.
 
 **Method Signature:**
 ```ts
-@Header(name: string, value: string): MethodDecorator
+@Header(name: string, value: string): MethodDecorator & ClassDecorator
 ```
 
 **Parameters:**
@@ -598,7 +759,7 @@ Adds a custom HTTP header to the response.
 - `value`: The value of the HTTP header.
 
 **Returns:** 
-- A method decorator.
+- A method decorator or class decorator.
 
 **Examples:**
 ```ts
@@ -609,6 +770,12 @@ import { Get, Header } from '@catbee/utils';
 getData() {
   return { data: '...' };
 }
+
+@Controller('/api/v1')
+@Header('API-Version', 'v1')
+class ApiV1Controller {
+  // All routes in this controller will include the header
+}
 ```
 
 ---
@@ -618,7 +785,7 @@ Adds multiple custom HTTP headers to the response.
 
 **Method Signature:**
 ```ts
-@Headers(headers: Record<string, string> | string, value?: string): MethodDecorator
+@Headers(headers: Record<string, string> | string, value?: string): MethodDecorator & ClassDecorator
 ```
 
 **Parameters:**
@@ -626,7 +793,7 @@ Adds multiple custom HTTP headers to the response.
 - `value`: Header value (required when first parameter is a string)
 
 **Returns:** 
-- A method decorator.
+- A method decorator or class decorator.
 
 **Examples:**
 ```ts
@@ -649,6 +816,16 @@ getData() {
 getSecureData() {
   return { data: 'secure content' };
 }
+
+// Controller-level headers
+@Controller('/api/public')
+@Headers({
+  'Access-Control-Allow-Origin': '*',
+  'X-API-Type': 'public'
+})
+class PublicApiController {
+  // All routes in this controller will include these headers
+}
 ```
 
 ---
@@ -658,23 +835,38 @@ Runs a function before the route handler.
 
 **Method Signature:**
 ```ts
-@Before(fn: (req: Request, res: Response) => void): MethodDecorator
+@Before(fn: (req: Request, res: Response) => void): MethodDecorator & ClassDecorator
 ```
 
 **Parameters:**
 - `fn`: A function that takes the request and response objects.
 
 **Returns:** 
-- A method decorator.
+- A method decorator or class decorator.
 
 **Examples:**
 ```ts
 import { Before, Get, Param } from '@catbee/utils';
 
+// Method-level hook
 @Get('/users/:id')
 @Before((req, res) => console.log(`Accessing user ${req.params.id}`))
 getUser(@Param('id') id: string) {
   return { id };
+}
+
+// Controller-level hook
+@Controller('/api')
+@Before((req, res) => {
+  console.log(`API access: ${req.method} ${req.path}`);
+  req.startTime = Date.now();
+})
+class ApiController {
+  // This hook runs before all routes in the controller
+  @Get('/data')
+  getData() {
+    return { data: 'example' };
+  }
 }
 ```
 
@@ -685,23 +877,38 @@ Runs a function after the route handler, can access the result.
 
 **Method Signature:**
 ```ts
-@After(fn: (req: Request, res: Response, result: any) => void): MethodDecorator
+@After(fn: (req: Request, res: Response, result: any) => void): MethodDecorator & ClassDecorator
 ```
 
 **Parameters:**
 - `fn`: A function that takes the request, response, and result objects.
 
 **Returns:** 
-- A method decorator.
+- A method decorator or class decorator.
 
 **Examples:**
 ```ts
 import { After, Get, Param } from '@catbee/utils';
 
+// Method-level hook
 @Get('/users/:id')
 @After((req, res, result) => console.log(`User data sent: ${JSON.stringify(result)}`))
 getUser(@Param('id') id: string) {
   return { id, name: 'Example' };
+}
+
+// Controller-level hook
+@Controller('/api')
+@After((req, res, result) => {
+  const duration = Date.now() - req.startTime;
+  console.log(`Request processed in ${duration}ms`);
+})
+class ApiController {
+  // This hook runs after all routes in the controller
+  @Get('/data')
+  getData() {
+    return { data: 'example' };
+  }
 }
 ```
 
@@ -745,23 +952,42 @@ Requires specific roles for accessing a route.
 
 **Method Signature:**
 ```ts
-@Roles(...roles: string[]): MethodDecorator
+@Roles(...roles: string[]): MethodDecorator & ClassDecorator
 ```
 
 **Parameters:**
 - `...roles`: The roles required to access the route.
 
 **Returns:** 
-- A method decorator.
+- A method decorator or class decorator.
 
 **Examples:**
 ```ts
-import { Roles, Get } from '@catbee/utils';
+import { Roles, Get, Controller } from '@catbee/utils';
 
+// Method-level roles
 @Get('/admin/settings')
 @Roles('admin', 'superuser')
 getSettings() {
   return { settings: ['a', 'b'] };
+}
+
+// Controller-level roles
+@Controller('/admin')
+@Roles('admin')
+class AdminController {
+  // All routes in this controller require the 'admin' role
+  @Get('/users')
+  getUsers() {
+    return { users: [] };
+  }
+  
+  // Override controller-level roles for specific methods
+  @Get('/metrics')
+  @Roles('admin', 'analyst')
+  getMetrics() {
+    return { metrics: {} };
+  }
 }
 ```
 
@@ -772,32 +998,45 @@ Adds caching headers to route responses for client-side caching.
 
 **Method Signature:**
 ```ts
-@Cache(ttlSeconds: number): MethodDecorator
+@Cache(ttlSeconds: number): MethodDecorator & ClassDecorator
 ```
 
 **Parameters:**
 - `ttlSeconds`: Time to live in seconds for the cache
 
 **Returns:** 
-- A method decorator.
+- A method decorator or class decorator.
 
 **Headers Set:**
 - `Cache-Control: public, max-age={ttlSeconds}`
 
 **Examples:**
 ```ts
-import { Get, Cache } from '@catbee/utils';
+import { Get, Cache, Controller } from '@catbee/utils';
 
+// Method-level cache
 @Get('/static-data')
 @Cache(300) // Cache for 5 minutes
 getStaticData() {
   return { data: 'This data changes infrequently' };
 }
 
-@Get('/user-profile/:id')
-@Cache(60) // Cache for 1 minute
-getUserProfile(@Param('id') id: string) {
-  return this.userService.getProfile(id);
+// Controller-level cache
+@Controller('/api/public')
+@Cache(60) // Default 1 minute cache for all routes
+class PublicApiController {
+  // Uses controller-level cache (60 seconds)
+  @Get('/countries')
+  getCountries() {
+    return { countries: [] };
+  }
+  
+  // Override with method-level cache
+  @Get('/exchange-rates')
+  @Cache(600) // Override with 10 minutes for this specific route
+  getExchangeRates() {
+    return { rates: {} };
+  }
 }
 ```
 
@@ -808,7 +1047,7 @@ Applies rate limiting to routes using express-rate-limit.
 
 **Method Signature:**
 ```ts
-@RateLimit(options: RateLimitOptions): MethodDecorator
+@RateLimit(options: RateLimitOptions): MethodDecorator & ClassDecorator
 ```
 
 **Parameters:**
@@ -826,29 +1065,37 @@ Applies rate limiting to routes using express-rate-limit.
 ```
 
 **Returns:** 
-- A method decorator.
+- A method decorator or class decorator.
 
 **Note:** Requires `express-rate-limit` package to be installed.
 
 **Examples:**
 ```ts
-import { Post, RateLimit, Body } from '@catbee/utils';
+import { Post, RateLimit, Body, Controller } from '@catbee/utils';
 
+// Method-level rate limit
 @Post('/login')
 @RateLimit({ max: 5, windowMs: 60000 }) // 5 requests per minute
 login(@Body() credentials: any) {
   return this.authService.login(credentials);
 }
 
-@Post('/api/data')
-@RateLimit({ 
-  max: 100, 
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  standardHeaders: true,
-  legacyHeaders: false 
-})
-createData(@Body() data: any) {
-  return this.dataService.create(data);
+// Controller-level rate limit
+@Controller('/api')
+@RateLimit({ max: 100, windowMs: 60 * 1000 }) // 100 requests per minute
+class ApiController {
+  // All routes use controller-level rate limiting
+  @Get('/data')
+  getData() {
+    return { data: [] };
+  }
+  
+  // Stricter rate limit for sensitive operations
+  @Post('/payments')
+  @RateLimit({ max: 10, windowMs: 60 * 1000 }) // 10 requests per minute
+  processPayment(@Body() payment: any) {
+    return { status: 'processing' };
+  }
 }
 ```
 
@@ -859,38 +1106,45 @@ Sets the content type header for the response.
 
 **Method Signature:**
 ```ts
-@ContentType(type: string): MethodDecorator
+@ContentType(type: string): MethodDecorator & ClassDecorator
 ```
 
 **Parameters:**
 - `type`: MIME type for the response
 
 **Returns:** 
-- A method decorator.
+- A method decorator or class decorator.
 
 **Headers Set:**
 - `Content-Type: {type}`
 
 **Examples:**
 ```ts
-import { Get, ContentType } from '@catbee/utils';
+import { Get, ContentType, Controller } from '@catbee/utils';
 
+// Method-level content type
 @Get('/download/pdf')
 @ContentType('application/pdf')
 downloadPdf() {
   return this.fileService.generatePdf();
 }
 
-@Get('/api/xml')
+// Controller-level content type
+@Controller('/api/xml')
 @ContentType('application/xml')
-getXmlData() {
-  return this.dataService.toXml();
-}
-
-@Get('/feed.rss')
-@ContentType('application/rss+xml')
-getRssFeed() {
-  return this.feedService.generateRss();
+class XmlApiController {
+  // All routes return XML content
+  @Get('/data')
+  getData() {
+    return '<data><item>1</item></data>';
+  }
+  
+  // Override with method-level content type
+  @Get('/json-data')
+  @ContentType('application/json')
+  getJsonData() {
+    return { data: [1, 2, 3] };
+  }
 }
 ```
 
@@ -901,7 +1155,7 @@ Adds API versioning to routes with configurable prefix and header options.
 
 **Method Signature:**
 ```ts
-@Version(version: string, options?: VersionOptions): MethodDecorator
+@Version(version: string, options?: VersionOptions): MethodDecorator & ClassDecorator
 ```
 
 **Parameters:**
@@ -920,30 +1174,35 @@ Adds API versioning to routes with configurable prefix and header options.
 ```
 
 **Returns:** 
-- A method decorator.
+- A method decorator or class decorator.
 
 **Examples:**
 ```ts
-import { Get, Version } from '@catbee/utils';
+import { Get, Version, Controller } from '@catbee/utils';
 
+// Method-level versioning
 @Get('/users')
 @Version('v2') // Route becomes /v2/users, adds X-API-Version: v2 header
 getUsersV2() {
   return this.userService.findAllV2();
 }
 
-@Get('/data')
-@Version('v3', { addPrefix: false, addHeader: true, headerName: 'API-Version' })
-getDataV3() {
-  // Route stays /data, adds API-Version: v3 header
-  return this.dataService.getV3();
-}
-
-@Get('/legacy')
-@Version('v1', { addPrefix: true, addHeader: false })
-getLegacyData() {
-  // Route becomes /v1/legacy, no version header
-  return this.legacyService.getData();
+// Controller-level versioning
+@Controller('/api')
+@Version('v3')
+class ApiV3Controller {
+  // All routes are prefixed with /v3 and include X-API-Version: v3 header
+  @Get('/users')
+  getUsers() {
+    return { users: [] };
+  }
+  
+  // Method-level versioning overrides controller-level
+  @Get('/experimental')
+  @Version('v4')
+  getExperimental() {
+    return { experimental: true };
+  }
 }
 ```
 
@@ -954,14 +1213,14 @@ Sets execution timeout for route handlers to prevent long-running requests.
 
 **Method Signature:**
 ```ts
-@Timeout(ms: number): MethodDecorator
+@Timeout(ms: number): MethodDecorator & ClassDecorator
 ```
 
 **Parameters:**
 - `ms`: Timeout duration in milliseconds
 
 **Returns:** 
-- A method decorator.
+- A method decorator or class decorator.
 
 **Behavior:**
 - If the route handler takes longer than the specified time, a 408 Request Timeout response is sent
@@ -969,24 +1228,31 @@ Sets execution timeout for route handlers to prevent long-running requests.
 
 **Examples:**
 ```ts
-import { Get, Timeout } from '@catbee/utils';
+import { Get, Timeout, Controller } from '@catbee/utils';
 
+// Method-level timeout
 @Get('/slow-operation')
 @Timeout(30000) // 30 second timeout
 async slowOperation() {
   return await this.heavyService.processLargeDataset();
 }
 
-@Post('/upload')
-@Timeout(60000) // 1 minute timeout for file uploads
-async uploadFile(@Body() fileData: any) {
-  return await this.fileService.processUpload(fileData);
-}
-
-@Get('/report')
-@Timeout(120000) // 2 minute timeout for report generation
-async generateReport(@Query('type') type: string) {
-  return await this.reportService.generate(type);
+// Controller-level timeout
+@Controller('/api/reports')
+@Timeout(60000) // 1 minute default timeout
+class ReportsController {
+  // Uses controller-level timeout (60 seconds)
+  @Get('/daily')
+  async getDailyReport() {
+    return await this.reportService.generateDaily();
+  }
+  
+  // Override with method-level timeout
+  @Get('/annual')
+  @Timeout(120000) // 2 minutes for this specific operation
+  async getAnnualReport() {
+    return await this.reportService.generateAnnual();
+  }
 }
 ```
 
@@ -997,7 +1263,7 @@ Adds comprehensive logging to routes for monitoring and debugging.
 
 **Method Signature:**
 ```ts
-@Log(options?: LogOptions): MethodDecorator
+@Log(options?: LogOptions): MethodDecorator & ClassDecorator
 ```
 
 **Parameters:**
@@ -1019,7 +1285,7 @@ Adds comprehensive logging to routes for monitoring and debugging.
 ```
 
 **Returns:** 
-- A method decorator.
+- A method decorator or class decorator.
 
 **Log Information:**
 - Entry logs: method, URL, user agent, timestamp
@@ -1028,37 +1294,37 @@ Adds comprehensive logging to routes for monitoring and debugging.
 
 **Examples:**
 ```ts
-import { Post, Log, Body, Param } from '@catbee/utils';
+import { Post, Log, Body, Param, Controller } from '@catbee/utils';
 
-// Basic logging (entry and exit only)
+// Method-level logging
 @Post('/users')
 @Log()
 createUser(@Body() userData: any) {
   return this.userService.create(userData);
 }
 
-// Comprehensive logging
-@Post('/orders/:id/process')
-@Log({
-  logEntry: true,
-  logExit: true,
-  logBody: true,
-  logParams: true,
-  logResponse: false // Don't log response for security
-})
-processOrder(@Param('id') id: string, @Body() orderData: any) {
-  return this.orderService.process(id, orderData);
-}
-
-// Minimal logging (exit only with response)
-@Get('/public/stats')
-@Log({
-  logEntry: false,
-  logExit: true,
-  logResponse: true
-})
-getPublicStats() {
-  return this.statsService.getPublic();
+// Controller-level logging
+@Controller('/api')
+@Log({ logEntry: true, logExit: true, logParams: true })
+class ApiController {
+  // Uses controller-level logging configuration
+  @Get('/users/:id')
+  getUser(@Param('id') id: string) {
+    return { id, name: 'Test' };
+  }
+  
+  // Override with method-level logging
+  @Post('/orders')
+  @Log({
+    logEntry: true,
+    logExit: true,
+    logBody: true,
+    logParams: true,
+    logResponse: false // Don't log response for security
+  })
+  createOrder(@Body() orderData: any) {
+    return this.orderService.create(orderData);
+  }
 }
 ```
 
@@ -1134,32 +1400,70 @@ class UserController {
 
 ---
 
+
+### `inject()`
+A function to manually inject a dependency outside of class decorators.
+
+**Method Signature:**
+```ts
+function inject<T>(targetClass: Constructor<T>): T
+```
+**Parameters:**
+- `targetClass`: The class to inject.
+
+**Examples:**
+```ts
+import { inject, Controller } from '@catbee/utils';
+
+@Injectable()
+class UserService {
+  getUser() { /* ... */ }
+}
+
+@Controller('/api/users')
+class UserController {
+  userService = inject(UserService);
+}
+```
+
+---
+
 ## Controller-Level Decorator Inheritance
 
 Many decorators can be applied at the controller level and will be inherited by all methods in that controller, unless overridden at the method level.
 
 **Inheritable Decorators:**
 - `@Headers()`
+- `@Before()`
+- `@After()`
 - `@Cache()`
 - `@RateLimit()`
 - `@Version()`
 - `@Timeout()`
 - `@Log()`
 - `@Roles()`
+- `@ContentType()`
+- `@Use()`
 
 **Examples:**
 ```ts
-import { Controller, Get, Post, Cache, Headers, Roles, Version } from '@catbee/utils';
+import { Controller, Get, Post, Cache, Headers, Roles, Version, Use, ContentType, Before, After } from '@catbee/utils';
+import { authMiddleware, loggingMiddleware } from './middleware';
 
 @Controller('/api/admin')
 @Cache(300) // All routes cached for 5 minutes by default
 @Headers({ 'X-Admin-API': 'true' }) // All routes get this header
 @Roles('admin') // All routes require admin role
 @Version('v2') // All routes are v2
+@Use(authMiddleware, loggingMiddleware) // All routes use these middlewares
+@ContentType('application/json') // All routes return JSON
+@Before((req, res) => console.log(`Admin API request: ${req.method} ${req.path}`))
+@After((req, res, result) => console.log(`Admin API response sent in ${Date.now() - req.startTime}ms`))
 class AdminController {
   
   @Get('/users')
-  // Inherits: @Cache(300), @Headers({'X-Admin-API': 'true'}), @Roles('admin'), @Version('v2')
+  // Inherits: @Cache(300), @Headers({'X-Admin-API': 'true'}), @Roles('admin'), 
+  // @Version('v2'), @Use(...), @ContentType('application/json'), @Before(...), @After(...)
   getUsers() {
     return this.userService.findAll();
   }
@@ -1173,6 +1477,7 @@ class AdminController {
   
   @Post('/settings')
   @Roles('superadmin') // Overrides controller-level roles
+  @ContentType('application/xml') // Overrides controller-level content type
   updateSettings(@Body() settings: any) {
     return this.settingsService.update(settings);
   }
