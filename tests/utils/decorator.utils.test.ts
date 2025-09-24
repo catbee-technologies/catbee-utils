@@ -27,7 +27,9 @@ import {
   registerControllers,
   Injectable,
   Inject,
-  ReqHeader
+  ReqHeader,
+  ReqCookie,
+  ReqId
 } from '../../src/utils/decorators.utils';
 import { jest } from '@jest/globals';
 import { HttpStatusCodes } from '../../src/utils/http-status-codes';
@@ -150,6 +152,79 @@ describe('Decorators and registerControllers', () => {
       id: '123',
       name: 'John',
       ok: true
+    });
+  });
+
+  it('should extract request ID with @ReqId and respect options', async () => {
+    mockReq.headers['x-request-id'] = 'test-id-123';
+
+    @Controller('/reqid-options')
+    class ReqIdOptionsController {
+      @Get('/test')
+      testReqId(@ReqId() plainReqId: string) {
+        return { plainReqId };
+      }
+    }
+
+    registerControllers(mockRouter, [ReqIdOptionsController]);
+    const [, ...handlers] = mockRouter.get.mock.calls[0];
+    const routeHandler = handlers[handlers.length - 1];
+
+    await routeHandler(mockReq, mockRes, mockNext);
+    expect(mockRes.json).toHaveBeenCalledWith({
+      plainReqId: 'test-id-123'
+    });
+
+    // Test with request ID from req.id property
+    mockReq.headers['x-request-id'] = undefined;
+    mockReq.id = 'test-id-456';
+
+    await routeHandler(mockReq, mockRes, mockNext);
+    expect(mockRes.json).toHaveBeenCalledWith({
+      plainReqId: 'test-id-456'
+    });
+
+    // Test with missing request ID
+    mockReq.headers['x-request-id'] = undefined;
+    mockReq.id = undefined;
+    mockRes.json = jest.fn();
+
+    await routeHandler(mockReq, mockRes, mockNext);
+
+    expect(mockRes.json).toHaveBeenCalledWith({ plainReqId: undefined });
+  });
+
+  it('should extract cookies with @ReqCookie and respect options', async () => {
+    mockReq.cookies = {
+      JSESSION: 'header.payload.signature'
+    };
+
+    @Controller('/cookie-options')
+    class CookieOptionsController {
+      @Get('/test')
+      testCookieOptions(
+        @ReqCookie('JSESSION') sessionToken: string,
+        @ReqCookie('missing') missingCookie: string,
+        @ReqCookie() allCookies: Record<string, string>
+      ) {
+        return {
+          sessionToken,
+          missingCookie,
+          allCookies
+        };
+      }
+    }
+
+    registerControllers(mockRouter, [CookieOptionsController]);
+    const [, ...handlers] = mockRouter.get.mock.calls[0];
+    const routeHandler = handlers[handlers.length - 1];
+
+    await routeHandler(mockReq, mockRes, mockNext);
+
+    expect(mockRes.json).toHaveBeenCalledWith({
+      sessionToken: 'header.payload.signature',
+      missingCookie: undefined,
+      allCookies: { JSESSION: 'header.payload.signature' }
     });
   });
 

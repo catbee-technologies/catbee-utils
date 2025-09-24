@@ -263,10 +263,21 @@ describe('ExceptionUtils', () => {
     it('returns correct error class for known status', () => {
       expect(createHttpError(HttpStatusCodes.BAD_REQUEST)).toBeInstanceOf(BadRequestException);
       expect(createHttpError(HttpStatusCodes.UNAUTHORIZED)).toBeInstanceOf(UnauthorizedException);
+      expect(createHttpError(HttpStatusCodes.FORBIDDEN)).toBeInstanceOf(ForbiddenException);
       expect(createHttpError(HttpStatusCodes.NOT_FOUND)).toBeInstanceOf(NotFoundException);
       expect(createHttpError(HttpStatusCodes.METHOD_NOT_ALLOWED)).toBeInstanceOf(MethodNotAllowedException);
+      expect(createHttpError(HttpStatusCodes.NOT_ACCEPTABLE)).toBeInstanceOf(NotAcceptableException);
+      expect(createHttpError(HttpStatusCodes.REQUEST_TIMEOUT)).toBeInstanceOf(RequestTimeoutException);
+      expect(createHttpError(HttpStatusCodes.CONFLICT)).toBeInstanceOf(ConflictException);
+      expect(createHttpError(HttpStatusCodes.PAYLOAD_TOO_LARGE)).toBeInstanceOf(PayloadTooLargeException);
+      expect(createHttpError(HttpStatusCodes.UNSUPPORTED_MEDIA_TYPE)).toBeInstanceOf(UnsupportedMediaTypeException);
       expect(createHttpError(HttpStatusCodes.UNPROCESSABLE_ENTITY)).toBeInstanceOf(UnprocessableEntityException);
-      expect(createHttpError(499, 'Custom')).toBeInstanceOf(HttpError);
+      expect(createHttpError(HttpStatusCodes.INTERNAL_SERVER_ERROR)).toBeInstanceOf(InternalServerErrorException);
+      expect(createHttpError(HttpStatusCodes.BAD_GATEWAY)).toBeInstanceOf(BadGatewayException);
+      expect(createHttpError(HttpStatusCodes.TOO_MANY_REQUESTS)).toBeInstanceOf(TooManyRequestsException);
+      expect(createHttpError(HttpStatusCodes.SERVICE_UNAVAILABLE)).toBeInstanceOf(ServiceUnavailableException);
+      expect(createHttpError(HttpStatusCodes.GATEWAY_TIMEOUT)).toBeInstanceOf(GatewayTimeoutException);
+      expect(createHttpError(HttpStatusCodes.INSUFFICIENT_STORAGE)).toBeInstanceOf(InsufficientStorageException);
     });
     it('sets message if provided', () => {
       const e = createHttpError(HttpStatusCodes.BAD_REQUEST, 'bad!');

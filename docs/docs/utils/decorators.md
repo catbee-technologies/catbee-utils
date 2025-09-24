@@ -23,7 +23,9 @@ These utilities provide a declarative way to define Express routes, middleware, 
 - [**`@Req(): ParameterDecorator`**](#req) - Extract the request object.
 - [**`@Res(): ParameterDecorator`**](#res) - Extract the response object.
 - [**`@ReqHeader(key?: string): ParameterDecorator`**](#reqheader) - Extract request headers.
+- [**`@ReqCookie(name?: string): ParameterDecorator`**](#reqcookie) - Extract cookies from the request.
 - [**`@ReqLogger(): ParameterDecorator`**](#reqlogger) - Inject a logger instance.
+- [**`@ReqId(): ParameterDecorator`**](#reqid) - Extract the request ID from headers or request object.
 - [**`@HttpCode(status: number): MethodDecorator`**](#httpcode) - Set a custom HTTP status code for the response.
 - [**`@Header(name: string, value: string): MethodDecorator & ClassDecorator`**](#header) - Add a custom HTTP header to the response.
 - [**`@Headers(headers: Record<string, string> | string, value?: string): MethodDecorator & ClassDecorator`**](#headers) - Add multiple custom HTTP headers to the response.
@@ -83,7 +85,7 @@ interface ParamDefinition {
 
 // Parameter options for advanced extraction
 interface ParamOptions<T = any> {
-  type: 'string' | 'number' | 'boolean';
+  type?: 'string' | 'number' | 'boolean';
   dataType?: 'single' | 'array' | 'object';
   delimiter?: string;
   default?: T;
@@ -689,6 +691,32 @@ getData(
 
 ---
 
+### `@ReqCookie()`
+Extracts cookies from the request.
+
+**Method Signature:**
+```ts
+@ReqCookie(name?: string): ParameterDecorator
+```
+
+**Parameters:**
+- `name`: The name of the cookie to extract.
+
+**Returns:** 
+- A parameter decorator.
+
+**Examples:**
+```ts
+import { Get, ReqCookie } from '@catbee/utils';
+
+@Get('/data')
+getData(@ReqCookie('session_id') sessionId: string) {
+  return { sessionId };
+}
+```
+
+---
+
 ### `@ReqLogger()`
 Injects a logger instance.
 
@@ -714,6 +742,29 @@ logData(@ReqLogger() logger: any, @Param('id') id: string) {
 createItem(@Body() data: any, @ReqLogger() logger: any) {
   logger.info({ data }, 'Creating new item');
   return { created: true };
+}
+```
+
+---
+
+### `@ReqId()`
+Extracts the request ID from the request headers or the request object.
+
+**Method Signature:**
+```ts
+@ReqId(): ParameterDecorator
+```
+
+**Returns:** 
+- A parameter decorator.
+
+**Examples:**
+```ts
+import { Get, ReqId } from '@catbee/utils';
+
+@Get('/data')
+getData(@ReqId() reqId: string) {
+  return { reqId };
 }
 ```
 

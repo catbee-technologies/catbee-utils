@@ -72,7 +72,7 @@ interface ParamDefinition {
   /** Parameter position in method signature */
   index: number;
   /** Type of parameter (query, body, etc.) */
-  type: 'query' | 'param' | 'body' | 'req' | 'res' | 'logger' | 'reqHeader';
+  type: 'query' | 'param' | 'body' | 'req' | 'res' | 'logger' | 'reqHeader' | 'reqId' | 'cookie';
   /** Optional key for extracting specific property */
   key?: string;
   /** Optional ParamOptions for advanced extraction */
@@ -504,7 +504,7 @@ export function Use(...middlewares: RequestHandler[]): MethodDecorator & ClassDe
  */
 export interface ParamOptions<T = any> {
   /** Base type of the parameter (default: 'string') */
-  type: 'string' | 'number' | 'boolean';
+  type?: 'string' | 'number' | 'boolean';
 
   /** Data structure type (default: 'single') */
   dataType?: 'single' | 'array' | 'object';
@@ -540,14 +540,36 @@ export interface ParamOptions<T = any> {
   transform?: (value: any) => any;
 }
 
-function createParamDecorator(type: ParamDefinition['type'], key?: string) {
+function defineParamMetadata(
+  target: any,
+  propertyKey: string | symbol,
+  parameterIndex: number,
+  type: ParamDefinition['type'],
+  key: string | undefined
+) {
+  const params: ParamDefinition[] = Reflect.getMetadata(PARAMS_KEY, target, propertyKey) || [];
+
+  params.push({ index: parameterIndex, type, key });
+  params.sort((a, b) => a.index - b.index);
+
+  Reflect.defineMetadata(PARAMS_KEY, params, target, propertyKey);
+}
+
+export function createParamDecorator(
+  type: ParamDefinition['type'],
+  key?: string
+): (paramKey?: string) => ParameterDecorator {
   return (paramKey?: string): ParameterDecorator => {
     return (target, propertyKey, parameterIndex) => {
-      const params: ParamDefinition[] = Reflect.getMetadata(PARAMS_KEY, target as object, propertyKey as string) || [];
-      // Ensure parameters are ordered by index
-      params.push({ index: parameterIndex, type, key: paramKey || key });
-      params.sort((a, b) => a.index - b.index);
-      Reflect.defineMetadata(PARAMS_KEY, params, target as object, propertyKey as string);
+      defineParamMetadata(target, propertyKey as string, parameterIndex, type, paramKey ?? key);
+    };
+  };
+}
+
+export function createParamDecoratorWithoutParam(type: ParamDefinition['type']): () => ParameterDecorator {
+  return (): ParameterDecorator => {
+    return (target, propertyKey, parameterIndex) => {
+      defineParamMetadata(target, propertyKey as string, parameterIndex, type, undefined);
     };
   };
 }
@@ -652,7 +674,21 @@ export const Body = createParamDecorator('body');
  * }
  * ```
  */
-export const ReqLogger = createParamDecorator('logger');
+export const ReqLogger = createParamDecoratorWithoutParam('logger');
+
+/**
+ * Decorator that extracts request ID from headers.
+ * @returns Parameter decorator
+ *
+ * @example
+ * ```ts
+ * @Get('/data')
+ * getData(@ReqId() reqId: string) {
+ *  // reqId will contain the value of req.headers['x-request-id'] or req.id
+ * }
+ * ```
+ */
+export const ReqId = createParamDecoratorWithoutParam('reqId');
 
 /**
  * Decorator that extracts request headers.
@@ -670,6 +706,21 @@ export const ReqLogger = createParamDecorator('logger');
 export const ReqHeader = createParamDecorator('reqHeader');
 
 /**
+ * Decorator that extracts cookies from request.
+ * @param key - Optional key to extract specific cookie
+ * @returns Parameter decorator
+ *
+ * @example
+ * ```ts
+ * @Get('/data')
+ * getData(@ReqCookie('session_id') sessionId: string) {
+ *   // sessionId will contain the value of req.cookies['session_id']
+ * }
+ * ```
+ */
+export const ReqCookie = createParamDecorator('cookie');
+
+/**
  * Decorator that injects the entire request object.
  *
  * @returns Parameter decorator
@@ -683,7 +734,7 @@ export const ReqHeader = createParamDecorator('reqHeader');
  * }
  * ```
  */
-export const Req = createParamDecorator('req');
+export const Req = createParamDecoratorWithoutParam('req');
 
 /**
  * Decorator that injects the response object.
@@ -699,7 +750,7 @@ export const Req = createParamDecorator('req');
  * }
  * ```
  */
-export const Res = createParamDecorator('res');
+export const Res = createParamDecoratorWithoutParam('res');
 
 /**
  * Decorator that sets a custom HTTP status code for a response.
@@ -1387,6 +1438,12 @@ export function registerControllers(router: Router, controllers: any[]) {
                 case 'reqHeader':
                   args[index] = key ? req.headers[key.toLowerCase()] : req.headers;
                   break;
+                case 'reqId':
+                  args[index] = req.headers['x-request-id'] || req?.id || undefined;
+                  break;
+                case 'cookie':
+                  args[index] = key ? req.cookies?.[key] : req.cookies;
+                  break;
               }
             });
           }
@@ -1529,7 +1586,7 @@ function applyParamOptions(rawValue: any, options: ParamOptions, key?: string) {
 
       // Apply type conversion to each array element
       if (options.type) {
-        value = value.map((v: any) => convertType(v, options.type));
+        value = value.map((v: any) => convertType(v, options.type || 'string'));
       }
     } else if (options.dataType === 'object') {
       // Handle object data type
