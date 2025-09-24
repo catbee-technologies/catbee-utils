@@ -14,8 +14,8 @@ A modular, production-grade utility library for Node.js and TypeScript, built fo
   <img src="https://codecov.io/gh/catbee-technologies/catbee-utils/graph/badge.svg?token=XAJHK6R1OQ" alt="Coverage" />
   <img src="https://img.shields.io/node/v/@catbee/utils" alt="Node Version" />
   <img src="https://img.shields.io/npm/v/@catbee/utils" alt="NPM Version" />
-  <img src="https://img.shields.io/npm/v/@catbee/utils/rc" alt="NPM RC Version" />
-  <img src="https://img.shields.io/npm/v/@catbee/utils/next" alt="NPM Next Version" />
+  <!-- <img src="https://img.shields.io/npm/v/@catbee/utils/rc" alt="NPM RC Version" />
+  <img src="https://img.shields.io/npm/v/@catbee/utils/next" alt="NPM Next Version" /> -->
   <img src="https://img.shields.io/npm/dt/@catbee/utils" alt="NPM Downloads" />
   <img src="https://img.shields.io/npm/types/@catbee/utils" alt="TypeScript Types" />
   <img src="https://img.shields.io/librariesio/release/npm/@catbee%2Futils" alt="Dependencies" />
