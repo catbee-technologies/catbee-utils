@@ -211,7 +211,7 @@ const config: Config = {
     },
     announcementBar: {
       id: 'new-release',
-      content: '🚀 Catbee Utils v0.0.7 is now available on <a href="https://www.npmjs.com/package/@catbee/utils">npm</a>!',
+      content: `🚀 Catbee Utils v1.0.1 is now available on <a href="https://www.npmjs.com/package/@catbee/utils">npm</a>!`,
       backgroundColor: '#6a4fbc',
       textColor: '#ffffff',
       isCloseable: true,
