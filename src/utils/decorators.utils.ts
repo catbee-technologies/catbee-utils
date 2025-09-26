@@ -1231,7 +1231,7 @@ export function registerControllers(router: Router, controllers: any[]) {
 
     // Use DI container to resolve controller (constructor injection + property injection)
     const instance = diContainer.get(ControllerClass);
-    const basePath: string = Reflect.getMetadata('basePath', ControllerClass as object) || '';
+    let basePath: string = Reflect.getMetadata('basePath', ControllerClass as object) || '';
     const routes: RouteDefinition[] = Reflect.getMetadata(ROUTES_KEY, ControllerClass as object) || [];
 
     // Get controller-level decorators (fallback values)
@@ -1247,6 +1247,11 @@ export function registerControllers(router: Router, controllers: any[]) {
     const controllerBeforeHooks: Function[] = Reflect.getMetadata(BEFORE_KEY, ControllerClass as object) || [];
     const controllerAfterHooks: Function[] = Reflect.getMetadata(AFTER_KEY, ControllerClass as object) || [];
     const controllerContentType = Reflect.getMetadata(CONTENT_TYPE_KEY, ControllerClass as object);
+
+    // Apply controller-level version prefix to base path
+    if (controllerVersion?.options?.addPrefix) {
+      basePath = `/${controllerVersion.version}${basePath || ''}`;
+    }
 
     routes.forEach(({ path, method, handlerName }) => {
       const methodMiddlewares: RequestHandler[] =
@@ -1289,9 +1294,11 @@ export function registerControllers(router: Router, controllers: any[]) {
       const rateLimitOptions:
         | { max: number; windowMs: number; standardHeaders: boolean; legacyHeaders: boolean }
         | undefined = Reflect.getMetadata(RATE_LIMIT_KEY, instance as object, handlerName) || controllerRateLimit;
-      const version:
+      const methodVersion:
         | { version: string; options: { addPrefix: boolean; addHeader: boolean; headerName: string } }
-        | undefined = Reflect.getMetadata(VERSION_KEY, instance as object, handlerName) || controllerVersion;
+        | undefined = Reflect.getMetadata(VERSION_KEY, instance as object, handlerName);
+      // Method-level version overrides controller-level version
+      const version = methodVersion || controllerVersion;
       const timeout: { ms: number } | undefined =
         Reflect.getMetadata(TIMEOUT_KEY, instance as object, handlerName) || controllerTimeout;
       const logConfig:
@@ -1315,8 +1322,9 @@ export function registerControllers(router: Router, controllers: any[]) {
       }
 
       let finalPath = path;
-      if (version?.options?.addPrefix) {
-        finalPath = `/${version.version}${path}`;
+      // Only apply method-level version prefix if it's different from controller-level
+      if (methodVersion?.options?.addPrefix && methodVersion.version !== controllerVersion?.version) {
+        finalPath = `/${methodVersion.version}${path}`;
       }
 
       const handler: RequestHandler = async (req, res, next) => {

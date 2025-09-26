@@ -734,7 +734,7 @@ describe('Decorators and registerControllers', () => {
 
       registerControllers(mockRouter, [OverrideController]);
       const [path, ...handlers] = mockRouter.get.mock.calls[0];
-      expect(path).toBe('/override/v2/method-override');
+      expect(path).toBe('/v1/override/v2/method-override');
 
       const routeHandler = handlers[handlers.length - 1];
       await routeHandler(mockReq, mockRes, mockNext);
