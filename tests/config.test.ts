@@ -105,6 +105,9 @@ describe('config', () => {
       },
       cache: {
         defaultTtl: 3600000
+      },
+      server: {
+        skipHealthz: false
       }
     });
   });

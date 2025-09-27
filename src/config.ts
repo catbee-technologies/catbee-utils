@@ -76,6 +76,21 @@ export let config = {
      * Default TTL (time to live) for cache entries in seconds
      */
     defaultTtl: Env.getNumber('CACHE_DEFAULT_TTL_SECONDS', 3600) * 1000
+  },
+
+  server: {
+    /**
+     * Skip healthz endpoint even if health checks are configured
+     * Default: false
+     * Set to true to return 200 OK for /healthz without checks
+     * Useful in environments where a simple liveness probe is needed
+     * without performing actual health checks
+     * Example: Kubernetes liveness probe
+     * Note: This does not disable the health check functionality itself
+     *       Health checks can still be performed programmatically
+     *       or via other endpoints if needed
+     */
+    skipHealthz: Env.getBoolean('SERVER_SKIP_HEALTHZ', false)
   }
 };
 

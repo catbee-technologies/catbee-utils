@@ -33,7 +33,7 @@ import { getLogger } from '../utils/logger.utils';
 import { InternalServerErrorException, ServiceUnavailableException } from '../utils/exception.utils';
 import { NotFoundException } from '../utils/exception.utils';
 import fs from 'fs';
-import { defaultServerConfig } from '../config';
+import { config, defaultServerConfig } from '../config';
 import { deepObjMerge } from '../utils/obj.utils';
 import { fileExists } from '../utils/fs.utils';
 import { Socket } from 'net';
@@ -575,7 +575,7 @@ export class ExpressServer {
 
     this.app.get(healthCheckPath, async (_req: Request, res: Response) => {
       try {
-        if (!this.healthChecks.length) {
+        if (!this.healthChecks.length || config.server.skipHealthz) {
           return res.status(HttpStatusCodes.OK).json(new SuccessResponse('OK'));
         }
 
