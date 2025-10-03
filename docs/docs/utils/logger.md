@@ -17,12 +17,13 @@ Structured logging with Pino. This module provides a robust logging system with 
 
 ## Environment Variables
 
-| Environment Variable        | Default Value                  |
-|-----------------------------|--------------------------------|
-| `LOGGER_LEVEL`              | `info`                         |
-| `LOGGER_NAME`               | `process.env.npm_package_name` |
-| `LOGGER_PRETTY`             | `true`                         |
-| `LOGGER_PRETTY_SINGLE_LINE` | `false`                        |
+| Environment Variable        | Default Value                  | Description                                 |
+|-----------------------------|--------------------------------|---------------------------------------------|
+| `LOGGER_LEVEL`              | `info`                         | Log level for the application               |
+| `LOGGER_NAME`               | `process.env.npm_package_name` | Name of the logger                          |
+| `LOGGER_PRETTY`             | `true`                         | Enable pretty logging                       |
+| `LOGGER_PRETTY_COLORIZE`    | `true`                         | Enable colorized output for pretty-print    |
+| `LOGGER_PRETTY_SINGLE_LINE` | `false`                        | Enable single-line logging                  |
 
 ## Interfaces & Types
 

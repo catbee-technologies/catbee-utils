@@ -182,54 +182,56 @@ interface ServerHooks {
 
 ## Environment Variables for Logging
 
-| Environment Variable        | Default Value                  |
-|-----------------------------|--------------------------------|
-| `LOGGER_LEVEL`              | `info`                         |
-| `LOGGER_NAME`               | `process.env.npm_package_name` |
-| `LOGGER_PRETTY`             | `true`                         |
-| `LOGGER_PRETTY_SINGLE_LINE` | `false`                        |
+| Environment Variable        | Default Value                  | Description                                 |
+|-----------------------------|--------------------------------|---------------------------------------------|
+| `LOGGER_LEVEL`              | `info`                         | Log level for the application               |
+| `LOGGER_NAME`               | `process.env.npm_package_name` | Name of the logger                          |
+| `LOGGER_PRETTY`             | `true`                         | Enable pretty logging                       |
+| `LOGGER_PRETTY_COLORIZE`    | `true`                         | Enable colorized output for pretty-print    |
+| `LOGGER_PRETTY_SINGLE_LINE` | `false`                        | Enable single-line logging                  |
+| `SERVER_SKIP_HEALTHZ`       | `false`                        | Skip health checks route, always return 200 |
 
 ## Default Values
 
-| Option                | Default Value                |
-|-----------------------|-----------------------------|
-| `port`                | `3000`                      |
-| `host`                | `'0.0.0.0'`                 |
-| `cors`                | `false`                     |
-| `helmet`              | `false`                     |
-| `compression`         | `false`                     |
-| `bodyParser.json`     | `{ limit: '1mb' }`          |
-| `bodyParser.urlencoded` | `{ extended: true, limit: '1mb' }` |
-| `cookieParser`        | `false`                     |
-| `trustProxy`          | `false`                     |
-| `staticFolders`       | `[]`                        |
-| `isMicroservice`      | `false`                     |
-| `appName`             | `'express_app'`             |
-| `globalHeaders`       | `{}`                        |
-| `rateLimit.enable`    | `false`                     |
-| `rateLimit.windowMs`  | `900000` (15 min)           |
-| `rateLimit.max`       | `100`                       |
-| `rateLimit.message`   | `'Too many requests'`       |
-| `requestLogging.enable` | `true` (dev), `false` (prod) |
-| `requestLogging.ignorePaths` | `['/healthz', '/favicon.ico', '/metrics', '/docs', '/.well-known']` |
-| `healthCheck.path`    | `'/healthz'`                |
-| `healthCheck.detailed`| `true`                      |
-| `requestTimeout`      | `30000` (30 sec)            |
-| `responseTime.enable` | `false`                     |
-| `responseTime.addHeader` | `true`                   |
-| `responseTime.logOnComplete` | `false`              |
-| `requestId.headerName`| `'x-request-id'`            |
-| `requestId.exposeHeader` | `true`                   |
-| `metrics.enable`      | `false`                     |
-| `metrics.path`        | `'/metrics'`                |
-| `serviceVersion.enable` | `false`                   |
-| `serviceVersion.headerName` | `'x-service-version'` |
-| `serviceVersion.version` | `'0.0.0'`                |
-| `openApi.enable`      | `false`                     |
-| `openApi.mountPath`   | `'/docs'`                   |
-| `openApi.verbose`     | `false`                     |
-| `openApi.withGlobalPrefix` | `false`                |
-| `globalPrefix`        | `''`                        |
+| Option                | Default Value               | Description                                 |
+|-----------------------|-----------------------------|---------------------------------------------|
+| `port`                | `3000`                      | Port for the server                         |
+| `host`                | `'0.0.0.0'`                 | Host for the server                         |
+| `cors`                | `false`                     | Enable CORS                                 |
+| `helmet`              | `false`                     | Enable Helmet security headers              |
+| `compression`         | `false`                     | Enable response compression                  |
+| `bodyParser.json`     | `{ limit: '1mb' }`          | JSON body parser options                    |
+| `bodyParser.urlencoded` | `{ extended: true, limit: '1mb' }` | URL-encoded body parser options            |
+| `cookieParser`        | `false`                     | Enable cookie parsing                       |
+| `trustProxy`          | `false`                     | Enable proxy trust                           |
+| `staticFolders`       | `[]`                        | Static file serving folders                 |
+| `isMicroservice`      | `false`                     | Enable microservice mode                    |
+| `appName`             | `'express_app'`             | Name of the application                     |
+| `globalHeaders`       | `{}`                        | Global headers to include in all responses  |
+| `rateLimit.enable`    | `false`                     | Enable rate limiting                        |
+| `rateLimit.windowMs`  | `900000` (15 min)           | Time window for rate limiting               |
+| `rateLimit.max`       | `100`                       | Maximum number of requests in the window    |
+| `rateLimit.message`   | `'Too many requests'`       | Rate limit exceeded message                 |
+| `requestLogging.enable` | `true` (dev), `false` (prod) | Enable request logging                     |
+| `requestLogging.ignorePaths` | `['/healthz', '/favicon.ico', '/metrics', '/docs', '/.well-known']` | Paths to ignore for request logging |
+| `healthCheck.path`    | `'/healthz'`                | Health check endpoint                       |
+| `healthCheck.detailed`| `true`                      | Enable detailed health check response      |
+| `requestTimeout`      | `30000` (30 sec)            | Request timeout duration                    |
+| `responseTime.enable` | `false`                     | Enable response time tracking               |
+| `responseTime.addHeader` | `true`                   | Add response time header                    |
+| `responseTime.logOnComplete` | `false`              | Log response time on completion             |
+| `requestId.headerName`| `'x-request-id'`            | Request ID header name                      |
+| `requestId.exposeHeader` | `true`                   | Expose Request ID header                    |
+| `metrics.enable`      | `false`                     | Enable metrics collection                   |
+| `metrics.path`        | `'/metrics'`                | Metrics endpoint path                       |
+| `serviceVersion.enable` | `false`                   | Enable service versioning                   |
+| `serviceVersion.headerName` | `'x-service-version'` | Service version header name                 |
+| `serviceVersion.version` | `'0.0.0'`                | Service version                             |
+| `openApi.enable`      | `false`                     | Enable OpenAPI documentation                 |
+| `openApi.mountPath`   | `'/docs'`                   | OpenAPI documentation mount path            |
+| `openApi.verbose`     | `false`                     | Enable verbose OpenAPI documentation        |
+| `openApi.withGlobalPrefix` | `false`                | Use global prefix for OpenAPI routes        |
+| `globalPrefix`        | `''`                        | Global prefix for all routes                |
 
 ---
 
