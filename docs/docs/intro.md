@@ -18,7 +18,7 @@ A modular, production-grade utility library for Node.js and TypeScript, built fo
   <img src="https://img.shields.io/npm/v/@catbee/utils/next" alt="NPM Next Version" /> -->
   <img src="https://img.shields.io/npm/dt/@catbee/utils" alt="NPM Downloads" />
   <img src="https://img.shields.io/npm/types/@catbee/utils" alt="TypeScript Types" />
-  <img src="https://img.shields.io/librariesio/release/npm/@catbee%2Futils" alt="Dependencies" />
+  <!-- <img src="https://img.shields.io/librariesio/release/npm/@catbee%2Futils" alt="Dependencies" /> -->
   <img src="https://img.shields.io/maintenance/yes/2025" alt="Maintenance" />
   <img src="https://snyk.io/test/github/catbee-technologies/catbee-utils/badge.svg" alt="Snyk Vulnerabilities" />
   <img src="https://sonarcloud.io/api/project_badges/measure?project=catbee-technologies_catbee-utils&metric=alert_status&token=93da835f2d48d37b41fa628cc7fc764c873bd700" alt="Quality Gate Status" />
