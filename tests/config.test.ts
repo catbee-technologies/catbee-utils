@@ -101,6 +101,7 @@ describe('config', () => {
         level: 'debug',
         name: 'debug',
         pretty: false,
+        colorize: false,
         singleLine: false
       },
       cache: {

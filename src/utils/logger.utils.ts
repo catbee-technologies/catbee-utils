@@ -26,7 +26,6 @@ import pino, { LoggerOptions, stdTimeFunctions } from 'pino';
 import type { Logger as PinoLogger } from 'pino'; // Type-only import
 import { config } from '../config';
 import { ContextStore, StoreKeys } from './context-store.utils';
-import { Env } from './env.utils';
 
 /**
  * Symbol used to store the root logger in the Node.js global object.
@@ -251,22 +250,21 @@ function setupLogger(isGlobal: boolean = true): PinoLogger {
     timestamp: stdTimeFunctions.isoTime
   };
 
-  const logger =
-    config.logger.pretty && Env.isDev()
-      ? pino(
-          logParams,
-          pino.transport({
-            target: 'pino-pretty',
-            options: {
-              colorize: true,
-              translateTime: 'SYS:standard',
-              ignore: 'pid,hostname',
-              singleLine: config.logger.singleLine,
-              levelFirst: true
-            }
-          })
-        )
-      : pino(logParams);
+  const logger = config.logger.pretty
+    ? pino(
+        logParams,
+        pino.transport({
+          target: 'pino-pretty',
+          options: {
+            colorize: config.logger.colorize,
+            translateTime: 'SYS:standard',
+            ignore: 'pid,hostname',
+            singleLine: config.logger.singleLine,
+            levelFirst: true
+          }
+        })
+      )
+    : pino(logParams);
 
   if (isGlobal) {
     _global[GLOBAL_LOGGER_KEY] = logger;

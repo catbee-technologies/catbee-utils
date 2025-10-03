@@ -65,6 +65,12 @@ export let config = {
      * Has no effect in production.
      */
     pretty: Env.getBoolean('LOGGER_PRETTY', true),
+
+    /**
+     * Enables colorized output for pretty-print (default: true)
+     */
+    colorize: Env.getBoolean('LOGGER_PRETTY_COLORIZE', true),
+
     /**
      * Single line output for pretty-print (default: false)
      */
