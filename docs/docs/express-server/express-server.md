@@ -557,9 +557,17 @@ See [ServerConfigBuilder](#serverconfigbuilder) and [ExpressServer](#expressserv
 
 ---
 
-## Required npm Packages for Features
+## Core NPM Packages (always required)
 
-| Feature                | Required npm Packages                   |
+- `express` - The web framework
+- `reflect-metadata` - Metadata reflection API
+- `pino` - Logging library
+
+---
+
+## Feature-specific NPM Packages (only if feature is enabled)
+
+| Feature                | Required NPM Packages                   |
 |------------------------|-----------------------------------------|
 | CORS                   | `cors`                                  |
 | Helmet (security)      | `helmet`                                |
