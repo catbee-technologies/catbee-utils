@@ -166,17 +166,17 @@ describe('EnvUtils', () => {
   describe('getNumberEnum', () => {
     it('returns allowed value if present', () => {
       Env.set('NUM_ENUM', '2');
-      expect(Env.getNumberEnum('NUM_ENUM', [1, 2, 3], 1)).toBe(2);
+      expect(Env.getNumberEnum('NUM_ENUM', 1, [1, 2, 3])).toBe(2);
     });
 
     it('returns allowed default if missing', () => {
       Env.delete('NUM_ENUM_MISS');
-      expect(Env.getNumberEnum('NUM_ENUM_MISS', [1, 2, 3], 3)).toBe(3);
+      expect(Env.getNumberEnum('NUM_ENUM_MISS', 3, [1, 2, 3])).toBe(3);
     });
 
     it('throws on invalid value', () => {
       Env.set('NUM_ENUM_INVALID', '4');
-      expect(() => Env.getNumberEnum('NUM_ENUM_INVALID', [1, 2, 3], 1)).toThrow(/must be one of/);
+      expect(() => Env.getNumberEnum('NUM_ENUM_INVALID', 1, [1, 2, 3])).toThrow(/must be one of/);
     });
   });
 
@@ -361,15 +361,15 @@ describe('EnvUtils', () => {
   describe('getEnum', () => {
     it('returns allowed value if present', () => {
       Env.set('EN', 'production');
-      expect(Env.getEnum('EN', ['production', 'staging'], 'production')).toBe('production');
+      expect(Env.getEnum('EN', 'production', ['production', 'staging'])).toBe('production');
     });
     it('returns allowed default if missing', () => {
       Env.delete('ENM');
-      expect(Env.getEnum('ENM', ['foo', 'bar'], 'bar')).toBe('bar');
+      expect(Env.getEnum('ENM', 'bar', ['foo', 'bar'])).toBe('bar');
     });
     it('throws on invalid value', () => {
       Env.set('EN2', 'wat');
-      expect(() => Env.getEnum('EN2', ['a', 'b'], 'c')).toThrow(/must be one of/);
+      expect(() => Env.getEnum('EN2', 'c', ['a', 'b'])).toThrow(/must be one of/);
     });
   });
 

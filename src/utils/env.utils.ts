@@ -440,17 +440,17 @@ export class Env {
    *
    * @typeParam T - The allowed value type (string literal types).
    * @param {string} key - The environment variable key.
-   * @param {T[]} allowedValues - Array of accepted string values.
    * @param {T} [defaultValue] - Optional fallback value.
+   * @param {T[]} allowedValues - Array of accepted string values.
    * @returns {T} The validated environment value.
    * @throws {Error} If missing or invalid.
    *
    * @example
    * // If LOG_LEVEL=debug
-   * const level = Env.getEnum('LOG_LEVEL', ['debug', 'info', 'warn', 'error'] as const, 'info');
+   * const level = Env.getEnum('LOG_LEVEL', 'info', ['debug', 'info', 'warn', 'error'] as const);
    * // 'debug' (typed as 'debug' | 'info' | 'warn' | 'error')
    */
-  static getEnum<T extends string>(key: string, allowedValues: readonly T[], defaultValue: T): T {
+  static getEnum<T extends string>(key: string, defaultValue: T, allowedValues: readonly T[]): T {
     const value = process.env[key];
 
     if (!value) {
@@ -470,15 +470,15 @@ export class Env {
    * Retrieves an enum-like numeric environment variable.
    *
    * @param {string} key - The environment variable key.
-   * @param {number[]} allowedValues - Array of accepted values.
    * @param {number} defaultValue - Default value if not present.
+   * @param {number[]} allowedValues - Array of accepted values.
    * @returns {number} The validated value.
    *
    * @example
    * // If NODE_VERSION=16
-   * const version = Env.getNumberEnum('NODE_VERSION', [14, 16, 18], 16);
+   * const version = Env.getNumberEnum('NODE_VERSION', 16, [14, 16, 18]);
    */
-  static getNumberEnum(key: string, allowedValues: number[], defaultValue: number): number {
+  static getNumberEnum(key: string, defaultValue: number, allowedValues: number[]): number {
     const value = Env.getNumber(key, defaultValue);
 
     if (!allowedValues.includes(value)) {
