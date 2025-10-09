@@ -36,8 +36,8 @@ Provides a single `Env` class with static methods for reading, validating, and t
   - [**`getJSON<T>(key: string, defaultValue: T): T`**](#getjson) - Parses a JSON object from an environment variable.
   - [**`getArray<T>(key: string, defaultValue?: T[], splitter?: string, transform?: (item: string) => T): T[]`**](#getarray) - Parses a delimited string as an array, with optional transformation.
   - [**`getNumberArray(key: string, defaultValue?: number[], splitter?: string): number[]`**](#getnumberarray) - Parses a delimited string as an array of numbers.
-  - [**`getEnum<T extends string>(key: string, allowedValues: readonly T[], defaultValue: T): T`**](#getenum) - Gets an enum environment variable, throws if not a valid value.
-  - [**`getNumberEnum(key: string, allowedValues: number[], defaultValue: number): number`**](#getnumberenum) - Gets a number enum environment variable, throws if not a valid value.
+  - [**`getEnum<T extends string>(key: string, defaultValue: T, allowedValues: readonly T[]): T`**](#getenum) - Gets an enum environment variable, throws if not a valid value.
+  - [**`getNumberEnum(key: string, defaultValue: number, allowedValues: number[]): number`**](#getnumberenum) - Gets a number enum environment variable, throws if not a valid value.
   - [**`getUrl(key: string, defaultValue: string, options?: UrlOptions): string`**](#geturl) - Gets a URL environment variable, with optional validation.
   - [**`getEmail(key: string, defaultValue: string): string`**](#getemail) - Gets an email environment variable, with basic validation.
   - [**`getPath(key: string, defaultValue: string, options?: PathOptions): string`**](#getpath) - Gets a path environment variable, with optional validation.
@@ -485,13 +485,13 @@ Gets an environment variable as a string enum, validates allowed values.
 
 **Method Signature:**
 ```ts
-getEnum<T extends string>(key: string, allowedValues: readonly T[], defaultValue: T): T
+getEnum<T extends string>(key: string, defaultValue: T, allowedValues: readonly T[]): T
 ```
 
 **Parameters:**
 - `key`: The name of the environment variable to get.
-- `allowedValues`: The list of allowed string values.
 - `defaultValue`: The default value to return if the environment variable is not set or invalid.
+- `allowedValues`: The list of allowed string values.
 
 **Returns:**
 - The value of the environment variable if valid, otherwise the default value.
@@ -503,7 +503,7 @@ getEnum<T extends string>(key: string, allowedValues: readonly T[], defaultValue
 ```ts
 import { Env } from "@catbee/utils";
 
-Env.getEnum('LOG_LEVEL', ['debug', 'info', 'warn', 'error'] as const, 'info'); // 'debug', 'info', etc.
+Env.getEnum('LOG_LEVEL', 'info', ['debug', 'info', 'warn', 'error'] as const);
 ```
 
 ---
@@ -513,13 +513,13 @@ Gets an environment variable as a number enum, validates allowed values.
 
 **Method Signature:**
 ```ts
-getNumberEnum(key: string, allowedValues: number[], defaultValue: number): number
+getNumberEnum(key: string, defaultValue: number, allowedValues: number[]): number
 ```
 
 **Parameters:**
 - `key`: The name of the environment variable to get.
-- `allowedValues`: The list of allowed number values.
 - `defaultValue`: The default value to return if the environment variable is not set or invalid.
+- `allowedValues`: The list of allowed number values.
 
 **Returns:**
 - The numeric value of the environment variable if valid, otherwise the default value.
@@ -531,7 +531,7 @@ getNumberEnum(key: string, allowedValues: number[], defaultValue: number): numbe
 ```ts
 import { Env } from "@catbee/utils";
 
-Env.getNumberEnum('NODE_VERSION', [14, 16, 18], 16); // 14, 16, or 18
+Env.getNumberEnum('NODE_VERSION', 16, [14, 16, 18]);
 ```
 
 ---

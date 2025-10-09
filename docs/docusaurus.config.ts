@@ -230,7 +230,7 @@ const config: Config = {
           label: 'Docs',
         },
         { to: '/license/', label: 'License', position: 'left' },
-        { to: '/changelog/', label: 'Changelog', position: 'left' },
+        // { to: '/changelog/', label: 'Changelog', position: 'left' },
         // { to: '/contributors', label: 'Contributors', position: 'left' },
         { href: 'https://github.com/catbee-technologies/catbee-utils', label: 'GitHub', position: 'right' },
         { href: 'https://www.npmjs.com/package/@catbee/utils', label: 'NPM', position: 'right' }

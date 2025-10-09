@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.0.4] - 2025-10-09
+
+### Changed
+- **Utils**
+  - Reordered parameters in `Env.getEnum` and `Env.getNumberEnum` for improved clarity and usability.
+    - New signature: `(key, defaultValue, allowedValues)`.
+    - Previous signature: `(key, allowedValues, defaultValue)`.
+  - Updated related documentation and examples to reflect this change.
+
 ## [1.0.3] - 2025-10-03
 ### Added
 - **Server**
