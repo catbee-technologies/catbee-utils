@@ -380,7 +380,7 @@ export class ExpressServer {
           const skip = this.config.requestLogging?.ignorePaths?.(req, res);
           if (skip) return next();
         } else if (Array.isArray(this.config.requestLogging?.ignorePaths)) {
-          const skip = this.config.requestLogging?.ignorePaths?.includes(req.path);
+          const skip = this.config.requestLogging?.ignorePaths?.some(path => req.path.startsWith(path));
           if (skip) return next();
         }
 
