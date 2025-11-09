@@ -25,7 +25,7 @@ function HomepageHeader() {
             </Heading>
             <p className="hero__subtitle">{siteConfig.tagline}</p>
             <p className={clsx(styles.heroDescription)} style={{ paddingLeft: 0 }}>
-              A modular, production-grade utility library for Node.js and
+              A modular, production-grade utility library for Angular, Node.js and
               TypeScript. Built for robust, scalable applications and enterprise
               Express services. Every utility is tree-shakable, fully typed, and
               can be imported independently for optimal bundle size.

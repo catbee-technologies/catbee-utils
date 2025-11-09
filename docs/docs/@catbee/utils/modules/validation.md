@@ -1,3 +1,8 @@
+---
+id: validation
+pagination_next: null
+---
+
 # Validation Utilities
 
 Comprehensive suite of validators for strings, numbers, arrays, objects, dates, patterns, and more. Includes type guards, range checks, format checks, and multi-validator helpers. All methods are fully typed.

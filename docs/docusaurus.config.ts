@@ -5,15 +5,15 @@ import type { Config } from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
 
 const config: Config = {
-  title: 'Catbee Utils',
-  tagline: 'Utility Modules for Node.js',
+  title: 'Catbee Docs',
+  tagline: 'Documentation for Catbee Packages and Tools',
   favicon: 'favicon/favicon.ico',
   future: {
     v4: true,
   },
 
   // Set the production url of your site here
-  url: 'https://catbee-utils.npm.hprasath.com',
+  url: 'https://catbee.npm.hprasath.com',
   baseUrl: '/',
 
   headTags: [
@@ -21,28 +21,28 @@ const config: Config = {
       tagName: 'meta',
       attributes: {
         name: 'description',
-        content: 'Catbee Utils - A collection of reusable utility modules for Node.js and TypeScript projects.',
+        content: 'Catbee Docs - A collection of reusable utility modules for Angular, Node.js and TypeScript projects.',
       },
     },
     {
       tagName: 'meta',
       attributes: {
         name: 'keywords',
-        content: 'catbee, utils, node.js, typescript, javascript, utilities, library, npm, express',
+        content: 'catbee, utils, angular, node.js, typescript, javascript, utilities, library, npm, express, modular, tree-shakable, production-ready',
       },
     },
     {
       tagName: 'meta',
       attributes: {
         property: 'og:title',
-        content: 'Catbee Utils - Utility Modules for Node.js',
+        content: 'Catbee Docs - A collection of reusable utility modules for Angular, Node.js and TypeScript projects.',
       },
     },
     {
       tagName: 'meta',
       attributes: {
         property: 'og:description',
-        content: 'A powerful and modular collection of utilities for Node.js and TypeScript projects.',
+        content: 'Catbee Docs - Utilities for Angular, Node.js & TypeScript.',
       },
     },
     {
@@ -56,14 +56,14 @@ const config: Config = {
       tagName: 'meta',
       attributes: {
         property: 'og:url',
-        content: 'https://catbee-utils.npm.hprasath.com',
+        content: 'https://catbee.npm.hprasath.com',
       },
     },
     {
       tagName: 'meta',
       attributes: {
         property: 'og:image',
-        content: 'https://catbee-utils.npm.hprasath.com/favicon/android-chrome-512x512.png',
+        content: 'https://catbee.npm.hprasath.com/favicon/android-chrome-512x512.png',
       },
     },
     {
@@ -77,7 +77,7 @@ const config: Config = {
       tagName: 'meta',
       attributes: {
         name: 'twitter:title',
-        content: 'Catbee Utils - Utility Modules for Node.js',
+        content: 'Reusable utility modules for Angular, Node.js and TypeScript, designed for performance and simplicity.',
       },
     },
     {
@@ -91,7 +91,7 @@ const config: Config = {
       tagName: 'meta',
       attributes: {
         name: 'twitter:image',
-        content: 'https://catbee-utils.npm.hprasath.com/favicon/android-chrome-512x512.png',
+        content: 'https://catbee.npm.hprasath.com/favicon/android-chrome-512x512.png',
       },
     },
     {
@@ -106,6 +106,13 @@ const config: Config = {
       attributes: {
         rel: 'icon',
         href: '/favicon/favicon.ico',
+      },
+    },
+    {
+      tagName: 'link',
+      attributes: {
+        rel: 'canonical',
+        href: 'https://catbee.npm.hprasath.com',
       },
     },
     {
@@ -152,12 +159,12 @@ const config: Config = {
       innerHTML: JSON.stringify({
         '@context': 'https://schema.org',
         '@type': 'SoftwareSourceCode',
-        name: 'Catbee Utils',
+        name: 'Catbee Docs',
         description:
-          'Catbee Utils - A collection of reusable utility modules for Node.js and TypeScript projects.',
-        url: 'https://catbee-utils.npm.hprasath.com',
-        codeRepository: 'https://github.com/catbee-technologies/catbee-utils',
-        license: 'https://opensource.org/licenses/MIT',
+          'Catbee Docs - A collection of reusable utility modules for Angular, Node.js and TypeScript projects.',
+        url: 'https://catbee.npm.hprasath.com',
+        codeRepository: 'https://github.com/catbee-technologies',
+        license: 'https://catbee.npm.hprasath.com/license',
         programmingLanguage: 'TypeScript',
         author: {
           '@type': 'Organization',
@@ -171,7 +178,12 @@ const config: Config = {
   projectName: '@catbee/utils',
 
   onBrokenLinks: 'throw',
-  onBrokenMarkdownLinks: 'warn',
+
+  markdown: {
+    hooks: {
+      onBrokenMarkdownLinks: 'warn'
+    }
+  },
 
   i18n: {
     defaultLocale: 'en',
@@ -209,17 +221,17 @@ const config: Config = {
       disableSwitch: false,
       respectPrefersColorScheme: true,
     },
-    announcementBar: {
-      id: 'new-release',
-      content: `🚀 Catbee Utils v1.0.x is now available on <a href="https://www.npmjs.com/package/@catbee/utils">npm</a>!`,
-      backgroundColor: '#6a4fbc',
-      textColor: '#ffffff',
-      isCloseable: true,
-    },
+    // announcementBar: {
+    //   id: 'new-release',
+    //   content: `🚀 Catbee Utils v1.0.x is now available on <a href="https://www.npmjs.com/package/@catbee/utils">npm</a>!`,
+    //   backgroundColor: '#6a4fbc',
+    //   textColor: '#ffffff',
+    //   isCloseable: true,
+    // },
     navbar: {
-      title: 'Catbee Utils',
+      title: 'Catbee',
       logo: {
-        alt: 'Catbee Utils Logo',
+        alt: 'Catbee Docs Logo',
         src: 'favicon/android-chrome-192x192.png',
       },
       items: [
@@ -232,31 +244,26 @@ const config: Config = {
         { to: '/license/', label: 'License', position: 'left' },
         // { to: '/changelog/', label: 'Changelog', position: 'left' },
         // { to: '/contributors', label: 'Contributors', position: 'left' },
-        { href: 'https://github.com/catbee-technologies/catbee-utils', label: 'GitHub', position: 'right' },
-        { href: 'https://www.npmjs.com/package/@catbee/utils', label: 'NPM', position: 'right' }
+        { href: 'https://github.com/catbee-technologies', label: 'GitHub', position: 'right' },
+        { href: 'https://www.npmjs.com/package/@catbee/utils', label: '@catbee/utils', position: 'right' },
+        { href: 'https://www.npmjs.com/package/@ng-catbee/monaco-editor', label: '@ng-catbee/monaco-editor', position: 'right' },
       ]
     },
     footer: {
       style: 'dark',
-      // logo: {
-      //   alt: 'Catbee Utils Logo',
-      //   src: 'favicon/android-chrome-192x192.png',
-      //   href: '/',
-      //   width: 32,
-      //   height: 32,
-      // },
       copyright: `Copyright © ${new Date().getFullYear()} Catbee Technologies.`,
     },
     algolia: {
-      appId: '9XAZEAMSRU',
-      apiKey: 'db1d1b7281ef681eec43858e19fbe7a9',
-      indexName: 'Catbee Utils'
+      appId: 'SULA4ODR5K',
+      apiKey: 'c1ca6b1bdecb0c04ec41317e3e0983dc',
+      indexName: 'Catbee Docs'
     },
     prism: {
       theme: prismThemes.github,
       darkTheme: prismThemes.dracula,
     }
   } satisfies Preset.ThemeConfig,
+  plugins: ['@docusaurus/plugin-client-redirects']
 };
 
 export default config;
