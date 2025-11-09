@@ -7,7 +7,7 @@ pagination_prev: null
 
 ## @ng-catbee/monaco-editor – Angular Monaco Editor Integration
 
-> A modern Angular library that seamlessly integrates the Monaco Editor, offering full support for both **single** and **diff** editors — fully compatible with Reactive Forms, Template-driven Forms, and custom data models.
+> A modern Angular library that seamlessly integrates the Monaco Editor, offering fully support for both **single** and **diff** editors — fully compatible with Reactive Forms, Template-driven Forms, and custom data models.
 
 
 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', margin: '1rem 0', }}>

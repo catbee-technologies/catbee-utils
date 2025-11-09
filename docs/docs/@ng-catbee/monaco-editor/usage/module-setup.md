@@ -11,10 +11,10 @@ sidebar_position: 1
 import { CatbeeMonacoEditorModule } from '@ng-catbee/monaco-editor';
 
 @NgModule({
-	imports: [
-      CatbeeMonacoEditorModule.forRoot({
-        // Customization options - OPTIONAL
-      }),
+  imports: [
+    CatbeeMonacoEditorModule.forRoot({
+      // Configuration options
+    }),
   ]
 })
 export class AppModule {}
@@ -29,7 +29,7 @@ import { provideCatbeeMonacoEditor } from '@ng-catbee/monaco-editor';
 export const appConfig: ApplicationConfig = {
   providers: [
     provideCatbeeMonacoEditor({
-      // Customization options - OPTIONAL
+      // Configuration options
     })
   ]
 };
@@ -46,9 +46,11 @@ export const appConfig: ApplicationConfig = {
   providers: [
     importProvidersFrom(
       CatbeeMonacoEditorModule.forRoot({
-        // Customization options - OPTIONAL
+        // Configuration options
       })
     )
   ]
 };
 ```
+
+#### Check the [Installation and Configuration](../installation) guide for more details on configuration options.

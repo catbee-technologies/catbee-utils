@@ -31,9 +31,16 @@ Or you can copy the `vs` folder from `node_modules/monaco-editor/min/` to your `
 Then set the `baseUrl` option in the module configuration to point to your local assets:
 
 ```typescript
-CatbeeMonacoEditorModule.forRoot({
-  baseUrl: 'assets/monaco-editor/'
-}),
+import { CatbeeMonacoEditorModule } from '@ng-catbee/monaco-editor';
+
+@NgModule({
+  imports: [
+    CatbeeMonacoEditorModule.forRoot({
+      baseUrl: 'assets/monaco-editor/' // Path to the folder containing `vs` folder
+    }),
+  ],
+})
+export class AppModule {}
 ```
 
 ## Configuration Options
