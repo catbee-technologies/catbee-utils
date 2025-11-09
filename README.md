@@ -77,31 +77,31 @@ console.log(isEmail("user@example.com")); // true
 
 | Module | Description |
 | ------ | ----------- |
-| [Express Server](https://catbee-utils.npm.hprasath.com/docs/express-server) | Fast, secure, and scalable server setup |
-| [Array Utilities](https://catbee-utils.npm.hprasath.com/docs/utils/array) | Advanced array manipulation |
-| [Async Utilities](https://catbee-utils.npm.hprasath.com/docs/utils/async) | Promise helpers, concurrency, timing |
-| [Cache Utilities](https://catbee-utils.npm.hprasath.com/docs/utils/cache) | In-memory caching with TTL |
-| [Context Store](https://catbee-utils.npm.hprasath.com/docs/utils/context-store) | Per-request context via AsyncLocalStorage |
-| [Crypto Utilities](https://catbee-utils.npm.hprasath.com/docs/utils/crypto) | Hashing, encryption, tokens |
-| [Date Utilities](https://catbee-utils.npm.hprasath.com/docs/utils/date) | Date/time manipulation |
-| [Decorators Utilities](https://catbee-utils.npm.hprasath.com/docs/utils/decorators) | TypeScript decorators for Express |
-| [Directory Utilities](https://catbee-utils.npm.hprasath.com/docs/utils/directory) | Directory and file system helpers |
-| [Environment Utilities](https://catbee-utils.npm.hprasath.com/docs/utils/environment) | Env variable management |
-| [Exception Utilities](https://catbee-utils.npm.hprasath.com/docs/utils/exception) | HTTP and error handling |
-| [File System Utilities](https://catbee-utils.npm.hprasath.com/docs/utils/file-system) | File operations |
-| [HTTP Status Codes](https://catbee-utils.npm.hprasath.com/docs/utils/http-status-codes) | Typed status codes |
-| [ID Utilities](https://catbee-utils.npm.hprasath.com/docs/utils/id) | UUID and ID generation |
-| [Logger Utilities](https://catbee-utils.npm.hprasath.com/docs/utils/logger) | Structured logging with Pino |
-| [Middleware Utilities](https://catbee-utils.npm.hprasath.com/docs/utils/middleware) | Express middleware collection |
-| [Object Utilities](https://catbee-utils.npm.hprasath.com/docs/utils/object) | Deep merge, flatten, pick/omit, etc. |
-| [Performance Utilities](https://catbee-utils.npm.hprasath.com/docs/utils/performance) | Timing, memoization, memory tracking |
-| [Request Utilities](https://catbee-utils.npm.hprasath.com/docs/utils/request) | HTTP request parameter parsing/validation |
-| [Response Utilities](https://catbee-utils.npm.hprasath.com/docs/utils/response) | Standardized API response formatting |
-| [Stream Utilities](https://catbee-utils.npm.hprasath.com/docs/utils/stream) | Stream conversion, batching, throttling, line splitting |
-| [String Utilities](https://catbee-utils.npm.hprasath.com/docs/utils/string) | Casing, masking, slugifying, formatting |
-| [Type Utilities](https://catbee-utils.npm.hprasath.com/docs/utils/type) | Type checking, conversion, guards |
-| [URL Utilities](https://catbee-utils.npm.hprasath.com/docs/utils/url) | URL parsing, query manipulation, normalization |
-| [Validate Utilities](https://catbee-utils.npm.hprasath.com/docs/utils/validation) | Input validation functions |
+| [Express Server](https://catbee.npm.hprasath.com/docs/@catbee/utils/express-server) | Fast, secure, and scalable server setup |
+| [Array Utilities](https://catbee.npm.hprasath.com/docs/@catbee/utils/modules/array) | Advanced array manipulation |
+| [Async Utilities](https://catbee.npm.hprasath.com/docs/@catbee/utils/modules/async) | Promise helpers, concurrency, timing |
+| [Cache Utilities](https://catbee.npm.hprasath.com/docs/@catbee/utils/modules/cache) | In-memory caching with TTL |
+| [Context Store](https://catbee.npm.hprasath.com/docs/@catbee/utils/modules/context-store) | Per-request context via AsyncLocalStorage |
+| [Crypto Utilities](https://catbee.npm.hprasath.com/docs/@catbee/utils/modules/crypto) | Hashing, encryption, tokens |
+| [Date Utilities](https://catbee.npm.hprasath.com/docs/@catbee/utils/modules/date) | Date/time manipulation |
+| [Decorators Utilities](https://catbee.npm.hprasath.com/docs/@catbee/utils/modules/decorators) | TypeScript decorators for Express |
+| [Directory Utilities](https://catbee.npm.hprasath.com/docs/@catbee/utils/modules/directory) | Directory and file system helpers |
+| [Environment Utilities](https://catbee.npm.hprasath.com/docs/@catbee/utils/modules/environment) | Env variable management |
+| [Exception Utilities](https://catbee.npm.hprasath.com/docs/@catbee/utils/modules/exception) | HTTP and error handling |
+| [File System Utilities](https://catbee.npm.hprasath.com/docs/@catbee/utils/modules/file-system) | File operations |
+| [HTTP Status Codes](https://catbee.npm.hprasath.com/docs/@catbee/utils/modules/http-status-codes) | Typed status codes |
+| [ID Utilities](https://catbee.npm.hprasath.com/docs/@catbee/utils/modules/id) | UUID and ID generation |
+| [Logger Utilities](https://catbee.npm.hprasath.com/docs/@catbee/utils/modules/logger) | Structured logging with Pino |
+| [Middleware Utilities](https://catbee.npm.hprasath.com/docs/@catbee/utils/modules/middleware) | Express middleware collection |
+| [Object Utilities](https://catbee.npm.hprasath.com/docs/@catbee/utils/modules/object) | Deep merge, flatten, pick/omit, etc. |
+| [Performance Utilities](https://catbee.npm.hprasath.com/docs/@catbee/utils/modules/performance) | Timing, memoization, memory tracking |
+| [Request Utilities](https://catbee.npm.hprasath.com/docs/@catbee/utils/modules/request) | HTTP request parameter parsing/validation |
+| [Response Utilities](https://catbee.npm.hprasath.com/docs/@catbee/utils/modules/response) | Standardized API response formatting |
+| [Stream Utilities](https://catbee.npm.hprasath.com/docs/@catbee/utils/modules/stream) | Stream conversion, batching, throttling, line splitting |
+| [String Utilities](https://catbee.npm.hprasath.com/docs/@catbee/utils/modules/string) | Casing, masking, slugifying, formatting |
+| [Type Utilities](https://catbee.npm.hprasath.com/docs/@catbee/utils/modules/type) | Type checking, conversion, guards |
+| [URL Utilities](https://catbee.npm.hprasath.com/docs/@catbee/utils/modules/url) | URL parsing, query manipulation, normalization |
+| [Validate Utilities](https://catbee.npm.hprasath.com/docs/@catbee/utils/modules/validation) | Input validation functions |
 
 ---
 
@@ -117,10 +117,10 @@ import { chunk, sleep, TTLCache, getLogger } from "@catbee/utils";
 
 ## 📖 Documentation
 
-- [Full API Docs & Examples](https://catbee-utils.npm.hprasath.com)
+- [Full API Docs & Examples](https://catbee.npm.hprasath.com/docs/@catbee/utils/intro)
 
 ---
 
 ## 📜 License
 
-MIT © catbee-technologies
+MIT © Catbee Technologies (see the [LICENSE](https://catbee.npm.hprasath.com/license/) file for the full text)
