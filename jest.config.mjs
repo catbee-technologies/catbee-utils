@@ -6,14 +6,14 @@ export default {
   resetMocks: true,
   resetModules: true,
   collectCoverageFrom: ['src/**/*.ts'],
-  coverageDirectory: 'reports/coverage',
+  coverageDirectory: 'coverage',
   coverageReporters: ['text', 'text-summary', 'lcov', 'cobertura'],
   reporters: [
     'default',
     [
       'jest-junit',
       {
-        outputDirectory: 'reports',
+        outputDirectory: 'coverage',
         outputName: 'test-results.xml'
       }
     ],
