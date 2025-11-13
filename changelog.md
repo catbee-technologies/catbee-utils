@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.5] - 2025-11-09
+### Changed
+- **Server**
+  - request logging ignorePaths check to use startsWith for better path matching.
+---
+
 ## [1.0.4] - 2025-10-09
 
 ### Changed
