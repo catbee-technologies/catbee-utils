@@ -1,6 +1,6 @@
 # 📦 Publish to npm when pushing to main or tagging a release
 
-name: 📦 Auto Publish to npm
+name: Publish to NPM
 
 on:
   push:
@@ -10,59 +10,58 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
-    name: 📦 Build & Publish Package
+  publish:
     runs-on: ubuntu-latest
+
     steps:
-      - name: ⬇️ Checkout code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: 🟢 Setup Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          registry-url: 'https://registry.npmjs.org'
+          registry-url: https://registry.npmjs.org
 
-      - name: 📦 Install dependencies
+      - name: Install dependencies
         run: npm ci
 
-      - name: 🧪 Run lint
+      - name: Run lint
         run: npm run lint
 
-      - name: 🔡 Type check
+      - name: Type check
         run: npx tsc --noEmit
 
-      - name: 🧪 Run tests
+      - name: Run tests
         run: npm run test
 
-      - name: 🛠️ Build package
+      - name: Compile package
         run: npm run compile
 
-      - name: 📝 Remove some fields from package.json
+      - name: Clean package.json before publishing
         run: |
+          PKG_PATH=dist/@ng-catbee/$PACKAGE
           node -e "
           const fs = require('fs');
-          const pkg = JSON.parse(fs.readFileSync('package.json','utf8'));
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
           delete pkg.devDependencies;
           delete pkg.scripts;
           fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));
-          console.log('Removed devDependencies and scripts for publish');
+          console.log('Cleaned package.json for publish');
           "
 
-      - name: 🚀 Publish to npm
+      - name: Publish to npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           VERSION=${GITHUB_REF_NAME#v} # strip "v" prefix
-          echo "Publishing version $VERSION"
+          echo "Version: $VERSION"
 
           if [[ "$VERSION" == *-* ]]; then
-            # It's a prerelease (contains "-rc", "-beta", etc.)
-            TAG=$(echo $VERSION | sed 's/^[0-9.]*-//' | cut -d. -f1)
-            echo "Detected prerelease, using dist-tag=$TAG"
+            TAG=$(echo "$VERSION" | sed 's/^[0-9.]*-//' | cut -d. -f1)
+            echo "Detected prerelease. Tag: $TAG"
             npm publish --access public --tag "$TAG"
           else
-            # Stable release
-            echo "Detected stable release, using dist-tag=latest"
+            echo "Stable release detected. Tag: latest"
             npm publish --access public --tag latest
           fi
