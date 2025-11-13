@@ -3,6 +3,6 @@ build/
 .env
 logs/
 *.log
-reports
+coverage/
 **/test-report.xml
 pack-output.json
