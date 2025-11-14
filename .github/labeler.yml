@@ -68,12 +68,6 @@ dependency:
       - any-glob-to-any-file: 'package.json'
       - any-glob-to-any-file: 'package-lock.json'
 
-docs:
-  - changed-files:
-      - any-glob-to-any-file: 'docs/**'
-  - head-branch:
-    - "^docs/"
-
 scripts:
   - changed-files:
       - any-glob-to-any-file: 'scripts/**'
