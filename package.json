@@ -34,11 +34,7 @@
     "test:debug": "cross-env LOGGER_LEVEL=info jest",
     "add-license": "npx license-check-and-add add -f file-banner-lic.json && npm run lint:fix",
     "check-license": "npx license-check-and-add check -f file-banner-lic.json",
-    "deps:update": "npx npm-check-updates -u --target latest && npm install",
-    "docs:install": "cd docs && npm install",
-    "docs:start": "cd docs && npm run start",
-    "docs:build": "cd docs && npm run build",
-    "docs:serve": "npm run docs:build && cd docs && npm run serve"
+    "deps:update": "npx npm-check-updates -u --target latest && npm install"
   },
   "devDependencies": {
     "@swc/core": "^1.13.19",
