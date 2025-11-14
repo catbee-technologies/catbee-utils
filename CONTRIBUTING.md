@@ -7,8 +7,8 @@ Please take a moment to read through these guidelines to ensure a smooth and eff
 
 ### 1. Fork & Clone the Repository
 ```sh
-git clone https://github.com/catbee-technologies/ng-catbee.git
-cd ng-catbee
+git clone https://github.com/catbee-technologies/catbee-utils.git
+cd catbee-utils
 ```
 
 ### 2. Create a Feature Branch

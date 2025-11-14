@@ -1,7 +1,6 @@
 # Security Policy
 
 ## Supported Versions
-- **Scope:** This workspace and all packages under `packages/` (e.g., `@ng-catbee/monaco-editor`).
 - **Security fixes target:** Latest release of each package and the previous minor when feasible.
 - **Pre-releases are not supported** for security fixes.
 

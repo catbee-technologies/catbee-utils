@@ -40,7 +40,6 @@ jobs:
 
       - name: Clean package.json before publishing
         run: |
-          PKG_PATH=dist/@ng-catbee/$PACKAGE
           node -e "
           const fs = require('fs');
           const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
