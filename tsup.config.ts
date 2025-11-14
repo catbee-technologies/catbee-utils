@@ -26,9 +26,9 @@ const baseConfig: Options = {
   esbuildOptions(options) {
     options.platform = 'node';
     // options.external = ['pino', 'os', 'fs', 'path', 'worker_threads'];
-    options.banner = {
-      js: licenseBanner
-    };
+    // options.banner = {
+    //   js: licenseBanner
+    // };
   },
   treeshake: true,
   skipNodeModulesBundle: true
@@ -44,9 +44,7 @@ export default defineConfig([
   {
     ...baseConfig,
     format: 'cjs',
-    dts: {
-      banner: licenseBanner,
-    },
+    dts: true, //  { banner: licenseBanner }, -> To generate .d.ts files with license banner
     tsconfig: './tsconfig.cjs.json',
     cjsInterop: true,
   }
