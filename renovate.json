@@ -10,12 +10,9 @@
   "prConcurrentLimit": 5,
   "packageRules": [
     {
-      "groupName": "catbee packages",
-      "matchPackageNames": ["/^@catbee/"]
-    },
-    {
-      "groupName": "ng catbee packages",
-      "matchPackageNames": ["/^@ng-catbee/"]
+      "matchManagers": ["npm"],
+      "matchUpdateTypes": ["major"],
+      "groupName": "npm breaking updates"
     },
     {
       "matchManagers": ["npm"],
@@ -23,12 +20,31 @@
       "groupName": "npm non-breaking updates"
     },
     {
-      "matchManagers": ["npm"],
-      "matchUpdateTypes": ["major"],
-      "groupName": "npm breaking updates"
+      "groupName": "eslint packages",
+      "matchPackageNames": [
+        "^eslint", 
+        "^@eslint", 
+        "^@docusaurus/eslint-plugin", 
+        "^@typescript-eslint",
+        "^typescript-eslint", 
+        "eslint-.*", 
+        "eslint-plugin-.*"
+      ]
+    },
+    {
+      "groupName": "jest packages",
+      "matchPackageNames": ["^jest", "^ts-jest", "^jest-", "^@types/jest"]
+    },
+    {
+      "groupName": "catbee packages",
+      "matchPackageNames": ["^@catbee"]
+    },
+    {
+      "groupName": "ng catbee packages",
+      "matchPackageNames": ["^@ng-catbee"]
     }
   ],
-  "addLabels": ["dependencies", "renovate"],
+  "addLabels": ["dependency", "renovate"],
   "reviewers": ["catbee-technologies/catbee-admins"],
   "assignees": ["catbee-technologies/catbee-admins"],
   "branchPrefix": "dependency/",

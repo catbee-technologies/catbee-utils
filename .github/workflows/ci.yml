@@ -42,7 +42,7 @@ jobs:
       - name: Build application and start
         run: npm run build:start
 
-      - name: TypeScript type checking for all packages
+      - name: TypeScript type check
         run: npx tsc --noEmit
 
       - name: Check outdated dependencies
