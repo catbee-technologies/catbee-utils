@@ -1,3 +1,4 @@
+import { CatbeeConfig } from './types/config';
 import { ServerConfig } from './types/server';
 import { Env } from './utils/env.utils';
 import { uuid } from './utils/id.utils';
@@ -24,59 +25,24 @@ declare global {
 /**
  * Application runtime configuration loaded from environment variables.
  */
-export let config = {
+export let defaultCatbeeConfig: CatbeeConfig = {
   logger: {
-    /**
-     * Logging level (e.g., 'info', 'debug', 'warn', 'error').
-     */
-    level: Env.get('LOGGER_LEVEL', 'info') as LoggerLevels,
-
-    /**
-     * Name of the logger instance (defaults to npm package name).
-     */
+    level: Env.get('LOGGER_LEVEL', Env.isDev() ? 'debug' : 'info') as LoggerLevels,
     name: Env.get('LOGGER_NAME', Env.get('npm_package_name', '@catbee/utils')),
-
-    /**
-     * Enables pretty-print logging in development.
-     * Has no effect in production.
-     */
     pretty: Env.getBoolean('LOGGER_PRETTY', true),
-
-    /**
-     * Enables colorized output for pretty-print (default: true)
-     */
     colorize: Env.getBoolean('LOGGER_PRETTY_COLORIZE', true),
-
-    /**
-     * Single line output for pretty-print (default: false)
-     */
-    singleLine: Env.getBoolean('LOGGER_PRETTY_SINGLE_LINE', false)
+    singleLine: Env.getBoolean('LOGGER_PRETTY_SINGLE_LINE', false),
+    dir: Env.getPath('LOGGER_DIR', '', { mustExist: true })
   },
-
   cache: {
-    /**
-     * Default TTL (time to live) for cache entries in seconds
-     */
     defaultTtl: Env.getNumber('CACHE_DEFAULT_TTL_SECONDS', 3600) * 1000
   },
-
   server: {
-    /**
-     * Skip healthz endpoint even if health checks are configured
-     * Default: false
-     * Set to true to return 200 OK for /healthz without checks
-     * Useful in environments where a simple liveness probe is needed
-     * without performing actual health checks
-     * Example: Kubernetes liveness probe
-     * Note: This does not disable the health check functionality itself
-     *       Health checks can still be performed programmatically
-     *       or via other endpoints if needed
-     */
     skipHealthz: Env.getBoolean('SERVER_SKIP_HEALTHZ', false)
   }
 };
 
-export const defaultServerConfig = {
+export const defaultServerConfig: ServerConfig = {
   port: 3000,
   host: '0.0.0.0',
   cors: false,
@@ -143,14 +109,14 @@ export const defaultServerConfig = {
  * Update the @catbee/utils configuration.
  * @param value Partial configuration object.
  */
-export function setConfig(value: Partial<typeof config>): void {
-  deepObjMerge(config, value);
+export function setConfig(value: Partial<CatbeeConfig>): void {
+  deepObjMerge(defaultCatbeeConfig, value);
 }
 
 /**
  * Get the current @catbee/utils configuration.
  * @returns The current configuration object.
  */
-export function getConfig(): typeof config {
-  return config;
+export function getConfig(): CatbeeConfig {
+  return defaultCatbeeConfig;
 }
