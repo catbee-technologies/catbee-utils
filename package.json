@@ -8,9 +8,14 @@
   "publishConfig": {
     "access": "public"
   },
-  "author": {
-    "name": "Hari G",
-    "email": "hprasath.dev@gmail.com"
+  "author": "Hari G <hprasath.dev@gmail.com>",
+  "homepage": "https://catbee.npm.hprasath.com/docs/@catbee/utils/intro",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/catbee-technologies/catbee-utils.git"
+  },
+  "bugs": {
+    "url": "https://github.com/catbee-technologies/catbee-utils/issues"
   },
   "license": "MIT",
   "scripts": {
