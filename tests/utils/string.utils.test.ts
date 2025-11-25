@@ -72,7 +72,7 @@ describe('StringUtils', () => {
       expect(slugify('Hello World!')).toBe('hello-world');
       expect(slugify(' Big   test 123 ')).toBe('big-test-123');
       expect(slugify('foo$bar--baz')).toBe('foobar-baz');
-      expect(slugify('foo_bar@#baz')).toBe('foo_barbaz'); // underscore allowed by \w
+      expect(slugify('foo_bar@#baz')).toBe('foo_barbaz');
     });
     it('single word returns itself lowercased', () => {
       expect(slugify('TeSt')).toBe('test');

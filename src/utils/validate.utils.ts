@@ -20,14 +20,38 @@ export function isPort(value: string | number): boolean {
  * @returns {boolean} True if valid email, else false.
  */
 export function isEmail(str: string): boolean {
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str)) return false;
+  if (typeof str !== 'string' || str.length > 254) return false;
 
-  // Additional checks
-  const [local, domain] = str.split('@');
+  const atIndex = str.indexOf('@');
+  if (atIndex === -1 || atIndex !== str.lastIndexOf('@')) return false;
+
+  const local = str.slice(0, atIndex);
+  const domain = str.slice(atIndex + 1);
+
   if (!local || !domain) return false;
 
-  // Disallow consecutive dots in local or domain part
-  if (local.includes('..') || domain.includes('..')) return false;
+  const dotAtom = /^[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+(\.[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+)*$/;
+  const quotedLocal = /^"([\s\x21\x23-\x5B\x5D-\x7E]|\\[\x20-\x7E])*"$/;
+
+  if (!dotAtom.test(local) && !quotedLocal.test(local)) return false;
+
+  if (domain.includes('..')) return false;
+
+  const labels = domain.split('.');
+  if (labels.some(l => !l.length)) return false;
+
+  if (labels.length < 2) return false;
+
+  const labelRegex = /^[A-Za-z0-9-]{1,63}$/;
+
+  for (const label of labels) {
+    if (!labelRegex.test(label)) return false;
+    if (label.startsWith('-') || label.endsWith('-')) return false;
+  }
+
+  // STRICT TLD VALIDATION
+  const tld = labels[labels.length - 1];
+  if (!/^[A-Za-z]{2,63}$/.test(tld)) return false; // <-- FIX
 
   return true;
 }

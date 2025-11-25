@@ -74,7 +74,8 @@ jest.mock('../../src/utils/env.utils', () => ({
       return key in values ? values[key] : fallback;
     }),
     getBoolean: jest.fn().mockReturnValue(false),
-    getNumber: jest.fn().mockImplementation((_key: string, fallback: number) => fallback)
+    getNumber: jest.fn().mockImplementation((_key: string, fallback: number) => fallback),
+    getPath: jest.fn().mockImplementation((_key: string, fallback: string) => fallback)
   },
   isDev: jest.fn().mockReturnValue(true)
 }));
