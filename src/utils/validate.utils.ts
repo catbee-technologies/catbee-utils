@@ -14,19 +14,23 @@ export function isPort(value: string | number): boolean {
 }
 
 /**
- * Checks if a string is a valid email address.
+ * Validates an email address safely and efficiently.
  *
- * @param {string} str - The input string.
- * @returns {boolean} True if valid email, else false.
+ * @param str - The email string to validate.
+ * @returns True if valid email, else false.
  */
 export function isEmail(str: string): boolean {
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str)) return false;
+  // RFC maximum length (254 chars) + CodeQL ReDoS mitigation
+  if (str.length > 254) return false;
 
-  // Additional checks
+  const basicEmail = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+  if (!basicEmail.test(str)) return false;
+
   const [local, domain] = str.split('@');
   if (!local || !domain) return false;
 
-  // Disallow consecutive dots in local or domain part
+  // Reject consecutive dots (common validity rule)
   if (local.includes('..') || domain.includes('..')) return false;
 
   return true;

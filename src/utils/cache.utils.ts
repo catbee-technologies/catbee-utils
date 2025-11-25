@@ -1,4 +1,4 @@
-import { config } from '../config';
+import { defaultCatbeeConfig } from '../config';
 
 /**
  * Represents a cached entry with a value and an expiration timestamp.
@@ -42,7 +42,7 @@ export class TTLCache<K, V> {
    * @param options - Configuration options for the cache
    */
   constructor(options: TTLCacheOptions = {}) {
-    this.ttlMs = options.ttlMs ?? config.cache.defaultTtl;
+    this.ttlMs = options.ttlMs ?? defaultCatbeeConfig.cache.defaultTtl;
     this.maxSize = options.maxSize;
 
     // Setup auto-cleanup if enabled

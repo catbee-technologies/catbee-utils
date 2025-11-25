@@ -9,7 +9,7 @@ import { getLogger } from '../utils/logger.utils';
 import { InternalServerErrorException, ServiceUnavailableException } from '../utils/exception.utils';
 import { NotFoundException } from '../utils/exception.utils';
 import fs from 'fs';
-import { config, defaultServerConfig } from '../config';
+import { defaultCatbeeConfig, defaultServerConfig } from '../config';
 import { deepObjMerge } from '../utils/obj.utils';
 import { fileExists } from '../utils/fs.utils';
 import { Socket } from 'net';
@@ -551,7 +551,7 @@ export class ExpressServer {
 
     this.app.get(healthCheckPath, async (_req: Request, res: Response) => {
       try {
-        if (!this.healthChecks.length || config.server.skipHealthz) {
+        if (!this.healthChecks.length || defaultCatbeeConfig.server.skipHealthz) {
           return res.status(HttpStatusCodes.OK).json(new SuccessResponse('OK'));
         }
 
@@ -983,17 +983,37 @@ export class ExpressServer {
 
   private normalizePath(path: string, withGlobalPrefix = false): string {
     const sanitize = (p: string): string => {
-      return (
-        '/' +
-        p
-          .trim()
-          .replace(/^\/+/, '') // remove leading slashes
-          .replace(/\/{2,}/g, '/') // collapse multiple slashes
-          .replace(/\/+$/, '')
-      ); // remove trailing slash
+      if (!p) return '/';
+      p = p.trim();
+
+      // Remove leading slashes
+      let start = 0;
+      while (start < p.length && p[start] === '/') start++;
+
+      // Remove trailing slashes
+      let end = p.length - 1;
+      while (end >= 0 && p[end] === '/') end--;
+
+      // Extract cleaned middle
+      p = p.substring(start, end + 1);
+
+      // Collapse multiple slashes
+      let out = '';
+      let prevSlash = false;
+
+      for (const ch of p) {
+        if (ch === '/') {
+          if (!prevSlash) out += '/';
+          prevSlash = true;
+        } else {
+          out += ch;
+          prevSlash = false;
+        }
+      }
+
+      return '/' + out;
     };
 
-    // Resolve global prefix if enabled
     const prefix = withGlobalPrefix && this.globalPrefix ? sanitize(this.globalPrefix) : '';
 
     // If path is invalid, default to prefix or root

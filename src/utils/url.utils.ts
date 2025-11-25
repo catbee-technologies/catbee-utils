@@ -98,21 +98,35 @@ export function getDomain(url: string, removeSubdomains: boolean = false): strin
  *
  * @param {...string[]} segments - URL path segments to join.
  * @returns {string} Joined URL path.
- *
- * @example
- * joinPaths('https://example.com/', '/api/', '/users');
- * // → 'https://example.com/api/users'
  */
 export function joinPaths(...segments: string[]): string {
-  let result = segments
+  const cleaned = segments
     .filter(s => s !== undefined && s !== null)
     .map((segment, index) => {
-      if (index === 0) return segment.replace(/\/+$/, '');
-      return segment.replace(/^\/+|\/+$/g, '');
+      segment = segment.toString();
+
+      if (index === 0) {
+        // Remove trailing slashes only
+        while (segment.endsWith('/')) segment = segment.slice(0, -1);
+        return segment;
+      }
+
+      // Remove leading slashes
+      while (segment.startsWith('/')) segment = segment.slice(1);
+
+      // Remove trailing slashes
+      while (segment.endsWith('/')) segment = segment.slice(0, -1);
+
+      return segment;
     })
-    .filter(Boolean)
-    .join('/');
-  if (segments[0] === '' && !result.startsWith('/')) result = '/' + result;
+    .filter(Boolean);
+
+  let result = cleaned.join('/');
+
+  // Preserve root slash for absolute paths
+  if (segments[0] === '' && !result.startsWith('/')) {
+    result = '/' + result;
+  }
   return result;
 }
 
@@ -134,17 +148,28 @@ export function normalizeUrl(url: string, base?: string): string {
       url = `https:${url}`;
     }
 
-    // Resolve relative URLs against a base
     const parsedUrl = base ? new URL(url, base) : new URL(url);
 
-    // Normalize
-    parsedUrl.pathname = parsedUrl.pathname.replace(/\/+/g, '/'); // Collapse multiple slashes
-    parsedUrl.pathname = parsedUrl.pathname.replace(/\/+$/, ''); // Remove trailing slash
+    // Collapse multiple slashes in pathname (except keep leading "/")
+    let path = parsedUrl.pathname;
+
+    // 1. Split + filter empty parts
+    const parts = path.split('/').filter(Boolean);
+
+    // 2. Join with single slash
+    path = '/' + parts.join('/');
+
+    // 3. Remove trailing slash, except for root
+    if (path.length > 1 && path.endsWith('/')) {
+      path = path.slice(0, -1);
+    }
+
+    parsedUrl.pathname = path;
     parsedUrl.hostname = parsedUrl.hostname.toLowerCase();
 
     return parsedUrl.toString();
   } catch {
-    return url; // Return original if invalid
+    return url;
   }
 }
 

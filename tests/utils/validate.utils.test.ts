@@ -39,6 +39,20 @@ describe('ValidateUtils', () => {
       expect(isEmail('foo@bar.')).toBe(false);
       expect(isEmail('foo@bar..com')).toBe(false);
     });
+    it('rejects emails exceeding RFC maximum length (254 chars)', () => {
+      // Create an email that's exactly 254 characters long (should pass)
+      // '@example.com' is 12 chars, so we need 242 'a's to get 254 total
+      const longEmail = 'a'.repeat(242) + '@example.com'; // Total: 254 chars - should pass
+      expect(isEmail(longEmail)).toBe(true);
+
+      // Create an email that's 255 characters long (exceeds limit)
+      const tooLongEmail = 'a'.repeat(243) + '@example.com'; // Total: 255 chars - should fail
+      expect(isEmail(tooLongEmail)).toBe(false);
+    });
+    it('rejects emails with TLD less than 2 chars', () => {
+      expect(isEmail('test@example.c')).toBe(false);
+      expect(isEmail('test@example.co')).toBe(true);
+    });
   });
 
   describe('isUUID', () => {

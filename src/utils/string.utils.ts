@@ -39,12 +39,34 @@ export function toCamelCase(str: string): string {
  * @returns {string} The slugified string.
  */
 export function slugify(str: string): string {
-  return str
-    .toLowerCase()
-    .replace(/[^\w\s-]/g, '') // remove non-word
-    .replace(/\s+/g, '-') // spaces to dash
-    .replace(/-+/g, '-') // multiple dashes to one
-    .replace(/^-+|-+$/g, ''); // trim leading/trailing dashes
+  str = str.toLowerCase();
+
+  let out = '';
+  let prevDash = false;
+
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i];
+
+    // allow alphanumeric
+    if ((ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9')) {
+      out += ch;
+      prevDash = false;
+    }
+    // whitespace or dash → convert to single dash
+    else if (ch === ' ' || ch === '-' || ch === '_' || ch === '\t') {
+      if (!prevDash) {
+        out += '-';
+        prevDash = true;
+      }
+    }
+    // ignore all other characters
+  }
+
+  // remove leading/trailing dashes
+  if (out.startsWith('-')) out = out.slice(1);
+  if (out.endsWith('-')) out = out.slice(0, -1);
+
+  return out;
 }
 
 /**
@@ -111,7 +133,28 @@ export function mask(str: string, visibleStart: number = 0, visibleEnd: number =
  * @returns {string} The string with HTML tags removed.
  */
 export function stripHtml(str: string): string {
-  return str.replace(/<[^>]*>/g, '');
+  let result = '';
+  let insideTag = false;
+
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i];
+
+    if (ch === '<') {
+      insideTag = true;
+      continue;
+    }
+
+    if (ch === '>') {
+      insideTag = false;
+      continue;
+    }
+
+    if (!insideTag) {
+      result += ch;
+    }
+  }
+
+  return result;
 }
 
 /**
