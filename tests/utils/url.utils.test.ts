@@ -120,6 +120,9 @@ describe('UrlUtils', () => {
     it('handles empty segments', () => {
       expect(joinPaths('', '/foo')).toBe('/foo');
     });
+    it('handles very long input efficiently', () => {
+      expect(joinPaths('/'.repeat(1e5), '/'.repeat(1e5))).toBe('');
+    });
   });
 
   describe('normalizeUrl', () => {

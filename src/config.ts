@@ -32,7 +32,7 @@ export let defaultCatbeeConfig: CatbeeConfig = {
     pretty: Env.getBoolean('LOGGER_PRETTY', true),
     colorize: Env.getBoolean('LOGGER_PRETTY_COLORIZE', true),
     singleLine: Env.getBoolean('LOGGER_PRETTY_SINGLE_LINE', false),
-    dir: Env.getPath('LOGGER_DIR', '', { mustExist: true })
+    dir: Env.getPath('LOGGER_DIR', '', { mustExist: false })
   },
   cache: {
     defaultTtl: Env.getNumber('CACHE_DEFAULT_TTL_SECONDS', 3600) * 1000

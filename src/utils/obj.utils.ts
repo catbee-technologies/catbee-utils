@@ -263,45 +263,51 @@ export function getValueByPath<T extends object>(obj: T, path: string) {
 
 /**
  * Sets a value at a deeply nested key in an object using dot/bracket notation path.
- * Creates intermediate objects and arrays as needed.
+ * Secured against prototype pollution.
  *
  * @template T
  * @param {T} obj - The object to modify.
- * @param {string} path - String path using dot and/or bracket notation (e.g., 'user.friends[0].name').
- * @param {any} value - The value to set at the path.
+ * @param {string} path - Dot/bracket notation path (e.g., "user.friends[0].name").
+ * @param {any} value - Value to assign.
  * @returns {T} The modified object.
  */
 export function setValueByPath<T extends object>(obj: T, path: string, value: any): T {
   if (!obj || typeof obj !== 'object') return obj;
 
-  // Convert path like "a.b[0].c" into ["a", "b", "0", "c"]
   const parts = path
-    .replace(/\[(\d+)\]/g, '.$1') // convert [0] to .0
+    .replace(/\[(\d+)\]/g, '.$1')
     .split('.')
-    .filter(Boolean); // remove empty strings
+    .filter(Boolean);
 
-  // Handle empty path
   if (parts.length === 0) return obj;
+
+  const forbiddenKeys = new Set(['__proto__', 'prototype', 'constructor']);
 
   let current: any = obj;
 
-  // Navigate to the parent of the target property
   for (let i = 0; i < parts.length - 1; i++) {
     const key = parts[i];
-    const isArrayIndex = !isNaN(Number(parts[i + 1]));
+    if (forbiddenKeys.has(key)) {
+      return obj;
+    }
+
+    const nextKey = parts[i + 1];
+    const isArrayIndex = !isNaN(Number(nextKey));
 
     if (current[key] === undefined) {
-      // Create intermediate object or array based on next key type
-      current[key] = isArrayIndex ? [] : {};
+      current[key] = isArrayIndex ? [] : Object.create(null);
+    } else if (typeof current[key] !== 'object' || current[key] === null) {
+      current[key] = isArrayIndex ? [] : Object.create(null);
     }
 
     current = current[key];
   }
 
-  // Set the value at the final key
   const finalKey = parts[parts.length - 1];
+  if (forbiddenKeys.has(finalKey)) {
+    return obj;
+  }
   current[finalKey] = value;
-
   return obj;
 }
 

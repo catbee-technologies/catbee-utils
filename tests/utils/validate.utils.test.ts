@@ -30,14 +30,78 @@ describe('ValidateUtils', () => {
       expect(isEmail('user.name+tag@a.co.uk')).toBe(true);
       expect(isEmail('foo.bar@baz.io')).toBe(true);
     });
-    it('rejects invalid emails', () => {
-      expect(isEmail('notanemail')).toBe(false);
-      expect(isEmail('foo@bar')).toBe(false);
-      expect(isEmail('foo.com')).toBe(false);
-      expect(isEmail('foo@.com')).toBe(false);
-      expect(isEmail('@nope.com')).toBe(false);
-      expect(isEmail('foo@bar.')).toBe(false);
-      expect(isEmail('foo@bar..com')).toBe(false);
+    describe('rejects invalid emails', () => {
+      it('basic invalid formats', () => {
+        expect(isEmail('notanemail')).toBe(false);
+        expect(isEmail('foo.com')).toBe(false);
+        expect(isEmail('@nope.com')).toBe(false);
+      });
+
+      it('rejects missing domain dot / invalid TLD', () => {
+        expect(isEmail('foo@bar')).toBe(false);
+        expect(isEmail('foo@bar.')).toBe(false);
+        expect(isEmail('foo@bar.c')).toBe(false); // TLD too short
+        expect(isEmail('foo@bar..com')).toBe(false); // consecutive dots
+        expect(isEmail('foo@.com')).toBe(false); // empty label
+        expect(isEmail('foo@com.')).toBe(false); // trailing dot
+      });
+
+      it('rejects local part issues', () => {
+        expect(isEmail('.foo@bar.com')).toBe(false); // starts with dot
+        expect(isEmail('foo.@bar.com')).toBe(false); // ends with dot
+        expect(isEmail('fo..o@bar.com')).toBe(false); // consecutive dots
+        expect(isEmail('foo bar@bar.com')).toBe(false); // space not allowed (unquoted)
+        expect(isEmail('foo@ bar.com')).toBe(false); // space in domain
+        expect(isEmail('foo@bar .com')).toBe(false);
+      });
+
+      it('additional invalid cases', () => {
+        // Too long
+        expect(isEmail('a'.repeat(300) + '@example.com')).toBe(false); // >254 chars
+
+        // Missing @ or multiple @
+        expect(isEmail('foo@@bar.com')).toBe(false);
+        expect(isEmail('foo@bar@baz.com')).toBe(false);
+
+        // Invalid characters in local part
+        expect(isEmail('foo()@bar.com')).toBe(false);
+        expect(isEmail('foo,bar@bar.com')).toBe(false);
+        expect(isEmail('foo;bar@bar.com')).toBe(false);
+        expect(isEmail('foo<>@bar.com')).toBe(false);
+        expect(isEmail('foo[]@bar.com')).toBe(false);
+
+        // Invalid characters in domain
+        expect(isEmail('foo@ba_r.com')).toBe(false); // underscore not allowed in domain
+        expect(isEmail('foo@bar!.com')).toBe(false);
+        expect(isEmail('foo@bar#com')).toBe(false);
+
+        // Domain label rules
+        expect(isEmail('foo@-bar.com')).toBe(false); // starts with hyphen
+        expect(isEmail('foo@bar-.com')).toBe(false); // ends with hyphen
+        expect(isEmail('foo@bar.-com')).toBe(false); // empty label
+        expect(isEmail('foo@bar..com')).toBe(false); // empty label
+
+        // TLD issues
+        expect(isEmail('foo@bar.c_m')).toBe(false); // invalid TLD characters
+        expect(isEmail('foo@bar.123')).toBe(false); // numeric TLD not allowed in strict mode
+        expect(isEmail(`foo@bar.${'a'.repeat(64)}`)).toBe(false); // 64-char TLD → invalid
+
+        // Quoted strings but invalid content
+        expect(isEmail('"unclosed@bar.com')).toBe(false);
+        expect(isEmail('"bad quote"bad@bar.com')).toBe(false);
+        expect(isEmail('"foo\bar"@bar.com')).toBe(false); // bad escape
+      });
+    });
+    it('rejects emails exceeding RFC maximum length (254 chars)', () => {
+      const longEmail = 'a'.repeat(242) + '@example.com'; // Total: 254 chars - should pass
+      expect(isEmail(longEmail)).toBe(true);
+
+      const tooLongEmail = 'a'.repeat(243) + '@example.com'; // Total: 255 chars - should fail
+      expect(isEmail(tooLongEmail)).toBe(false);
+    });
+    it('rejects emails with TLD less than 2 chars', () => {
+      expect(isEmail('test@example.c')).toBe(false);
+      expect(isEmail('test@example.co')).toBe(true);
     });
   });
 
