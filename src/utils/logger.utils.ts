@@ -1,6 +1,6 @@
 import pino, { LoggerOptions, stdTimeFunctions } from 'pino';
 import type { Logger as PinoLogger } from 'pino'; // Type-only import
-import { config } from '../config';
+import { defaultCatbeeConfig } from '../config';
 import { ContextStore, StoreKeys } from './context-store.utils';
 
 /**
@@ -23,42 +23,86 @@ export const defaultSensitiveFields = [
   'password',
   'secret',
   'token',
-  'apiKey',
   'api_key',
   'auth',
+  'private_key',
+  'public_key',
   'jwt',
   'access_token',
-  'client_secret',
+  'refresh_token',
   'session_token',
-  'refresh_token'
+  'csrf_token',
+  'authorization',
+  'bearer',
+  'x-api-key',
+  'x-auth-token',
+  'x-access-token',
+  'client_secret',
+  'passphrase',
+  'otp',
+  'api_secret',
+  'token_secret'
+];
+
+const defaultRedactPaths = [
+  'req.authorization',
+  'req.headers.authorization',
+  'req.headers.cookie',
+  'req.headers["x-api-key"]',
+  'req.headers["x-auth-token"]',
+  'req.headers["x-access-token"]',
+  'req.body.password',
+  'req.body.token',
+  'req.body.secret',
+  'req.query.token',
+  'req.query.api_key',
+  'req.query.apiKey',
+  'res.authorization',
+  'res.headers.authorization',
+  'res.headers["set-cookie"]',
+  'headers.authorization',
+  'headers.cookies',
+  'headers["set-cookie"]',
+  'headers["x-api-key"]',
+  'headers["x-auth-token"]',
+  'headers["x-access-token"]',
+  'url',
+  'uri',
+  'href',
+  'redirect_uri',
+  'redirectUri'
 ];
 
 /**
  * The global censor function used by the logger.
  */
-let globalRedactCensor: (value: unknown, path: string[], sensitiveFields?: string[]) => string = (
-  value,
-  path,
-  sensitiveFields = defaultSensitiveFields
-) => {
+let globalRedactCensor = (value: unknown, path: string[], sensitiveFields = getExpandedSensitiveFields()) => {
   if (typeof value !== 'string') return '***';
 
-  const lowerPath = path.map(p => p.toLowerCase());
+  const lowerPath: string[] = path.filter(p => typeof p === 'string').map(p => p.toLowerCase());
+
   const lowerSensitiveFields = sensitiveFields.map(f => f.toLowerCase());
 
   if (lowerPath.some(p => lowerSensitiveFields.includes(p))) return '***';
 
   // Redact URLs
-  if (lowerPath[0] === 'url') {
+  if (
+    lowerPath[0] === 'url' ||
+    lowerPath[0] === 'uri' ||
+    lowerPath[0] === 'href' ||
+    lowerPath.includes('redirect_uri') ||
+    lowerPath.includes('redirecturi')
+  ) {
     return value.replace(new RegExp(`([?&](${lowerSensitiveFields.join('|')})=)[^&#]*`, 'gi'), '$1***');
   }
 
+  // Authorization headers
   if (lowerPath.some(p => p.includes('authorization') || p.includes('auth'))) {
     return value.replace(/^(\S+)\s+.+$/, '$1 ***') || '***';
   }
 
   // Redact sensitive fields - check each path segment against each sensitive field
-  if (lowerPath.some(pathPart => lowerSensitiveFields.some(field => pathPart.includes(field)))) {
+  if (lowerPath.some(p => lowerSensitiveFields.some(f => p.includes(f)))) {
     return '***';
   }
 
@@ -140,6 +184,8 @@ export function redact(value: unknown, path: string[], sensitiveFields?: string[
 }
 
 /**
+ * @deprecated Use addSensitiveFields instead.
+ *
  * Extends the current redaction function with additional fields to redact.
  *
  * This function wraps the existing censor while adding more fields to be considered
@@ -155,8 +201,25 @@ export function redact(value: unknown, path: string[], sensitiveFields?: string[
  */
 export function addRedactFields(fields: string[]) {
   const prev = globalRedactCensor;
-  globalRedactCensor = (value, path, sensitiveFields = defaultSensitiveFields) =>
+  globalRedactCensor = (value, path, sensitiveFields = getExpandedSensitiveFields()) =>
     prev(value, path, [...(sensitiveFields || []), ...fields]);
+  cachedExpandedFields = null;
+}
+
+let cachedExpandedFields: string[] | null = null;
+/**
+ * Retrieves the expanded list of sensitive fields.
+ *
+ * This function expands the default sensitive fields into their various naming
+ * conventions (e.g., camelCase, snake_case) and caches the result for efficiency.
+ *
+ * @returns Array of expanded sensitive field names
+ */
+export function getExpandedSensitiveFields() {
+  if (!cachedExpandedFields) {
+    cachedExpandedFields = expandSensitiveFields(defaultSensitiveFields);
+  }
+  return cachedExpandedFields;
 }
 
 /**
@@ -175,6 +238,7 @@ export function addRedactFields(fields: string[]) {
  */
 export function setSensitiveFields(fields: string[]) {
   defaultSensitiveFields.splice(0, defaultSensitiveFields.length, ...fields);
+  cachedExpandedFields = null;
 }
 
 /**
@@ -193,6 +257,7 @@ export function setSensitiveFields(fields: string[]) {
  */
 export function addSensitiveFields(fields: string[]) {
   defaultSensitiveFields.push(...fields);
+  cachedExpandedFields = null;
 }
 
 /**
@@ -205,14 +270,17 @@ const _global = _globalThis as unknown as { [GLOBAL_LOGGER_KEY]: PinoLogger };
  * Initializes the global root logger according to app configuration.
  *
  * - Sets log name, level, timestamp, and redaction for sensitive fields.
+ * - Optionally writes logs to files with daily rotation when logger.dir is configured.
  * - Uses singleton in global symbol registry.
  */
 function setupLogger(isGlobal: boolean = true): PinoLogger {
+  const sensitiveFields = getExpandedSensitiveFields();
+  const paths = new Set([...defaultRedactPaths, ...sensitiveFields.flatMap(field => generateDeepPaths(field, 2))]);
   const logParams: LoggerOptions = {
-    name: config.logger.name || '@catbee/utils',
-    level: config.logger.level || 'info',
+    name: defaultCatbeeConfig.logger?.name || '@catbee/utils',
+    level: defaultCatbeeConfig.logger?.level || 'info',
     redact: {
-      paths: ['req.authorization', 'res.authorization', 'url', 'headers.authorization', 'headers.cookies'],
+      paths: Array.from(paths),
       censor: (value, path) => redact(value, path)
     },
     serializers: {
@@ -226,25 +294,75 @@ function setupLogger(isGlobal: boolean = true): PinoLogger {
     timestamp: stdTimeFunctions.isoTime
   };
 
-  const logger = config.logger.pretty
-    ? pino(
-        logParams,
-        pino.transport({
-          target: 'pino-pretty',
-          options: {
-            colorize: config.logger.colorize,
-            translateTime: 'SYS:standard',
-            ignore: 'pid,hostname',
-            singleLine: config.logger.singleLine,
-            levelFirst: true
+  let logger: PinoLogger;
+
+  // Determine if we need file logging
+  const logDir = defaultCatbeeConfig.logger?.dir?.trim();
+  const hasFileLogging = Boolean(logDir);
+
+  if (hasFileLogging && defaultCatbeeConfig.logger?.pretty) {
+    // Both file and pretty logging enabled - use multistream
+    logger = pino(
+      logParams,
+      pino.transport({
+        targets: [
+          {
+            target: 'pino-pretty',
+            level: defaultCatbeeConfig.logger?.level ?? 'info',
+            options: {
+              colorize: defaultCatbeeConfig.logger?.colorize,
+              translateTime: 'SYS:standard',
+              ignore: 'pid,hostname',
+              singleLine: defaultCatbeeConfig.logger?.singleLine,
+              levelFirst: true
+            }
+          },
+          {
+            target: 'pino/file',
+            level: defaultCatbeeConfig.logger?.level ?? 'info',
+            options: {
+              destination: `${logDir}/app.log`,
+              mkdir: true
+            }
           }
-        })
-      )
-    : pino(logParams);
+        ]
+      })
+    );
+  } else if (hasFileLogging) {
+    // Only file logging enabled
+    logger = pino(
+      logParams,
+      pino.transport({
+        target: 'pino/file',
+        options: {
+          destination: `${logDir}/app.log`,
+          mkdir: true
+        }
+      })
+    );
+  } else if (defaultCatbeeConfig.logger?.pretty) {
+    // Only pretty logging enabled
+    logger = pino(
+      logParams,
+      pino.transport({
+        target: 'pino-pretty',
+        options: {
+          colorize: defaultCatbeeConfig.logger?.colorize,
+          translateTime: 'SYS:standard',
+          ignore: 'pid,hostname',
+          singleLine: defaultCatbeeConfig.logger?.singleLine,
+          levelFirst: true
+        }
+      })
+    );
+  } else {
+    // No transports, just standard pino
+    logger = pino(logParams);
+  }
 
   if (isGlobal) {
     _global[GLOBAL_LOGGER_KEY] = logger;
-    _global[GLOBAL_LOGGER_KEY]?.debug('Logger initialized');
+    _global[GLOBAL_LOGGER_KEY]?.debug({ logDir: logDir || 'none' }, 'Logger initialized');
   }
 
   return logger;
@@ -274,12 +392,6 @@ export function getLogger(newInstance: boolean = false): PinoLogger {
 
   return _global[GLOBAL_LOGGER_KEY];
 }
-
-/**
- * Returns a fresh logger instance without any request context.
- * This logger is used for logging messages that are not tied to a specific request.
- */
-export const logger = getLogger(false);
 
 /**
  * Creates a child logger with additional context.
@@ -333,4 +445,64 @@ export function logError(error: Error | unknown, message?: string, context?: Rec
   };
 
   logger.error(logContext, message || errObj.message);
+}
+
+/**
+ * Expands multiple sensitive field names into their variants.
+ * Useful to match fields like `api_key`, `apiKey`, `apikey`, `APIKEY`, etc.
+ */
+export function expandSensitiveFields(fields: string[]): string[] {
+  const set = new Set<string>();
+
+  for (const field of fields) {
+    for (const v of expandSensitiveField(field)) {
+      set.add(v);
+    }
+  }
+
+  return Array.from(set);
+}
+
+/**
+ * Generates multiple variants of a sensitive field name.
+ * Useful to match fields like `api_key`, `apiKey`, `apikey`, `APIKEY`, etc.
+ */
+export function expandSensitiveField(field: string): string[] {
+  const parts = field.split(/[_-]/g).filter(Boolean);
+
+  const camel =
+    parts[0].toLowerCase() +
+    parts
+      .slice(1)
+      .map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase())
+      .join('');
+
+  const mergedLower = parts.join('').toLowerCase();
+  const mergedUpper = parts.join('').toUpperCase();
+
+  const kebab = parts.map(p => p.toLowerCase()).join('-');
+  const snakeLower = parts.map(p => p.toLowerCase()).join('_');
+  const snakeUpper = parts.map(p => p.toUpperCase()).join('_');
+
+  return Array.from(new Set([field, camel, mergedLower, mergedUpper, kebab, snakeLower, snakeUpper]));
+}
+
+/**
+ * Generates wildcard paths up to the given depth.
+ *
+ * depth = 2 →
+ *  password
+ *  *.password
+ *  *.*.password
+ */
+export function generateDeepPaths(field: string, depth: number): string[] {
+  const set = new Set<string>([field]);
+
+  let prefix = '';
+  for (let i = 1; i <= depth; i++) {
+    prefix = prefix ? `${prefix}.*` : '*';
+    set.add(`${prefix}.${field}`);
+  }
+
+  return [...set];
 }

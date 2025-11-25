@@ -5,7 +5,7 @@ import { Env } from '../../src/utils/env.utils';
 
 jest.mock('pino');
 jest.mock('../../src/config', () => ({
-  config: {
+  defaultCatbeeConfig: {
     logger: {
       name: 'TestLogger',
       level: 'info',
@@ -179,12 +179,12 @@ describe('LoggerUtils', () => {
 
     it('should redact authorization header', () => {
       const header = 'Bearer mySecretToken';
-      expect(loggerUtils.getRedactCensor()(header, ['req', 'authorization'])).toBe('Bearer ***');
+      expect(loggerUtils.getRedactCensor()(header, ['req', 'authorization'])).toBe('***');
     });
 
     it('should redact basic auth header', () => {
       const header = 'Basic username:password';
-      expect(loggerUtils.getRedactCensor()(header, ['authorization'])).toBe('Basic ***');
+      expect(loggerUtils.getRedactCensor()(header, ['authorization'])).toBe('***');
     });
 
     it('should redact common sensitive fields', () => {
@@ -278,7 +278,7 @@ describe('LoggerUtils', () => {
           expect(loggerUtils.getRedactCensor()('value', ['special'])).toBe('!!!SPECIAL!!!');
 
           // Test that original behavior still works for other cases
-          expect(loggerUtils.getRedactCensor()('Bearer token', ['authorization'])).toBe('Bearer ***');
+          expect(loggerUtils.getRedactCensor()('Bearer token', ['authorization'])).toBe('***');
         } finally {
           // Restore original censor
           loggerUtils.setRedactCensor(originalCensor);
@@ -368,6 +368,129 @@ describe('LoggerUtils', () => {
           loggerUtils.setSensitiveFields(originalFields);
         }
       });
+    });
+  });
+
+  describe('expandSensitiveFields', () => {
+    it('should expand multiple fields into various naming conventions', () => {
+      const fields = ['api_key', 'password'];
+      const expanded = loggerUtils.expandSensitiveFields(fields);
+
+      // Should contain variations of api_key
+      expect(expanded).toContain('api_key');
+      expect(expanded).toContain('apiKey');
+      expect(expanded).toContain('apikey');
+      expect(expanded).toContain('APIKEY');
+      expect(expanded).toContain('api-key');
+      expect(expanded).toContain('API_KEY');
+
+      // Should contain variations of password
+      expect(expanded).toContain('password');
+      expect(expanded).toContain('PASSWORD');
+    });
+
+    it('should return unique values', () => {
+      const fields = ['test', 'test'];
+      const expanded = loggerUtils.expandSensitiveFields(fields);
+      const uniqueCount = new Set(expanded).size;
+      expect(uniqueCount).toBe(expanded.length);
+    });
+  });
+
+  describe('expandSensitiveField', () => {
+    it('should generate camelCase variant', () => {
+      const variants = loggerUtils.expandSensitiveField('api_key');
+      expect(variants).toContain('apiKey');
+    });
+
+    it('should generate lowercase merged variant', () => {
+      const variants = loggerUtils.expandSensitiveField('api_key');
+      expect(variants).toContain('apikey');
+    });
+
+    it('should generate uppercase merged variant', () => {
+      const variants = loggerUtils.expandSensitiveField('api_key');
+      expect(variants).toContain('APIKEY');
+    });
+
+    it('should generate kebab-case variant', () => {
+      const variants = loggerUtils.expandSensitiveField('api_key');
+      expect(variants).toContain('api-key');
+    });
+
+    it('should generate snake_case variants', () => {
+      const variants = loggerUtils.expandSensitiveField('api_key');
+      expect(variants).toContain('api_key');
+      expect(variants).toContain('API_KEY');
+      expect(variants).toContain('apiKey');
+    });
+
+    it('should return original field in the list', () => {
+      const variants = loggerUtils.expandSensitiveField('password');
+      expect(variants).toContain('password');
+    });
+
+    it('should handle single-word fields', () => {
+      const variants = loggerUtils.expandSensitiveField('token');
+      expect(variants).toContain('token');
+      expect(variants).toContain('TOKEN');
+    });
+
+    it('should handle hyphenated fields', () => {
+      const variants = loggerUtils.expandSensitiveField('access-token');
+      expect(variants).toContain('accessToken');
+      expect(variants).toContain('access_token');
+      expect(variants).toContain('ACCESS_TOKEN');
+    });
+  });
+
+  describe('generateDeepPaths', () => {
+    it('should generate wildcard paths up to specified depth', () => {
+      const paths = loggerUtils.generateDeepPaths('password', 2);
+
+      expect(paths).toContain('password');
+      expect(paths).toContain('*.password');
+      expect(paths).toContain('*.*.password');
+      expect(paths).toHaveLength(3); // depth 0, 1, 2
+    });
+
+    it('should work with depth 0', () => {
+      const paths = loggerUtils.generateDeepPaths('token', 0);
+      expect(paths).toEqual(['token']);
+    });
+
+    it('should work with depth 1', () => {
+      const paths = loggerUtils.generateDeepPaths('secret', 1);
+      expect(paths).toContain('secret');
+      expect(paths).toContain('*.secret');
+      expect(paths).toHaveLength(2);
+    });
+
+    it('should work with larger depths', () => {
+      const paths = loggerUtils.generateDeepPaths('key', 5);
+      expect(paths).toHaveLength(6); // depth 0-5
+      expect(paths).toContain('key');
+      expect(paths).toContain('*.*.*.*.*.key');
+    });
+  });
+
+  describe('getExpandedSensitiveFields', () => {
+    it('should cache expanded fields', () => {
+      const first = loggerUtils.getExpandedSensitiveFields();
+      const second = loggerUtils.getExpandedSensitiveFields();
+
+      expect(first).toBe(second); // Same reference (cached)
+    });
+
+    it('should return expanded default sensitive fields', () => {
+      const expanded = loggerUtils.getExpandedSensitiveFields();
+
+      // Should contain variations of default fields
+      expect(expanded.length).toBeGreaterThan(loggerUtils.defaultSensitiveFields.length);
+      expect(expanded).toContain('password');
+      expect(expanded).toContain('PASSWORD');
+      expect(expanded).toContain('apiKey');
+      expect(expanded).toContain('api_key');
     });
   });
 });
