@@ -7,17 +7,18 @@ describe('config', () => {
         isDev: jest.fn(() => true),
         get: jest.fn((_key: string, fallback: string) => fallback),
         getBoolean: jest.fn(() => false),
-        getNumber: jest.fn((_key: string, fallback: number) => fallback)
+        getNumber: jest.fn((_key: string, fallback: number) => fallback),
+        getPath: jest.fn((_key: string, fallback: string) => fallback)
       }
     }));
 
-    const { config } = require('../src/config');
+    const { defaultCatbeeConfig } = require('../src/config');
     const { Env } = require('../src/utils/env.utils');
 
-    expect(config.logger.level).toBe('info');
-    expect(config.logger.name).toBe('@catbee/utils');
+    expect(defaultCatbeeConfig.logger.level).toBe('debug');
+    expect(defaultCatbeeConfig.logger.name).toBe('@catbee/utils');
 
-    expect(Env.get).toHaveBeenCalledWith('LOGGER_LEVEL', 'info');
+    expect(Env.get).toHaveBeenCalledWith('LOGGER_LEVEL', 'debug');
     expect(Env.get).toHaveBeenCalledWith('LOGGER_NAME', '@catbee/utils');
     expect(Env.get).toHaveBeenCalledWith('npm_package_name', '@catbee/utils');
   });
@@ -34,14 +35,15 @@ describe('config', () => {
           return key in values ? values[key] : fallback;
         }),
         getBoolean: jest.fn((key: string, fallback: boolean) => (key === 'LOGGER_ISO_TIMESTAMP' ? true : fallback)),
-        getNumber: jest.fn((_key: string, fallback: number) => fallback)
+        getNumber: jest.fn((_key: string, fallback: number) => fallback),
+        getPath: jest.fn((_key: string, fallback: string) => fallback)
       }
     }));
 
-    const { config } = require('../src/config');
+    const { defaultCatbeeConfig } = require('../src/config');
 
-    expect(config.logger.level).toBe('debug');
-    expect(config.logger.name).toBe('custom-logger');
+    expect(defaultCatbeeConfig.logger.level).toBe('debug');
+    expect(defaultCatbeeConfig.logger.name).toBe('custom-logger');
   });
 
   it('should fallback to npm_package_name when LOGGER_NAME is not set', () => {
@@ -56,14 +58,15 @@ describe('config', () => {
           return key in values ? values[key] : fallback;
         }),
         getBoolean: jest.fn(() => false),
-        getNumber: jest.fn((_key: string, fallback: number) => fallback)
+        getNumber: jest.fn((_key: string, fallback: number) => fallback),
+        getPath: jest.fn((_key: string, fallback: string) => fallback)
       }
     }));
 
-    const { config } = require('../src/config');
+    const { defaultCatbeeConfig } = require('../src/config');
 
-    expect(config.logger.level).toBe('warn');
-    expect(config.logger.name).toBe('my-pkg');
+    expect(defaultCatbeeConfig.logger.level).toBe('warn');
+    expect(defaultCatbeeConfig.logger.name).toBe('my-pkg');
   });
 
   it('should still return string for level even if invalid', () => {
@@ -72,25 +75,26 @@ describe('config', () => {
         isDev: jest.fn(() => true),
         get: jest.fn(() => 'debug'),
         getBoolean: jest.fn(() => false),
-        getNumber: jest.fn((_key: string, fallback: number) => fallback)
+        getNumber: jest.fn((_key: string, fallback: number) => fallback),
+        getPath: jest.fn((_key: string, fallback: string) => fallback)
       }
     }));
 
-    const { config } = require('../src/config');
+    const { defaultCatbeeConfig } = require('../src/config');
 
-    expect(typeof config.logger.level).toBe('string');
-    expect(config.logger.level).toBe('debug');
+    expect(typeof defaultCatbeeConfig.logger.level).toBe('string');
+    expect(defaultCatbeeConfig.logger.level).toBe('debug');
   });
 
   it('should update nested config values without losing others', () => {
-    const { config, setConfig } = require('../src/config');
+    const { defaultCatbeeConfig, setConfig } = require('../src/config');
 
-    expect(config.logger.pretty).toBe(false); // based on previous mock
+    expect(defaultCatbeeConfig.logger.pretty).toBe(false); // based on previous mock
 
     setConfig({ logger: { level: 'debug' } });
 
-    expect(config.logger.level).toBe('debug');
-    expect(config.logger.pretty).toBe(false); // still unchanged
+    expect(defaultCatbeeConfig.logger.level).toBe('debug');
+    expect(defaultCatbeeConfig.logger.pretty).toBe(false); // still unchanged
   });
 
   it('should get config', () => {
@@ -102,7 +106,8 @@ describe('config', () => {
         name: 'debug',
         pretty: false,
         colorize: false,
-        singleLine: false
+        singleLine: false,
+        dir: ''
       },
       cache: {
         defaultTtl: 3600000
