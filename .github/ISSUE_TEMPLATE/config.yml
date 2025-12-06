@@ -4,7 +4,7 @@ contact_links:
     url: https://github.com/catbee-technologies/catbee-utils#readme
     about: Check the README for more information about the project.
   - name: Documentation
-    url: https://catbee.npm.hprasath.com/docs/@catbee/utils/intro
+    url: https://catbee.in/docs/@catbee/utils/intro
     about: Find in-depth information about using catbee-utils in the docs.
   - name: Discussions
     url: https://github.com/catbee-technologies/catbee-utils/discussions
