@@ -1,69 +1,94 @@
-# 📦 Publish to npm when pushing to main or tagging a release
-
-name: Publish to NPM
+name: Publish Package
+run-name: Publish package for ${{ github.repository }} on ${{ github.ref_name }}
 
 on:
-  push:
-    tags:
-      - 'v*.*.*'       # stable tags like v1.2.3
-      - 'v*.*.*-*'     # prerelease tags like v1.2.3-rc.1, v1.2.3-beta.0
+  repository_dispatch:
+    types: [publish_packages]
+
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
+  statuses: write
 
 jobs:
   publish:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Read tag & sha from dispatch payload
+        run: |
+          echo "TARGET_SHA=${{ github.event.client_payload.sha }}" >> $GITHUB_ENV
+          echo "CREATED_TAG=${{ github.event.client_payload.tag }}" >> $GITHUB_ENV
+          echo "Tag received: ${{ github.event.client_payload.tag }}"
+          echo "SHA received: ${{ github.event.client_payload.sha }}"
+
+      - name: Checkout commit where tag was created
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ env.TARGET_SHA }}
+
+      - name: Fetch tags
+        run: git fetch --tags --force
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24
           registry-url: https://registry.npmjs.org
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Run lint
-        run: npm run lint
+      - name: Build package
+        run: npm run build
 
-      - name: Type check
-        run: npx tsc --noEmit
-
-      - name: Run tests
-        run: npm run test
-
-      - name: Compile package
-        run: npm run compile
-
-      - name: Clean package.json before publishing
+      - name: Clean dist package.json
         run: |
           node -e "
-          const fs = require('fs');
-          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-          delete pkg.devDependencies;
-          delete pkg.scripts;
-          fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));
-          console.log('Cleaned package.json for publish');
+            const fs = require('fs');
+            const path = 'dist/package.json';
+            const pkg = JSON.parse(fs.readFileSync(path, 'utf8'));
+            delete pkg.devDependencies;
+            delete pkg.scripts;
+            fs.writeFileSync(path, JSON.stringify(pkg, null, 2));
+            console.log('Cleaned dist/package.json');
           "
 
       - name: Publish to npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          VERSION=${GITHUB_REF_NAME#v} # strip "v" prefix
-          echo "Version: $VERSION"
+          version=$(jq -r '.version' package.json)
+          cd dist
+          echo -e "\nPublishing version: $version\n"
 
-          if [[ "$VERSION" == *-* ]]; then
-            TAG=$(echo "$VERSION" | sed 's/^[0-9.]*-//' | cut -d. -f1)
-            echo "Detected prerelease. Tag: $TAG"
-            npm publish --access public --tag "$TAG"
+          if [[ "$version" == *-* ]]; then
+            tag=$(echo "$version" | sed 's/^[0-9.]*-//' | cut -d. -f1)
+            echo "Publishing prerelease with tag: $tag"
+            npm publish --access public --tag "$tag"
           else
-            echo "Stable release detected. Tag: latest"
+            echo "Publishing stable release with tag: latest"
             npm publish --access public --tag latest
           fi
+
+      - name: Report status to commit
+        if: success()
+        uses: actions/github-script@v7
+        env:
+          TARGET_SHA: ${{ env.TARGET_SHA }}
+          PUBLISHED_VERSION: ${{ env.CREATED_TAG }}
+        with:
+          script: |
+            const tag = process.env.PUBLISHED_VERSION || "unknown";
+
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: process.env.TARGET_SHA,
+              state: "success",
+              context: "Release",
+              description: `Published version ${tag}`,
+              target_url: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`
+            });
