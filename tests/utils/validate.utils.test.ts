@@ -21,7 +21,7 @@ import {
   isDateInRange,
   matchesPattern,
   validateAll
-} from '../../src/utils/validate.utils';
+} from '../../src/validate';
 
 describe('ValidateUtils', () => {
   describe('isEmail', () => {

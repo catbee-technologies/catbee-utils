@@ -22,9 +22,9 @@ import {
   hasErrorShape,
   getErrorMessage,
   withErrorHandling
-} from '../../src/utils/exception.utils';
-import { HttpStatusCodes } from '../../src/utils/http-status-codes';
-import { ErrorResponse } from '../../src/utils/response.utils';
+} from '../../src/exception';
+import { HttpStatusCodes } from '../../src/http-status-codes';
+import { ErrorResponse } from '../../src/response';
 
 describe('ExceptionUtils', () => {
   describe('HttpError (generic)', () => {

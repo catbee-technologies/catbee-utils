@@ -14,7 +14,7 @@ import {
   decrypt,
   createSignedToken,
   verifySignedToken
-} from '../../src/utils/crypto.utils';
+} from '../../src/crypto';
 
 import { randomUUID } from 'crypto';
 

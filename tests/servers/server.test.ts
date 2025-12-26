@@ -1,10 +1,10 @@
-import { ExpressServer } from '../../src/servers/server';
+import { ExpressServer } from '../../src/server';
 import { ServerConfig } from '../../src/types/server';
 import request from 'supertest';
 import express from 'express';
-import { HttpStatusCodes } from '../../src/utils/http-status-codes';
+import { HttpStatusCodes } from '../../src/http-status-codes';
 import fs from 'fs';
-import * as envUtils from '../../src/utils/env.utils';
+import * as envUtils from '../../src/env';
 
 const counterInc = jest.fn();
 const histogramObserve = jest.fn();
@@ -63,7 +63,7 @@ jest.mock('@scalar/express-api-reference', () => ({
   apiReference: () => (_req: any, _res: any, next: Function) => next()
 }));
 
-jest.mock('../../src/utils/env.utils', () => ({
+jest.mock('../../src/env', () => ({
   Env: {
     isDev: jest.fn().mockReturnValue(true),
     get: jest.fn().mockImplementation((key: string, fallback: string) => {

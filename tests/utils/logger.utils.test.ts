@@ -1,7 +1,7 @@
-import * as loggerUtils from '../../src/utils/logger.utils';
-import { ContextStore, StoreKeys } from '../../src/utils/context-store.utils';
+import * as loggerUtils from '../../src/logger';
+import { ContextStore, StoreKeys } from '../../src/context-store';
 import pino from 'pino';
-import { Env } from '../../src/utils/env.utils';
+import { Env } from '../../src/env';
 
 jest.mock('pino');
 jest.mock('../../src/config', () => ({
@@ -13,7 +13,7 @@ jest.mock('../../src/config', () => ({
     }
   }
 }));
-jest.mock('../../src/utils/context-store.utils', () => ({
+jest.mock('../../src/context-store', () => ({
   ContextStore: {
     get: jest.fn(),
     set: jest.fn()

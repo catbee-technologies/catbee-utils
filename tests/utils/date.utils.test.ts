@@ -9,7 +9,7 @@ import {
   isBetween,
   isLeapYear,
   daysInMonth
-} from '../../src/utils/date.utils';
+} from '../../src/date';
 
 describe('date.utils', () => {
   describe('formatDate', () => {

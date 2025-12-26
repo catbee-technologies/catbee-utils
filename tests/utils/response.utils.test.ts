@@ -1,7 +1,8 @@
-import { getRequestId } from '../../src/utils/context-store.utils';
+import { getRequestId } from '../../src/context-store';
 import { randomUUID } from 'crypto';
-import { ErrorResponse, SuccessResponse } from '../../src/utils/response.utils';
 import {
+  ErrorResponse,
+  SuccessResponse,
   PaginatedResponse,
   NoContentResponse,
   RedirectResponse,
@@ -9,9 +10,9 @@ import {
   createErrorResponse,
   createPaginatedResponse,
   sendResponse
-} from '../../src/utils/response.utils';
+} from '../../src/response';
 
-jest.mock('../../src/utils/context-store.utils');
+jest.mock('../../src/context-store');
 jest.mock('crypto', () => ({
   randomUUID: jest.fn()
 }));

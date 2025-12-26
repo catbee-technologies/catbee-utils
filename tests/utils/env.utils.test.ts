@@ -1,4 +1,4 @@
-import { Env, Environment } from '../../src/utils/env.utils';
+import { Env, Environment } from '../../src/env';
 import fs from 'fs';
 
 describe('Environment enum', () => {

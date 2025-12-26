@@ -21,7 +21,7 @@ import {
   isFile,
   getFileSize,
   readFileBuffer
-} from '../../src/utils/fs.utils';
+} from '../../src/fs';
 
 describe('FsUtils', () => {
   let tempDir: string;

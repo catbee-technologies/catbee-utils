@@ -16,9 +16,9 @@ import {
   takeWhile,
   compact,
   countBy
-} from '../../src/utils/array.utils';
+} from '../../src/array';
 
-jest.mock('../../src/utils/obj.utils', () => ({
+jest.mock('../../src/obj', () => ({
   getValueByPath: (obj: any, path: string) => path.split('.').reduce((o, k) => (o ? o[k] : undefined), obj)
 }));
 

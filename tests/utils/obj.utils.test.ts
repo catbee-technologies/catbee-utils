@@ -12,7 +12,7 @@ import {
   deepFreeze,
   isObject,
   getAllPaths
-} from '../../src/utils/obj.utils';
+} from '../../src/obj';
 
 describe('ObjUtils', () => {
   describe('isObjEmpty', () => {

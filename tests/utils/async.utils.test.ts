@@ -17,7 +17,7 @@ import {
   circuitBreaker,
   CircuitBreakerOpenError,
   runWithConcurrency
-} from '../../src/utils/async.utils';
+} from '../../src/async';
 
 describe('sleep', () => {
   it('delays for at least the given ms', async () => {

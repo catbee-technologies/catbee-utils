@@ -1,10 +1,4 @@
-import {
-  ContextStore,
-  StoreKeys,
-  getRequestId,
-  getFromContext,
-  TypedContextKey
-} from '../../src/utils/context-store.utils';
+import { ContextStore, StoreKeys, getRequestId, getFromContext, TypedContextKey } from '../../src/context-store';
 
 describe('ContextStoreUtils', () => {
   it('should return undefined for missing key outside run context', () => {

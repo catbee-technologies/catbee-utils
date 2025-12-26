@@ -1,8 +1,8 @@
-jest.mock('../src/utils/env.utils.ts');
+jest.mock('../src/env');
 
 describe('config', () => {
   it('should use default logger config values', () => {
-    jest.mock('../src/utils/env.utils', () => ({
+    jest.mock('../src/env', () => ({
       Env: {
         isDev: jest.fn(() => true),
         get: jest.fn((_key: string, fallback: string) => fallback),
@@ -13,7 +13,7 @@ describe('config', () => {
     }));
 
     const { defaultCatbeeConfig } = require('../src/config');
-    const { Env } = require('../src/utils/env.utils');
+    const { Env } = require('../src/env');
 
     expect(defaultCatbeeConfig.logger.level).toBe('debug');
     expect(defaultCatbeeConfig.logger.name).toBe('@catbee/utils');
@@ -24,7 +24,7 @@ describe('config', () => {
   });
 
   it('should load environment-provided logger values', () => {
-    jest.mock('../src/utils/env.utils', () => ({
+    jest.mock('../src/env', () => ({
       Env: {
         isDev: jest.fn(() => true),
         get: jest.fn((key: string, fallback: string) => {
@@ -47,7 +47,7 @@ describe('config', () => {
   });
 
   it('should fallback to npm_package_name when LOGGER_NAME is not set', () => {
-    jest.mock('../src/utils/env.utils', () => ({
+    jest.mock('../src/env', () => ({
       Env: {
         isDev: jest.fn(() => true),
         get: jest.fn((key: string, fallback: string) => {
@@ -70,7 +70,7 @@ describe('config', () => {
   });
 
   it('should still return string for level even if invalid', () => {
-    jest.mock('../src/utils/env.utils', () => ({
+    jest.mock('../src/env', () => ({
       Env: {
         isDev: jest.fn(() => true),
         get: jest.fn(() => 'debug'),
