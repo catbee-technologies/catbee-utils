@@ -2,13 +2,13 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "composite": false,
-    "outDir": "build/esm",
+    "incremental": false,
+    "outDir": "dist",
     "rootDir": "src",
-    "module": "ES2022",
+    "module": "ESNext",
     "target": "ES2022",
     "moduleResolution": "node",
-    "downlevelIteration": true,
-    "tsBuildInfoFile": "build/esm/tsconfig.esm.tsbuildinfo"
+    "esModuleInterop": true
   },
-  "include": ["**/*.ts"]
+  "include": ["src/**/*.ts"]
 }

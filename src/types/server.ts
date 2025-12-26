@@ -1,11 +1,11 @@
-import { Express, json, NextFunction, urlencoded, Request, Response } from 'express';
-import { ExpressServer } from '../servers/server';
-import { HelmetOptions } from 'helmet';
-import { CompressionOptions } from 'compression';
-import { CookieParseOptions } from 'cookie-parser';
-import http from 'http';
-import { CorsOptions } from 'cors';
-import { ToggleConfig } from '.';
+import type { Express, json, NextFunction, urlencoded, Request, Response } from 'express';
+import type { ExpressServer } from '@catbee/utils/server';
+import type { HelmetOptions } from 'helmet';
+import type { CompressionOptions } from 'compression';
+import type { CookieParseOptions } from 'cookie-parser';
+import type { CorsOptions } from 'cors';
+import type http from 'http';
+import type { ToggleConfig } from './common';
 
 /**
  * Server configuration interface with smart defaults and full customization.

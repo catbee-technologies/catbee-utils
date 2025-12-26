@@ -5,26 +5,19 @@ import path from 'path';
 const licensePath = path.resolve('./LICENSE');
 
 // Directories/files to include
-const includePaths = [
-  './build',
-];
+const includePaths = ['./dist'];
 
 // Extensions to include
 const includeExtensions = ['.js', '.ts', '.d.ts', '.mjs', '.cjs'];
 
 // Filenames or paths to skip
 const excludePatterns = [
-  '.map',           // skip source maps
+  '.map' // skip source maps
 ];
 
 // Read and format LICENSE file
 const licenseText = fs.readFileSync(licensePath, 'utf-8');
-const formattedLicense = [
-  '/*',
-  ...licenseText.split('\n').map(line => ` * ${line}`),
-  ' */',
-  ''
-].join('\n');
+const formattedLicense = ['/*', ...licenseText.split('\n').map(line => ` * ${line}`), ' */', ''].join('\n');
 
 // Recursively get all files under a directory
 function getFiles(dir) {
@@ -51,8 +44,8 @@ for (const basePath of includePaths) {
   const absBase = path.resolve(basePath);
   if (!fs.existsSync(absBase)) continue;
 
-  const files = getFiles(absBase).filter(file => 
-    includeExtensions.some(ext => file.endsWith(ext)) && !isExcluded(file)
+  const files = getFiles(absBase).filter(
+    file => includeExtensions.some(ext => file.endsWith(ext)) && !isExcluded(file)
   );
 
   for (const filePath of files) {
@@ -65,9 +58,7 @@ for (const basePath of includePaths) {
     }
 
     fs.writeFileSync(filePath, formattedLicense + '\n' + content, 'utf-8');
-
-    console.log(`LICENSE attached to ${filePath}`);
   }
 }
 
-console.log('✅ LICENSE attachment completed.');
+console.log('✔ LICENSE attachment completed.');

@@ -2,13 +2,13 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "composite": false,
-    "outDir": "build/cjs",
+    "incremental": false,
+    "outDir": "dist",
     "rootDir": "src",
     "module": "CommonJS",
     "target": "ES2022",
     "moduleResolution": "node",
-    "downlevelIteration": true,
-    "tsBuildInfoFile": "build/cjs/tsconfig.cjs.tsbuildinfo"
+    "esModuleInterop": true
   },
-  "include": ["**/*.ts"]
+  "include": ["src/**/*.ts"]
 }

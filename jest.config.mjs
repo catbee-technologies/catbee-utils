@@ -16,10 +16,15 @@ export default {
         outputDirectory: 'coverage',
         outputName: 'test-results.xml'
       }
-    ],
+    ]
   ],
+  moduleNameMapper: {
+    "^@catbee/utils$": "<rootDir>/src",
+    "^@catbee/utils/(.*)$": "<rootDir>/src/$1"
+  },
+  modulePathIgnorePatterns: ["<rootDir>/dist/"],
   testMatch: ['**/tests/**/*.test.ts'],
   coveragePathIgnorePatterns: ['index.ts', 'src/types', 'src/servers/server.ts'],
   testResultsProcessor: 'jest-sonar-reporter',
   detectOpenHandles: true
-}
+};

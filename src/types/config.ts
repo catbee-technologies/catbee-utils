@@ -1,4 +1,4 @@
-import { LoggerLevels } from '../utils/logger.utils';
+import type { LoggerLevels } from '@catbee/utils/logger';
 
 export interface CatbeeConfig {
   logger?: {
