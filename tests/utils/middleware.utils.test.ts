@@ -1,34 +1,27 @@
-import {
-  requestId,
-  timeout,
-  errorHandler,
-  responseTime,
-  setupRequestContext,
-  healthCheck
-} from '../../src/utils/middleware.utils';
-import { HttpStatusCodes } from '../../src/utils/http-status-codes';
-import { ErrorResponse } from '../../src/utils/response.utils';
-import { Env } from '../../src/utils/env.utils';
-import { getLogger } from '../../src/utils/logger.utils';
-import { ContextStore, StoreKeys } from '../../src/utils/context-store.utils';
-import { uuid } from '../../src/utils/id.utils';
+import { requestId, timeout, errorHandler, responseTime, setupRequestContext, healthCheck } from '../../src/middleware';
+import { HttpStatusCodes } from '../../src/http-status-codes';
+import { ErrorResponse } from '../../src/response';
+import { Env } from '../../src/env';
+import { getLogger } from '../../src/logger';
+import { ContextStore, StoreKeys } from '../../src/context-store';
+import { uuid } from '../../src/id';
 
-jest.mock('../../src/utils/id.utils', () => ({
+jest.mock('../../src/id', () => ({
   uuid: jest.fn()
 }));
 const childLogger = { info: jest.fn(), error: jest.fn() };
-jest.mock('../../src/utils/logger.utils', () => ({
+jest.mock('../../src/logger', () => ({
   getLogger: jest.fn(() => ({
     info: jest.fn(),
     error: jest.fn(),
     child: jest.fn(() => childLogger)
   }))
 }));
-jest.mock('../../src/utils/env.utils', () => ({
+jest.mock('../../src/env', () => ({
   Env: { isDev: jest.fn() }
 }));
-jest.mock('../../src/utils/context-store.utils', () => {
-  const original = jest.requireActual('../../src/utils/context-store.utils');
+jest.mock('../../src/context-store', () => {
+  const original = jest.requireActual('../../src/context-store');
   return {
     ...original,
     ContextStore: {

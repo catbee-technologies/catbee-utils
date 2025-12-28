@@ -1,19 +1,11 @@
-import * as loggerUtils from '../../src/utils/logger.utils';
-import { ContextStore, StoreKeys } from '../../src/utils/context-store.utils';
+import * as loggerUtils from '../../src/logger';
+import { ContextStore, StoreKeys } from '../../src/context-store';
 import pino from 'pino';
-import { Env } from '../../src/utils/env.utils';
+import { Env } from '../../src/env';
+import { setCatbeeGlobalConfig } from '../../src/config';
 
 jest.mock('pino');
-jest.mock('../../src/config', () => ({
-  defaultCatbeeConfig: {
-    logger: {
-      name: 'TestLogger',
-      level: 'info',
-      pretty: true
-    }
-  }
-}));
-jest.mock('../../src/utils/context-store.utils', () => ({
+jest.mock('../../src/context-store', () => ({
   ContextStore: {
     get: jest.fn(),
     set: jest.fn()
@@ -28,6 +20,15 @@ describe('LoggerUtils', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    setCatbeeGlobalConfig({
+      logger: {
+        name: 'TestLogger',
+        level: 'info',
+        pretty: true,
+        colorize: false,
+        singleLine: false
+      }
+    });
     mockLogger = {
       child: jest.fn().mockReturnThis(),
       debug: jest.fn(),

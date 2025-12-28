@@ -5,7 +5,7 @@ import {
   createThrottleStream,
   createBatchStream,
   createLineStream
-} from '../../src/utils/stream.utils';
+} from '../../src/stream';
 import { Readable } from 'stream';
 
 describe('stream.utils', () => {

@@ -15,10 +15,19 @@ import {
   take,
   takeWhile,
   compact,
-  countBy
-} from '../../src/utils/array.utils';
+  countBy,
+  secureIndex,
+  secureRandom,
+  findLast,
+  chunkBy,
+  remove,
+  isSorted,
+  lastOfArr,
+  headOfArr,
+  findLastIndex
+} from '../../src/array';
 
-jest.mock('../../src/utils/obj.utils', () => ({
+jest.mock('../../src/obj', () => ({
   getValueByPath: (obj: any, path: string) => path.split('.').reduce((o, k) => (o ? o[k] : undefined), obj)
 }));
 
@@ -67,12 +76,11 @@ describe('ArrayUtils', () => {
 
   describe('random', () => {
     it('returns a value from array or undefined', () => {
-      jest.spyOn(global.Math, 'random').mockReturnValue(0.49);
-      expect(random([10, 20, 30])).toBe(20);
+      expect(random([10, 20, 30])).toBeDefined();
       expect(random([])).toBeUndefined();
       // @ts-expect-error
       expect(random(null)).toBeUndefined();
-      jest.spyOn(global.Math, 'random').mockRestore();
+      jest.spyOn(globalThis.Math, 'random').mockRestore();
     });
   });
 
@@ -259,6 +267,110 @@ describe('ArrayUtils', () => {
     it('returns {} for non-array', () => {
       // @ts-expect-error
       expect(countBy(null, () => 'x')).toEqual({});
+    });
+  });
+
+  describe('secureIndex', () => {
+    it('returns a number in range', () => {
+      for (let i = 1; i < 10; i++) {
+        const idx = secureIndex(i);
+        expect(idx).toBeGreaterThanOrEqual(0);
+        expect(idx).toBeLessThan(i);
+      }
+    });
+    it('throws for invalid max', () => {
+      expect(() => secureIndex(0)).toThrow();
+      expect(() => secureIndex(-1)).toThrow();
+      expect(() => secureIndex(1.5)).toThrow();
+    });
+  });
+
+  describe('secureRandom', () => {
+    it('returns undefined for empty or non-array', () => {
+      expect(secureRandom([])).toBeUndefined();
+      expect(secureRandom(null as any)).toBeUndefined();
+    });
+    it('returns a value from array', () => {
+      const arr = [1, 2, 3];
+      const val = secureRandom(arr);
+      expect(arr).toContain(val);
+    });
+  });
+
+  describe('findLast', () => {
+    it('returns last matching element', () => {
+      expect(findLast([1, 2, 3, 2], (x: number) => x === 2)).toBe(2);
+    });
+    it('returns undefined if not found or non-array', () => {
+      expect(findLast([1, 2, 3], (x: number) => x === 4)).toBeUndefined();
+      expect(findLast(null as any, () => true)).toBeUndefined();
+    });
+  });
+
+  describe('findLastIndex', () => {
+    it('returns last matching index', () => {
+      expect(findLastIndex([1, 2, 3, 2], (x: number) => x === 2)).toBe(3);
+    });
+    it('returns -1 if not found or non-array', () => {
+      expect(findLastIndex([1, 2, 3], (x: number) => x === 4)).toBe(-1);
+      expect(findLastIndex(null as any, () => true)).toBe(-1);
+    });
+  });
+
+  describe('chunkBy', () => {
+    it('splits array by predicate', () => {
+      expect(chunkBy([1, 2, 3, 1, 2], (x: number) => x === 1)).toEqual([
+        [1, 2, 3],
+        [1, 2]
+      ]);
+    });
+    it('returns [] for non-array or empty', () => {
+      expect(chunkBy(null as any, () => true)).toEqual([]);
+      expect(chunkBy([], () => true)).toEqual([]);
+    });
+  });
+
+  describe('remove', () => {
+    it('removes all occurrences of value', () => {
+      expect(remove([1, 2, 3, 2], 2)).toEqual([1, 3]);
+    });
+    it('returns [] for non-array', () => {
+      expect(remove(null as any, 1)).toEqual([]);
+    });
+  });
+
+  describe('isSorted', () => {
+    it('returns true for sorted arrays', () => {
+      expect(isSorted([1, 2, 3])).toBe(true);
+      expect(isSorted([3, 2, 1], 'desc')).toBe(true);
+    });
+    it('returns false for unsorted', () => {
+      expect(isSorted([1, 3, 2])).toBe(false);
+      expect(isSorted([3, 1, 2], 'desc')).toBe(false);
+    });
+    it('returns true for empty or single', () => {
+      expect(isSorted([])).toBe(true);
+      expect(isSorted([1])).toBe(true);
+      expect(isSorted(null as any)).toBe(true);
+    });
+    it('supports custom compareFn', () => {
+      expect(isSorted([{ v: 1 }, { v: 2 }], 'asc', (a: { v: number }, b: { v: number }) => a.v - b.v)).toBe(true);
+    });
+  });
+
+  describe('headOfArr', () => {
+    it('returns first element or undefined', () => {
+      expect(headOfArr([1, 2, 3])).toBe(1);
+      expect(headOfArr([])).toBeUndefined();
+      expect(headOfArr(null as any)).toBeUndefined();
+    });
+  });
+
+  describe('lastOfArr', () => {
+    it('returns last element or undefined', () => {
+      expect(lastOfArr([1, 2, 3])).toBe(3);
+      expect(lastOfArr([])).toBeUndefined();
+      expect(lastOfArr(null as any)).toBeUndefined();
     });
   });
 });

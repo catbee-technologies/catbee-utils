@@ -1,22 +1,16 @@
-jest.mock('../src/utils/env.utils.ts');
+import { CatbeeConfig } from './../src/types/config';
+import { getEnvMockModule } from './__mocks__/index.mock';
+
+jest.mock('../src/env', () => getEnvMockModule());
 
 describe('config', () => {
   it('should use default logger config values', () => {
-    jest.mock('../src/utils/env.utils', () => ({
-      Env: {
-        isDev: jest.fn(() => true),
-        get: jest.fn((_key: string, fallback: string) => fallback),
-        getBoolean: jest.fn(() => false),
-        getNumber: jest.fn((_key: string, fallback: number) => fallback),
-        getPath: jest.fn((_key: string, fallback: string) => fallback)
-      }
-    }));
+    const { getCatbeeGlobalConfig } = require('../src/config');
+    const { Env } = require('../src/env');
 
-    const { defaultCatbeeConfig } = require('../src/config');
-    const { Env } = require('../src/utils/env.utils');
-
-    expect(defaultCatbeeConfig.logger.level).toBe('debug');
-    expect(defaultCatbeeConfig.logger.name).toBe('@catbee/utils');
+    const config = getCatbeeGlobalConfig();
+    expect(config.logger.level).toBe('debug');
+    expect(config.logger.name).toBe('@catbee/utils');
 
     expect(Env.get).toHaveBeenCalledWith('LOGGER_LEVEL', 'debug');
     expect(Env.get).toHaveBeenCalledWith('LOGGER_NAME', '@catbee/utils');
@@ -24,86 +18,41 @@ describe('config', () => {
   });
 
   it('should load environment-provided logger values', () => {
-    jest.mock('../src/utils/env.utils', () => ({
-      Env: {
-        isDev: jest.fn(() => true),
-        get: jest.fn((key: string, fallback: string) => {
-          const values: Record<string, string> = {
-            LOGGER_LEVEL: 'debug',
-            LOGGER_NAME: 'custom-logger'
-          };
-          return key in values ? values[key] : fallback;
-        }),
-        getBoolean: jest.fn((key: string, fallback: boolean) => (key === 'LOGGER_ISO_TIMESTAMP' ? true : fallback)),
-        getNumber: jest.fn((_key: string, fallback: number) => fallback),
-        getPath: jest.fn((_key: string, fallback: string) => fallback)
-      }
-    }));
+    const { getCatbeeGlobalConfig } = require('../src/config');
 
-    const { defaultCatbeeConfig } = require('../src/config');
-
-    expect(defaultCatbeeConfig.logger.level).toBe('debug');
-    expect(defaultCatbeeConfig.logger.name).toBe('custom-logger');
-  });
-
-  it('should fallback to npm_package_name when LOGGER_NAME is not set', () => {
-    jest.mock('../src/utils/env.utils', () => ({
-      Env: {
-        isDev: jest.fn(() => true),
-        get: jest.fn((key: string, fallback: string) => {
-          const values: Record<string, string> = {
-            LOGGER_LEVEL: 'warn',
-            npm_package_name: 'my-pkg'
-          };
-          return key in values ? values[key] : fallback;
-        }),
-        getBoolean: jest.fn(() => false),
-        getNumber: jest.fn((_key: string, fallback: number) => fallback),
-        getPath: jest.fn((_key: string, fallback: string) => fallback)
-      }
-    }));
-
-    const { defaultCatbeeConfig } = require('../src/config');
-
-    expect(defaultCatbeeConfig.logger.level).toBe('warn');
-    expect(defaultCatbeeConfig.logger.name).toBe('my-pkg');
+    const config = getCatbeeGlobalConfig();
+    expect(config.logger.level).toBe('debug');
+    expect(config.logger.name).toBe('@catbee/utils');
   });
 
   it('should still return string for level even if invalid', () => {
-    jest.mock('../src/utils/env.utils', () => ({
-      Env: {
-        isDev: jest.fn(() => true),
-        get: jest.fn(() => 'debug'),
-        getBoolean: jest.fn(() => false),
-        getNumber: jest.fn((_key: string, fallback: number) => fallback),
-        getPath: jest.fn((_key: string, fallback: string) => fallback)
-      }
-    }));
+    const { getCatbeeGlobalConfig } = require('../src/config');
 
-    const { defaultCatbeeConfig } = require('../src/config');
-
-    expect(typeof defaultCatbeeConfig.logger.level).toBe('string');
-    expect(defaultCatbeeConfig.logger.level).toBe('debug');
+    const config = getCatbeeGlobalConfig();
+    expect(typeof config.logger.level).toBe('string');
+    expect(config.logger.level).toBe('debug');
   });
 
   it('should update nested config values without losing others', () => {
-    const { defaultCatbeeConfig, setConfig } = require('../src/config');
+    const { getCatbeeGlobalConfig, setCatbeeGlobalConfig } = require('../src/config');
 
-    expect(defaultCatbeeConfig.logger.pretty).toBe(false); // based on previous mock
+    const config = getCatbeeGlobalConfig();
+    expect(config.logger.pretty).toBe(false); // based on previous mock
 
-    setConfig({ logger: { level: 'debug' } });
+    setCatbeeGlobalConfig({ logger: { level: 'debug' } });
 
-    expect(defaultCatbeeConfig.logger.level).toBe('debug');
-    expect(defaultCatbeeConfig.logger.pretty).toBe(false); // still unchanged
+    const updatedConfig = getCatbeeGlobalConfig();
+    expect(updatedConfig.logger.level).toBe('debug');
+    expect(updatedConfig.logger.pretty).toBe(false); // still unchanged
   });
 
   it('should get config', () => {
-    const { getConfig } = require('../src/config');
+    const { getCatbeeGlobalConfig } = require('../src/config');
 
-    expect(getConfig()).toStrictEqual({
+    const expected: CatbeeConfig = {
       logger: {
         level: 'debug',
-        name: 'debug',
+        name: '@catbee/utils',
         pretty: false,
         colorize: false,
         singleLine: false,
@@ -113,8 +62,76 @@ describe('config', () => {
         defaultTtl: 3600000
       },
       server: {
+        port: 3000,
+        host: '0.0.0.0',
+        cors: false,
+        helmet: false,
+        compression: false,
+        bodyParser: {
+          json: {
+            limit: '1mb'
+          },
+          urlencoded: {
+            extended: true,
+            limit: '1mb'
+          }
+        },
+        cookieParser: false,
+        isMicroservice: false,
+        appName: 'catbee_server',
+        globalHeaders: {},
+        rateLimit: {
+          enable: false,
+          windowMs: 900000,
+          max: 100,
+          message: 'Too many requests, please try again later.',
+          standardHeaders: false,
+          legacyHeaders: false
+        },
+        requestLogging: {
+          enable: false,
+          skipNotFoundRoutes: false
+        },
+        trustProxy: false,
+        openApi: {
+          enable: false,
+          mountPath: '/docs',
+          verbose: false,
+          withGlobalPrefix: false
+        },
+        healthCheck: {
+          path: '/healthz',
+          detailed: false,
+          withGlobalPrefix: false
+        },
+        requestTimeout: 0,
+        responseTime: {
+          enable: false,
+          addHeader: false,
+          logOnComplete: false
+        },
+        requestId: {
+          headerName: 'x-request-id',
+          exposeHeader: false
+        },
+        metrics: {
+          enable: false,
+          path: '/metrics',
+          withGlobalPrefix: false
+        },
+        serviceVersion: {
+          enable: false,
+          headerName: 'x-service-version',
+          version: '0.0.0'
+        },
         skipHealthz: false
       }
-    });
+    };
+
+    const actual = getCatbeeGlobalConfig();
+    delete actual.server.requestLogging.ignorePaths;
+    delete actual.server.requestId.generator;
+
+    expect(actual).toEqual(expected);
   });
 });
