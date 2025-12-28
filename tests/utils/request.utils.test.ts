@@ -4,7 +4,7 @@ import {
   extractPaginationParams,
   extractSortParams,
   extractFilterParams
-} from '../../src/utils/request.utils';
+} from '../../src/request';
 
 describe('parseNumberParam', () => {
   it('parses valid number', () => {

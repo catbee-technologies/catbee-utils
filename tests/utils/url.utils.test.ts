@@ -10,7 +10,7 @@ import {
   removeQueryParams,
   getExtension,
   parseTypedQueryParams
-} from '../../src/utils/url.utils';
+} from '../../src/url';
 
 describe('UrlUtils', () => {
   describe('appendQueryParams', () => {

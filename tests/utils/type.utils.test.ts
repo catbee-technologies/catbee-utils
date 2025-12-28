@@ -1,4 +1,4 @@
-import { isPrimitiveType, getTypeOf, isArrayOf, toStr, toNum, toBool, ensureType } from '../../src/utils/type.utils';
+import { isPrimitiveType, getTypeOf, isArrayOf, toStr, toNum, toBool, ensureType } from '../../src/type';
 
 describe('type.utils', () => {
   describe('isPrimitiveType', () => {

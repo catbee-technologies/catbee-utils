@@ -11,7 +11,7 @@ import {
   equalsIgnoreCase,
   reverse,
   countOccurrences
-} from '../../src/utils/string.utils';
+} from '../../src/string';
 
 describe('StringUtils', () => {
   describe('capitalize', () => {

@@ -1,8 +1,8 @@
-import { timeSync, timeAsync, timed, memoize, trackMemoryUsage } from '../../src/utils/performance.utils';
-import { getLogger } from '../../src/utils/logger.utils';
+import { timeSync, timeAsync, timed, memoize, trackMemoryUsage } from '../../src/performance';
+import { getLogger } from '../../src/logger';
 
 const childLogger = { info: jest.fn(), error: jest.fn() };
-jest.mock('../../src/utils/logger.utils', () => ({
+jest.mock('../../src/logger', () => ({
   getLogger: jest.fn(() => ({
     info: jest.fn(),
     error: jest.fn(),

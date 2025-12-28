@@ -1,4 +1,4 @@
-import { Env, Environment } from '../../src/utils/env.utils';
+import { Env, Environment } from '../../src/env';
 import fs from 'fs';
 
 describe('Environment enum', () => {
@@ -504,13 +504,103 @@ describe('EnvUtils', () => {
   describe('getDuration', () => {
     it('parses ms, s, m, h, d, and combos', () => {
       Env.set('DUR', '1d2h3m4s5ms');
-      expect(Env.getDuration('DUR')).toBe(1 * 86400000 + 2 * 3600000 + 3 * 60000 + 4 * 1000 + 5);
+      expect(Env.getDuration('DUR')).toBe(86_400_000 + 7_200_000 + 180_000 + 4_000 + 5);
+
       Env.set('DUR', '1000');
       expect(Env.getDuration('DUR')).toBe(1000);
+
+      Env.set('DUR', '1h20m10s');
+      expect(Env.getDuration('DUR')).toBe(3_600_000 + 1_200_000 + 10_000);
+
+      Env.set('DUR', '1h 20m 10s');
+      expect(Env.getDuration('DUR')).toBe(3_600_000 + 1_200_000 + 10_000);
+
+      Env.set('DUR', '1m2s1m');
+      expect(Env.getDuration('DUR')).toBe(60_000 + 2_000 + 60_000);
+
+      Env.set('DUR', '2m 2s 1h 500ms');
+      expect(Env.getDuration('DUR')).toBe(120_000 + 2_000 + 3_600_000 + 500);
+
+      Env.set('DUR', '1w2d');
+      expect(Env.getDuration('DUR')).toBe(604_800_000 + 172_800_000);
+
+      Env.set('DUR', '5s300ms');
+      expect(Env.getDuration('DUR')).toBe(5_000 + 300);
+
+      Env.set('DUR', '10m5m');
+      expect(Env.getDuration('DUR')).toBe(600_000 + 300_000);
+
+      Env.set('DUR', '1y 2w 3d 4h 5m 6s 7ms');
+      expect(Env.getDuration('DUR')).toBe(
+        31_536_000_000 + 2 * 604_800_000 + 3 * 86_400_000 + 4 * 3_600_000 + 5 * 60_000 + 6 * 1_000 + 7
+      );
+
+      Env.set('DUR', '2H 30M 15S 250MS');
+      expect(Env.getDuration('DUR')).toBe(7_200_000 + 1_800_000 + 15_000 + 250);
+
+      Env.set('DUR', '3d5ms2h10s');
+      expect(Env.getDuration('DUR')).toBe(259_200_000 + 7_200_000 + 10_000 + 5);
+
+      Env.set('DUR', '1m 1s 1ms 1h 1d');
+      expect(Env.getDuration('DUR')).toBe(60_000 + 1_000 + 1 + 3_600_000 + 86_400_000);
+
+      Env.set('DUR', '1h1h');
+      expect(Env.getDuration('DUR')).toBe(7_200_000);
+
+      Env.set('DUR', '60m');
+      expect(Env.getDuration('DUR')).toBe(3_600_000);
+
+      Env.set('DUR', '24h');
+      expect(Env.getDuration('DUR')).toBe(86_400_000);
+
+      Env.set('DUR', '7d');
+      expect(Env.getDuration('DUR')).toBe(604_800_000);
+
+      Env.set('DUR', '90s 10s');
+      expect(Env.getDuration('DUR')).toBe(90_000 + 10_000);
+
+      Env.set('DUR', '2w3d2w');
+      expect(Env.getDuration('DUR')).toBe(2 * 604_800_000 + 3 * 86_400_000 + 2 * 604_800_000);
+
+      Env.set('DUR', '1d 2d 3d');
+      expect(Env.getDuration('DUR')).toBe(86_400_000 + 172_800_000 + 259_200_000);
+
+      Env.set('DUR', '1h 1m 1s 1ms');
+      expect(Env.getDuration('DUR')).toBe(3_600_000 + 60_000 + 1_000 + 1);
+
+      Env.set('DUR', '48h');
+      expect(Env.getDuration('DUR')).toBe(48 * 3_600_000);
+
+      Env.set('DUR', '1h 120m');
+      expect(Env.getDuration('DUR')).toBe(3_600_000 + 7_200_000);
+
+      Env.set('DUR', '1h20m 30s 70ms');
+      expect(Env.getDuration('DUR')).toBe(3_600_000 + 1_200_000 + 30_000 + 70);
+
+      Env.set('DUR', '1H20M10S');
+      expect(Env.getDuration('DUR')).toBe(3_600_000 + 1_200_000 + 10_000);
+
+      Env.set('DUR', '1D 2H 3M 4S 5MS');
+      expect(Env.getDuration('DUR')).toBe(86_400_000 + 7_200_000 + 180_000 + 4_000 + 5);
+
+      Env.set('DUR', '   1h   2m  3s ');
+      expect(Env.getDuration('DUR')).toBe(3_600_000 + 120_000 + 3_000);
+
+      Env.set('DUR', '6s 6S 6m 6M');
+      expect(Env.getDuration('DUR')).toBe(6_000 + 6_000 + 360_000 + 360_000);
+
+      Env.set('DUR', '500ms 1s 1500ms');
+      expect(Env.getDuration('DUR')).toBe(500 + 1_000 + 1_500);
+
+      Env.set('DUR', 'invalid');
+      expect(() => Env.getDuration('DUR')).toThrow();
+
+      Env.set('DUR', '');
+      expect(Env.getDuration('DUR')).toBe(0);
     });
     it('throws on invalid duration', () => {
       Env.set('DUR', 'notaduration');
-      expect(() => Env.getDuration('DUR')).toThrow(/invalid duration format/);
+      expect(() => Env.getDuration('DUR')).toThrow(/Invalid duration/);
     });
 
     // Add test for empty value

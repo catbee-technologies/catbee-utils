@@ -14,9 +14,8 @@ import {
   decrypt,
   createSignedToken,
   verifySignedToken
-} from '../../src/utils/crypto.utils';
-
-import { randomUUID } from 'crypto';
+} from '../../src/crypto';
+import { randomUUID } from 'node:crypto';
 
 describe('CryptoUtils', () => {
   describe('hash', () => {

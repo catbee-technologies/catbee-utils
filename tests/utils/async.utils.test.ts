@@ -17,7 +17,7 @@ import {
   circuitBreaker,
   CircuitBreakerOpenError,
   runWithConcurrency
-} from '../../src/utils/async.utils';
+} from '../../src/async';
 
 describe('sleep', () => {
   it('delays for at least the given ms', async () => {
@@ -238,7 +238,7 @@ describe('singletonAsync', () => {
     const singleton = singletonAsync(fn, true);
 
     const promise1 = singleton();
-    await expect(singleton()).rejects.toThrow('Busy');
+    await expect(singleton()).rejects.toThrow('Function is already in progress');
     resolve('ok');
     await expect(promise1).resolves.toBe('ok');
   });
