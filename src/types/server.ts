@@ -1,242 +1,426 @@
-import { Express, json, NextFunction, urlencoded, Request, Response } from 'express';
-import { ExpressServer } from '../servers/server';
-import { HelmetOptions } from 'helmet';
-import { CompressionOptions } from 'compression';
-import { CookieParseOptions } from 'cookie-parser';
-import http from 'http';
-import { CorsOptions } from 'cors';
-import { ToggleConfig } from '.';
+import type { Express, json, NextFunction, urlencoded, Request, Response } from 'express';
+import type http from 'node:http';
+import type { ExpressServer } from '@catbee/utils/server';
+import type { HelmetOptions } from 'helmet';
+import type { CompressionOptions } from 'compression';
+import type { CookieParseOptions } from 'cookie-parser';
+import type { CorsOptions } from 'cors';
+import type { ToggleConfig } from './common';
 
 /**
- * Server configuration interface with smart defaults and full customization.
- * All options are designed with security and performance best practices.
- * Most options can be overridden via environment variables.
+ * Server configuration for Catbee HTTP/Express server.
+ * Designed with secure and high-performance defaults for production use.
+ * All features remain fully overridable by consumers.
  */
-export interface ServerConfig {
-  /** Port the server should listen on (default: 3000, env: PORT)
-   *  - default: 3000
+export interface CatbeeServerConfig {
+  /** Server port
+   *  - **default**: `3000`
+   *  - **env**: `SERVER_PORT` || `PORT`
    */
   port: number;
-  /** Optional host address for binding (default: '0.0.0.0', env: HOST)
-   *  - default: '0.0.0.0'
+
+  /** Host address to bind the server
+   *  - **default**: `'0.0.0.0'`
+   *  - **env**: `SERVER_HOST` || `HOST`
    */
   host?: string;
 
-  /** CORS configuration (default: false disables CORS, or provide options object)
-   *  - default: false
+  /** CORS configuration toggle or options
+   *  - **default**: `false`
+   *  - **env**: `SERVER_CORS_ENABLE`
+   *  - `true` -> enable with default settings
+   *  - `CorsOptions` -> enable with custom settings
+   *
+   *  **example**:
+   *  ```ts
+   *  cors: {
+   *    origin: 'https://example.com',
+   *    methods: ['GET', 'POST'],
+   *    credentials: true
+   *  }
+   *  ```
    */
   cors?: ToggleConfig<CorsOptions>;
 
-  /** Enable Helmet security headers (default: false disables Helmet, or provide options object)
-   *  - default: false
+  /** Helmet security headers toggle or options
+   *  - **default**: `false`
+   *  - **env**: `SERVER_HELMET_ENABLE`
+   *  - `true` -> enable with default settings
+   *  - `HelmetOptions` -> enable with custom settings
+   *
+   *  **example**:
+   *  ```ts
+   *  helmet: {
+   *    contentSecurityPolicy: {
+   *      directives: {
+   *        defaultSrc: ["'self'"],
+   *        scriptSrc: ["'self'", 'trusted.com']
+   *      }
+   *    }
+   *  }
+   *  ```
    */
   helmet?: ToggleConfig<HelmetOptions>;
 
-  /** Enable gzip/deflate compression (default: false disables compression, or provide options object)
-   *  - default: false
+  /** HTTP response compression toggle or options
+   *  - **default**: `false`
+   *  - **env**: `SERVER_COMPRESSION_ENABLE`
+   *  - `true` -> enable with default settings
+   *  - `CompressionOptions` -> enable with custom settings
+   *
+   *  **example**:
+   *  ```ts
+   *  compression: { level: 6 }
+   *  ```
    */
   compression?: ToggleConfig<CompressionOptions>;
 
-  /** Request body parsing with size limits
-   *  - json: { limit: '1mb' }
-   *  - urlencoded: { extended: true, limit: '1mb' }
+  /** Body parser configuration for incoming requests
+   *  - **default**: `{ json: { limit: '1mb' }, urlencoded: { extended: true, limit: '1mb' } }`
+   *  - **env**:
+   *    - `SERVER_BODY_PARSER_JSON_LIMIT`
+   *    - `SERVER_BODY_PARSER_URLENCODED_LIMIT`
    */
   bodyParser?: {
-    /** JSON parser (default: { limit: '1mb' }) */
+    /** JSON body parser options
+     *  - **default**: `{ limit: '1mb' }`
+     */
     json?: Parameters<typeof json>[0];
-    /** URL-encoded parser (default: { extended: true, limit: '1mb' }) */
+
+    /** URL-encoded body parser options
+     *  - **default**: `{ extended: true, limit: '1mb' }`
+     */
     urlencoded?: Parameters<typeof urlencoded>[0];
   };
 
-  /** Enable cookie parsing with options (default: false)
-   *  - default: false
+  /** Cookie parser toggle or options
+   *  - **default**: `false`
+   *  - **env**: `SERVER_COOKIE_PARSER_ENABLE`
+   *  - `true` -> enable with default decode
+   *  - `CookieParseOptions` -> enable with custom settings
+   *
+   *  **example**:
+   *  ```ts
+   *  cookieParser: {
+   *    decode: (val) => decodeURIComponent(val)
+   *  }
+   *  ```
    */
   cookieParser?: ToggleConfig<CookieParseOptions>;
 
-  /** Trust proxy headers (default: false)
-   *  - default: false
+  /** Trust proxy configuration
+   *  - **default**: `false`
+   *  - **env**: `SERVER_TRUST_PROXY_ENABLE`
+   *  - `true` -> trust first proxy
+   *  - `number` -> trust N proxies
+   *  - `string | string[]` -> trust specific proxy IP(s)
    */
-  trustProxy?: boolean;
+  trustProxy?: boolean | number | string | string[];
 
-  /** Static file serving configuration for assets, uploads, etc.
-   *  - path: file system path to serve
-   *  - route: URL route prefix (default: "/")
-   *  - maxAge: cache max age (default: 0)
-   *  - etag: enable ETag headers (default: true)
-   *  - immutable: enable immutable caching (default: false)
-   *  - lastModified: enable last-modified caching (default: true)
-   *  - cacheControl: enable Cache-Control headers (default: true)
+  /** Static folder serving configuration
+   *  - **path**: file system path to serve
+   *  - **route**: URL route prefix (default: "/")
+   *  - **maxAge**: cache max age (default: 0)
+   *  - **etag**: enable ETag headers (default: true)
+   *  - **immutable**: enable immutable caching (default: false)
+   *  - **lastModified**: enable last-modified caching (default: true)
+   *  - **cacheControl**: enable Cache-Control headers (default: true)
    */
   staticFolders?: Array<{
-    /** URL route prefix (default: "/") */
+    /** URL mount path prefix
+     *  - **default**: `/`
+     */
     path?: string;
-    /** File system path to serve */
+
+    /** Local directory path to serve (required) */
     directory: string;
-    /** Cache-Control: max-age=<duration> (default: 0) */
+
+    /** Cache-Control max-age value
+     *  - **default**: `0`
+     */
     maxAge?: string;
-    /** Enable ETag headers (default: true) */
+
+    /** Enable ETag header
+     *  - **default**: `true`
+     */
     etag?: boolean;
-    /** Enable immutable caching (default: false) */
+
+    /** Immutable caching
+     *  - **default**: `false`
+     */
     immutable?: boolean;
-    /** Enable last-modified caching (default: true) */
+
+    /** Last-Modified header support
+     *  - **default**: `true`
+     */
     lastModified?: boolean;
-    /** Enable Cache-Control headers (default: true) */
+
+    /** Include Cache-Control header
+     *  - **default**: `true`
+     */
     cacheControl?: boolean;
   }>;
 
-  /** Enable microservice mode (default: false)
-   *  - default: false
+  /** Enable microservice mode
+   *  - **default**: `false`
+   *  - **env**: `SERVER_IS_MICROSERVICE`
    */
   isMicroservice?: boolean;
 
-  /** Service name for headers/metrics (default: 'express_app', env: APP_NAME)
-   *  - default: 'express_app'
+  /** Application/service name used for logs, headers, and metrics
+   *  - **default**: `'catbee_server'`
+   *  - **env**: `SERVER_APP_NAME` or `npm_package_name`
    */
   appName?: string;
 
-  /** Global response headers (default: {})
-   *  - default: {}
+  /** Global headers applied to all responses
+   *  - **default**: {}
+   *  - **env**: `SERVER_GLOBAL_HEADERS` (JSON)
    */
   globalHeaders?: Record<string, string | (() => string)>;
 
   /** Rate limiting settings
-   *  - enable: false
-   *  - windowMs: 15 * 60 * 1000
-   *  - max: 100
-   *  - message: 'Too many requests'
-   *  - standardHeaders: true
-   *  - legacyHeaders: false
+   *  - **enable**: `false` - **env**: `SERVER_RATE_LIMIT_ENABLE`
+   *  - **windowMs**: `900000` (15 minutes) - **env**: `SERVER_RATE_LIMIT_WINDOW_MS`
+   *  - **max**: `100` - **env**: `SERVER_RATE_LIMIT_MAX`
+   *  - **message**: `'Too many requests'` - **env**: `SERVER_RATE_LIMIT_MESSAGE`
+   *  - **standardHeaders**: `true` - **env**: `SERVER_RATE_LIMIT_STANDARD_HEADERS`
+   *  - **legacyHeaders**: `false` - **env**: `SERVER_RATE_LIMIT_LEGACY_HEADERS`
    */
   rateLimit?: {
-    /** Enable rate limiting (default: false) */
+    /** Enable rate-limiting
+     *  - **default**: `false`
+     *  - **env**: `SERVER_RATE_LIMIT_ENABLE`
+     */
     enable: boolean;
-    /** Time window in ms (default: 900000 - 15 minutes) */
+
+    /** Window duration in ms
+     *  - **default**: `900000` (15 minutes)
+     *  - **env**: `SERVER_RATE_LIMIT_WINDOW_MS`
+     */
     windowMs?: number;
-    /** Max requests per window (default: 100) */
+
+    /** Max requests per window
+     *  - **default**: `100`
+     *  - **env**: `SERVER_RATE_LIMIT_MAX`
+     */
     max?: number;
-    /** Rate limit message (default: 'Too many requests') */
+
+    /** Custom message when limit is reached
+     *  - **default**: `'Too many requests'`
+     *  - **env**: `SERVER_RATE_LIMIT_MESSAGE`
+     */
     message?: string;
-    /** Add standard headers (default: true) */
+
+    /** Include standard rate-limit headers
+     *  - **default**: `true`
+     *  - **env**: `SERVER_RATE_LIMIT_STANDARD_HEADERS`
+     */
     standardHeaders?: boolean;
-    /** Add legacy headers (default: false) */
+
+    /** Include legacy rate-limit headers
+     *  - **default**: `false`
+     *  - **env**: `SERVER_RATE_LIMIT_LEGACY_HEADERS`
+     */
     legacyHeaders?: boolean;
   };
 
   /** Request logging configuration
-   *  - enable: true in dev, false in prod
-   *  - ignorePaths: skips /healthz, /favicon.ico, /metrics, /docs, /.well-known
-   *  - skipNotFoundRoutes: false
+   *  - **enable**: `true` in `development`, `false` in `production` - **env**: `SERVER_REQUEST_LOGGING_ENABLE`
+   *  - **ignorePaths**: skips `/healthz`, `/favicon.ico`, `/metrics`, `/docs`, `/.well-known`
+   *  - **skipNotFoundRoutes**: `false` - **env**: `SERVER_REQUEST_LOGGING_SKIP_NOT_FOUND_ROUTES`
    */
   requestLogging?: {
-    /** Enable request logging (default: true in dev, false in prod) */
+    /** Enable request logging
+     *  - **default**: `true` in `development`, `false` in `production`
+     *  - **env**: `SERVER_REQUEST_LOGGING_ENABLE`
+     */
     enable: boolean;
-    /** Ignore paths function or string[] (default: skips /healthz, /favicon.ico, /metrics, /docs, /.well-known) */
+
+    /** Ignore specific paths or apply custom logic to skip logging */
     ignorePaths?: string[] | ((req: Request, res: Response) => boolean);
-    /** Skip logging for not found routes (default: false) */
+
+    /** Skip 404 routes from logs
+     *  - **default**: `false`
+     *  - **env**: `SERVER_REQUEST_LOGGING_SKIP_NOT_FOUND_ROUTES`
+     */
     skipNotFoundRoutes?: boolean;
   };
 
-  /** Health check settings
-   *  - path: '/healthz'
-   *  - detailed: true
-   *  - withGlobalPrefix: false
+  /** Health-check configuration
+   *  - **path**: `/healthz`
+   *  - **detailed**: `true`
+   *  - **withGlobalPrefix**: `false`
    */
   healthCheck?: {
-    /** Health check path (default: '/healthz') */
+    /** Health-check endpoint path
+     *  - **default**: `'/healthz'`
+     *  - **env**: `SERVER_HEALTH_CHECK_PATH`
+     */
     path?: string;
-    /** Custom checks (default: []) */
+    /** Include detailed check results in the response
+     *  - **default**: `true`
+     *  - **env**: `SERVER_HEALTH_CHECK_DETAILED_OUTPUT`
+     */
+    detailed?: boolean;
+
+    /** Apply global route prefix
+     *  - **default**: `false`
+     *  - **env**: `SERVER_HEALTH_CHECK_WITH_GLOBAL_PREFIX`
+     */
+    withGlobalPrefix?: boolean;
+
+    /** Custom health checks */
     checks?: Array<{
+      /** Name of the health check */
       name: string;
+      /** Check function that returns boolean or Promise<boolean> */
       check: () => Promise<boolean> | boolean;
     }>;
-    /** Show detailed checks status in response (default: true) */
-    detailed?: boolean;
-    /** Include in global prefix (default: false) */
-    withGlobalPrefix?: boolean;
   };
 
-  /** Request timeout in ms (default: 30000 - 30 seconds)
-   *  - default: 30000
+  /** Request timeout in ms
+   *  - **default**: `30000` (30 seconds)
+   *  - **env**: `SERVER_REQUEST_TIMEOUT_MS`
    */
   requestTimeout?: number;
 
   /** Response timing configuration
-   *  - enable: false
-   *  - addHeader: true
-   *  - logOnComplete: false
+   *  - **enable**: `false`
+   *  - **addHeader**: `true`
+   *  - **logOnComplete**: `false`
    */
   responseTime?: {
-    /** Enable timing (default: false) */
+    /** Enable timing
+     * - **default**: `false`
+     * - **env**: `SERVER_RESPONSE_TIME_ENABLE`
+     */
     enable: boolean;
-    /** Add X-Response-Time header (default: true) */
+    /** Add X-Response-Time header
+     * - **default**: `true`
+     * - **env**: `SERVER_RESPONSE_TIME_ADD_HEADER`
+     */
     addHeader?: boolean;
-    /** Log completion time (default: false) */
+    /** Log completion time
+     * - **default**: `false`
+     * - **env**: `SERVER_RESPONSE_TIME_LOG_ON_COMPLETE`
+     */
     logOnComplete?: boolean;
   };
 
-  /** Request ID configuration
-   *  - headerName: 'x-request-id'
-   *  - exposeHeader: true
-   *  - generator: uuid()
+  /** Request ID tracking configuration
+   *  - **enable**: `false` - **env**: `SERVER_REQUEST_ID_ENABLE`
+   *  - **headerName**: `'x-request-id'` - **env**: `SERVER_REQUEST_ID_HEADER_NAME`
+   *  - **exposeHeader**: `true` - **env**: `SERVER_REQUEST_ID_EXPOSE_HEADER`
+   *  - **generator**: `uuid()`
    */
   requestId?: {
-    /** Header name (default: 'x-request-id') */
+    /** Header name for request tracing
+     *  - **default**: `'x-request-id'`
+     *  - **env**: `SERVER_REQUEST_ID_HEADER_NAME`
+     */
     headerName?: string;
-    /** Add to response headers (default: true) */
+
+    /** Expose request ID in response headers
+     *  - **default**: `true`
+     *  - **env**: `SERVER_REQUEST_ID_EXPOSE_HEADER`
+     */
     exposeHeader?: boolean;
-    /** ID generator (default: uuid()) */
+
+    /** Function to generate request ID
+     *  - **default**: `uuid()`
+     */
     generator?: () => string;
   };
 
-  /** Global route prefix (default: '/')
-   *  - default: '/'
+  /** Global route prefix for all endpoints
+   *  - **default**: `/`
    */
   globalPrefix?: string;
 
-  /** OpenAPI documentation
-   *  - enable: false
-   *  - mountPath: '/docs'
-   *  - verbose: false
-   *  - withGlobalPrefix: false
+  /** OpenAPI/Swagger documentation config
+   *  - **enable**: `false` - **env**: `SERVER_OPENAPI_ENABLE`
+   *  - **mountPath**: `'/docs'` - **env**: `SERVER_OPENAPI_MOUNT_PATH`
+   *  - **verbose**: `false` - **env**: `SERVER_OPENAPI_VERBOSE`
+   *  - **withGlobalPrefix**: `false` - **env**: `SERVER_OPENAPI_WITH_GLOBAL_PREFIX`
    */
   openApi?: {
-    /** Enable docs (default: false) */
+    /** Enable OpenAPI spec serving
+     *  - **default**: `false`
+     *  - **env**: `SERVER_OPENAPI_ENABLE`
+     */
     enable: boolean;
-    /** UI path (default: '/docs') */
+
+    /** Mount path for API docs UI
+     *  - **default**: `'/docs'`
+     *  - **env**: `SERVER_OPENAPI_MOUNT_PATH`
+     */
     mountPath?: string;
-    /** Spec file path (required if enabled) */
+
+    /** Local OpenAPI spec file path (required if enabled)
+     *  - **env**: `SERVER_OPENAPI_FILE_PATH`
+     */
     filePath?: string;
-    /** Enable verbose logs (default: false) */
+
+    /** Verbose OpenAPI logs
+     *  - **default**: `false`
+     *  - **env**: `SERVER_OPENAPI_VERBOSE`
+     */
     verbose?: boolean;
-    /** Include in global prefix (default: false) */
+
+    /** Apply global prefix to docs route
+     *  - **default**: `false`
+     *  - **env**: `SERVER_OPENAPI_WITH_GLOBAL_PREFIX`
+     */
     withGlobalPrefix?: boolean;
   };
 
-  /** Prometheus metrics
-   *  - enable: false
-   *  - path: '/metrics'
-   *  - withGlobalPrefix: false
+  /** Prometheus metrics config
+   * - **enable**: `false` - **env**: `SERVER_METRICS_ENABLE`
+   * - **path**: `'/metrics'` - **env**: `SERVER_METRICS_PATH`
+   * - **withGlobalPrefix**: `false` - **env**: `SERVER_METRICS_WITH_GLOBAL_PREFIX`
    */
   metrics?: {
-    /** Enable metrics (default: false) */
+    /** Enable metrics endpoint
+     *  - **default**: `false`
+     *  - **env**: `SERVER_METRICS_ENABLE`
+     */
     enable: boolean;
-    /** Metrics path (default: '/metrics') */
+
+    /** Metrics endpoint path
+     *  - **default**: `'/metrics'`
+     *  - **env**: `SERVER_METRICS_PATH`
+     */
     path?: string;
-    /** Include in global prefix (default: false) */
+
+    /** Apply global prefix
+     *  - **default**: `false`
+     *  - **env**: `SERVER_METRICS_WITH_GLOBAL_PREFIX`
+     */
     withGlobalPrefix?: boolean;
   };
 
-  /** Service version header
-   *  - enable: false
-   *  - headerName: 'x-service-version'
-   *  - version: '0.0.0'
+  /** Service version header config
+   * - **enable**: `false` - **env**: `SERVER_SERVICE_VERSION_ENABLE`
+   * - **headerName**: `'x-service-version'` - **env**: `SERVER_SERVICE_VERSION_HEADER_NAME`
+   * - **version**: `'0.0.0'` - **env**: `SERVER_SERVICE_VERSION`
    */
   serviceVersion?: {
-    /** Enable version header (default: false) */
+    /** Enable version header
+     *  - **default**: `false`
+     */
     enable: boolean;
-    /** Header name (default: 'x-service-version') */
+
+    /** Header name
+     *  - **default**: `'x-service-version'`
+     *  - **env**: `SERVER_SERVICE_VERSION_HEADER_NAME`
+     */
     headerName?: string;
-    /** Version value (default: '0.0.0') */
+
+    /** Version value
+     *  - **default**: `'0.0.0'`
+     *  - **env**: `SERVER_SERVICE_VERSION`
+     */
     version?: string | (() => string);
   };
 
@@ -250,41 +434,62 @@ export interface ServerConfig {
    * ```
    */
   https?: {
-    /** Path to SSL private key file (PEM) */
+    /** SSL private key file path (PEM) */
     key: string;
-    /** Path to SSL certificate file (PEM) */
+    /** SSL certificate file path (PEM) */
     cert: string;
-    /** Optional path to CA bundle file (PEM) */
+    /** Optional CA bundle path (PEM) */
     ca?: string;
-    /** Optional passphrase for the private key */
+    /** Optional private key passphrase */
     passphrase?: string;
-    /** Any other https.ServerOptions */
+    /** Additional Node.js `https.ServerOptions` */
     [key: string]: any;
   };
 }
 
 /**
- * Server lifecycle hooks for custom behavior injection.
- * Allows extending server functionality without modifying core code.
- * All hooks can be async and support error handling.
+ * Lifecycle hooks for Catbee server runtime.
+ * Allows injecting custom behavior without modifying Catbee core internals.
  */
-export interface ServerHooks {
-  /** Called before any middleware or routes are initialized - good for early setup */
+export interface CatbeeServerHooks {
+  /** Called before middleware & routes initialize */
   beforeInit?: (server: ExpressServer) => Promise<void> | void;
-  /** Called after middleware and routes are set up - good for final configuration */
+  /** Called after middleware & routes initialize */
   afterInit?: (server: ExpressServer) => Promise<void> | void;
-  /** Called just before the server starts listening - good for last-minute checks */
+  /** Called before server starts listening */
   beforeStart?: (app: Express) => Promise<void> | void;
-  /** Called after the server starts successfully - good for announcing readiness */
+  /** Called after server is ready */
   afterStart?: (server: http.Server) => Promise<void> | void;
-  /** Called before graceful shutdown begins - good for cleanup preparation */
+  /** Called before graceful shutdown */
   beforeStop?: (server: http.Server) => Promise<void> | void;
-  /** Called after server has stopped - good for final cleanup */
+  /** Called after server stops */
   afterStop?: () => Promise<void> | void;
-  /** Custom global error handler - overrides the default error handling */
+  /** Custom error handler (overrides Catbee default if provided) */
   onError?: (error: Error, req: Request, res: Response, next: NextFunction) => void;
-  /** Called at the start of each request - good for request preprocessing */
+  /** Called when a request is received (middleware-style injection) */
   onRequest?: (req: Request, res: Response, next: NextFunction) => void;
-  /** Called before response is sent - good for response modification */
+  /** Called before response is sent */
   onResponse?: (req: Request, res: Response, next: NextFunction) => void;
 }
+
+/* Additional server configuration options not covered in CatbeeServerConfig */
+export interface GlobalServerAddons {
+  /**
+   * Skip healthz endpoint even if health checks are configured
+   *  - **default**: `false`
+   *  - **env**: `SERVER_SKIP_HEALTHZ`
+   *
+   * @additionalInfo
+   * Set to true to return `200 OK` for `/healthz` without checks
+   * Useful in environments where a simple liveness probe is needed
+   * without performing actual health checks
+   * Example: Kubernetes liveness probe
+   * Note: This does not disable the health check functionality itself
+   *       Health checks can still be performed programmatically
+   *       or via other endpoints if needed
+   */
+  skipHealthz: boolean;
+}
+
+/** Combined global server configuration type */
+export type CatbeeGlobalServerConfig = CatbeeServerConfig & GlobalServerAddons;

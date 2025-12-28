@@ -1,4 +1,5 @@
-import { LoggerLevels } from '../utils/logger.utils';
+import type { LoggerLevels } from '@catbee/utils/logger';
+import { CatbeeGlobalServerConfig } from './server';
 
 export interface CatbeeConfig {
   logger?: {
@@ -47,19 +48,6 @@ export interface CatbeeConfig {
      */
     defaultTtl: number;
   };
-  server: {
-    /**
-     * Skip healthz endpoint even if health checks are configured
-     * Default: false
-     * Set to true to return 200 OK for /healthz without checks
-     * Useful in environments where a simple liveness probe is needed
-     * without performing actual health checks
-     * Example: Kubernetes liveness probe
-     * Note: This does not disable the health check functionality itself
-     *       Health checks can still be performed programmatically
-     *       or via other endpoints if needed
-     * Environment variable: SERVER_SKIP_HEALTHZ
-     */
-    skipHealthz: boolean;
-  };
+  /** Server configuration */
+  server: CatbeeGlobalServerConfig;
 }
