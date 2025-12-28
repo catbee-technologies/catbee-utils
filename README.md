@@ -53,22 +53,58 @@ npm i @catbee/utils
 ## ⚡ Quick Start
 
 ```ts
-import { chunk, sleep, getLogger, uuid, isEmail } from "@catbee/utils";
+import { ServerConfigBuilder, ExpressServer } from '@catbee/utils/server';
+import { Router } from 'express';
 
-// Chunk an array
-const result = chunk([1, 2, 3, 4, 5], 2); // [[1, 2], [3, 4], [5]]
+const config = new ServerConfigBuilder()
+  .withPort(3000)
+  .withCors({ origin: '*' })
+  .enableRateLimit({ max: 50, windowMs: 60000 })
+  .enableRequestLogging({ ignorePaths: ['/healthz', '/metrics'] })
+  .withHealthCheck({ path: '/health', detailed: true })
+  .enableOpenApi('./openapi.yaml', { mountPath: '/docs' })
+  .withGlobalHeaders({ 'X-Powered-By': 'Catbee' })
+  .withGlobalPrefix('/api')
+  .withRequestId({ headerName: 'X-Request-Id', exposeHeader: true })
+  .enableResponseTime({ addHeader: true, logOnComplete: true })
+  .build();
 
-// Sleep for 1 second
-await sleep(1000);
+const server = new ExpressServer(config, {
+  beforeInit: srv => console.log('Initializing server...'),
+  afterInit: srv => console.log('Server initialized'),
+  beforeStart: app => console.log('Starting server...'),
+  afterStart: srv => console.log('Server started!'),
+  beforeStop: srv => console.log('Stopping server...'),
+  afterStop: () => console.log('Server stopped.'),
+  onRequest: (req, res, next) => {
+    console.log('Processing request:', req.method, req.url);
+    next();
+  },
+  onResponse: (req, res, next) => {
+    res.setHeader('X-Processed-By', 'ExpressServer');
+    next();
+  },
+  onError: (err, req, res, next) => {
+    console.error('Custom error handler:', err);
+    res.status(500).json({ error: 'Custom error: ' + err.message });
+  }
+});
 
-// Log with context
-getLogger().info("App started");
+// Register routes
+const router = server.createRouter('/users');
+router.get('/', (req, res) => res.json({ users: [] }));
+router.post('/', (req, res) => res.json({ created: true }));
 
-// Generate a secure UUID
-console.log(uuid()); // e.g. 2a563ec1-caf6-4fe2-b60c-9cf7fb1bdb7f
+// Or set a base router for all routes
+const baseRouter = Router();
+baseRouter.use('/users', router);
+server.setBaseRouter(baseRouter);
 
-// Basic validation
-console.log(isEmail("user@example.com")); // true
+server.registerHealthCheck('database', async () => await checkDatabaseConnection());
+server.useMiddleware(loggingMiddleware, errorMiddleware);
+
+await server.start();
+server.enableGracefulShutdown();
 ```
 
 ---

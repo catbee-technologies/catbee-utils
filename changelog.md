@@ -57,8 +57,8 @@
 ## [1.0.0] - 2025-09-24
 ### Added
 - **Decorators**
-  - `@ReqCookie(key?: string)` → Extract cookies directly into controller parameters.
-  - `@ReqId()` → Injects the current request's unique identifier into controllers/methods.
+  - `@ReqCookie(key?: string)` -> Extract cookies directly into controller parameters.
+  - `@ReqId()` -> Injects the current request's unique identifier into controllers/methods.
 
 - **Dependency Injection (DI)**
   - Introduced `DIContainer` for lightweight dependency injection.
@@ -66,17 +66,17 @@
   - Added `@Inject()` decorator for constructor/property injection.
 
 - **HTTP & Utility Decorators**
-  - `@Headers` → Access request headers.
-  - `@Cache(ttl)` → Cache route responses for a configurable TTL.
-  - `@RateLimit(limit, window)` → Apply rate limiting on routes.
-  - `@ContentType(type)` → Override default content type.
-  - `@Version(v)` → Attach version metadata to routes.
-  - `@Timeout(ms)` → Automatically abort long-running requests.
-  - `@Log()` → Enable per-route request logging.
+  - `@Headers` -> Access request headers.
+  - `@Cache(ttl)` -> Cache route responses for a configurable TTL.
+  - `@RateLimit(limit, window)` -> Apply rate limiting on routes.
+  - `@ContentType(type)` -> Override default content type.
+  - `@Version(v)` -> Attach version metadata to routes.
+  - `@Timeout(ms)` -> Automatically abort long-running requests.
+  - `@Log()` -> Enable per-route request logging.
 
 ### Changed
 - **Logger**
-  - **Refactored** logger type from `pino.Logger` → `PinoLogger` to align with typings.
+  - **Refactored** logger type from `pino.Logger` -> `PinoLogger` to align with typings.
   - Enhanced `setupLogger`:
     - New `isGlobal` parameter for toggling between global and scoped loggers.
     - Reintroduced serializers for consistent log formatting.
@@ -127,7 +127,7 @@
 ## [0.0.4] - 2025-08-17
 ### Changed
 - **Logger**
-  - Standardized request ID field: renamed `reqId` → `requestId`.
+  - Standardized request ID field: renamed `reqId` -> `requestId`.
 
 ### Fixed
 - **Server**
@@ -170,6 +170,6 @@
 
 # Notes
 - This project follows **semantic versioning**:
-  - **MAJOR** → Breaking changes.
-  - **MINOR** → Backward-compatible features.
-  - **PATCH** → Fixes and small improvements.
+  - **MAJOR** -> Breaking changes.
+  - **MINOR** -> Backward-compatible features.
+  - **PATCH** -> Fixes and small improvements.
