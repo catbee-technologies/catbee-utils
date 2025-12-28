@@ -1,10 +1,10 @@
-import { ExpressServer } from '../../src/servers/server';
-import { ServerConfig } from '../../src/types/server';
+import { ExpressServer } from '../../src/server';
+import { CatbeeGlobalServerConfig } from '../../src/types/server';
 import request from 'supertest';
 import express from 'express';
-import { HttpStatusCodes } from '../../src/utils/http-status-codes';
-import fs from 'fs';
-import * as envUtils from '../../src/utils/env.utils';
+import { HttpStatusCodes } from '../../src/http-status-codes';
+import { readFileSync } from '../../src/fs';
+import * as envUtils from '../../src/env';
 
 const counterInc = jest.fn();
 const histogramObserve = jest.fn();
@@ -42,8 +42,8 @@ jest.mock('prom-client', () => {
   };
 });
 
-jest.mock('fs', () => ({
-  ...jest.requireActual('fs'),
+jest.mock('../../src/fs', () => ({
+  ...jest.requireActual('../../src/fs'),
   readFileSync: jest.fn().mockImplementation(filePath => {
     if (typeof filePath === 'string') {
       if (filePath.includes('localhost.pem')) return 'mock-key-content';
@@ -63,23 +63,6 @@ jest.mock('@scalar/express-api-reference', () => ({
   apiReference: () => (_req: any, _res: any, next: Function) => next()
 }));
 
-jest.mock('../../src/utils/env.utils', () => ({
-  Env: {
-    isDev: jest.fn().mockReturnValue(true),
-    get: jest.fn().mockImplementation((key: string, fallback: string) => {
-      const values: Record<string, string> = {
-        LOGGER_NAME: 'express_app',
-        LOGGER_LEVEL: 'silent'
-      };
-      return key in values ? values[key] : fallback;
-    }),
-    getBoolean: jest.fn().mockReturnValue(false),
-    getNumber: jest.fn().mockImplementation((_key: string, fallback: number) => fallback),
-    getPath: jest.fn().mockImplementation((_key: string, fallback: string) => fallback)
-  },
-  isDev: jest.fn().mockReturnValue(true)
-}));
-
 // Mock process.getuid for port validation tests
 Object.defineProperty(process, 'getuid', {
   value: jest.fn().mockReturnValue(1000)
@@ -96,8 +79,8 @@ async function killServer(server: ExpressServer) {
 }
 
 describe('ExpressServer', () => {
-  const baseConfig: Partial<ServerConfig> = {
-    port: 4000, // Use random available port for testing
+  const baseConfig: Partial<CatbeeGlobalServerConfig> = {
+    port: 4000,
     host: 'localhost',
     requestLogging: { enable: false }, // Disable for cleaner test output
     metrics: { enable: false, path: '/metrics' },
@@ -194,8 +177,8 @@ describe('ExpressServer', () => {
       // Start the server
       const httpServer = await server.start();
       expect(httpServer).toBeDefined();
-      expect(fs.readFileSync).toHaveBeenCalledWith(keyPath);
-      expect(fs.readFileSync).toHaveBeenCalledWith(certPath);
+      expect(readFileSync).toHaveBeenCalledWith(keyPath);
+      expect(readFileSync).toHaveBeenCalledWith(certPath);
 
       await killServer(server);
     });

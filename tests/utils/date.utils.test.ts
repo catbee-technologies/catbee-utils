@@ -8,8 +8,11 @@ import {
   endOf,
   isBetween,
   isLeapYear,
-  daysInMonth
-} from '../../src/utils/date.utils';
+  daysInMonth,
+  formatDuration,
+  parseDuration,
+  getDateFromDuration
+} from '../../src/date';
 
 describe('date.utils', () => {
   describe('formatDate', () => {
@@ -292,6 +295,52 @@ describe('date.utils', () => {
 
     it('throws error if month is missing', () => {
       expect(() => daysInMonth(2023 as any)).toThrow();
+    });
+  });
+  describe('formatDuration', () => {
+    it('returns 0ms for non-finite or non-positive', () => {
+      expect(formatDuration(NaN)).toBe('0ms');
+      expect(formatDuration(-100)).toBe('0ms');
+      expect(formatDuration(0)).toBe('0ms');
+    });
+    it('formats days, hours, minutes, seconds, ms', () => {
+      expect(formatDuration(90061)).toBe('1m 30s 61ms');
+      expect(formatDuration(3661000)).toBe('1h 1m 1s');
+      expect(formatDuration(24 * 60 * 60 * 1000 + 1000)).toContain('1d');
+    });
+  });
+
+  describe('parseDuration', () => {
+    it('returns value for finite number', () => {
+      expect(parseDuration(1234)).toBe(1234);
+    });
+    it('returns 0 for empty or invalid string', () => {
+      expect(parseDuration('')).toBe(0);
+      expect(parseDuration('   ')).toBe(0);
+      expect(parseDuration(undefined as any)).toBe(0);
+    });
+    it('parses plain ms string', () => {
+      expect(parseDuration('60000')).toBe(60000);
+    });
+    it('parses combined units', () => {
+      expect(parseDuration('1h20m10s')).toBe(1 * 3600000 + 20 * 60000 + 10 * 1000);
+      expect(parseDuration('2d')).toBe(2 * 86400000);
+      expect(parseDuration('1w2d3h')).toBe(1 * 604800000 + 2 * 86400000 + 3 * 3600000);
+      expect(parseDuration('5ms')).toBe(5);
+    });
+    it('throws error for invalid format', () => {
+      expect(() => parseDuration('abc')).toThrow();
+    });
+  });
+
+  describe('getDateFromDuration', () => {
+    it('returns future date for valid duration', () => {
+      const now = Date.now();
+      const result = getDateFromDuration('1s');
+      expect(result.getTime()).toBeGreaterThanOrEqual(now + 1000);
+    });
+    it('throws error for zero duration', () => {
+      expect(() => getDateFromDuration('0')).toThrow();
     });
   });
 });

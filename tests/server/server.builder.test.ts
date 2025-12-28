@@ -1,4 +1,4 @@
-import { ServerConfigBuilder } from '../../src/servers/server.builder';
+import { ServerConfigBuilder } from '../../src/server';
 
 jest.mock(
   '@scalar/express-api-reference',

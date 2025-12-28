@@ -1,4 +1,4 @@
-import { uuid, randomHex, randomInt, randomBase64, nanoId } from '../../src/utils/id.utils';
+import { uuid, randomHex, randomInt, randomBase64, nanoId } from '../../src/id';
 
 describe('IdUtils', () => {
   describe('uuid', () => {

@@ -21,9 +21,9 @@ import {
   isDateInRange,
   matchesPattern,
   validateAll
-} from '../../src/utils/validate.utils';
+} from '../../src/validation';
 
-describe('ValidateUtils', () => {
+describe('ValidationUtils', () => {
   describe('isEmail', () => {
     it('accepts standard emails', () => {
       expect(isEmail('test@example.com')).toBe(true);
@@ -35,6 +35,9 @@ describe('ValidateUtils', () => {
         expect(isEmail('notanemail')).toBe(false);
         expect(isEmail('foo.com')).toBe(false);
         expect(isEmail('@nope.com')).toBe(false);
+      });
+      it('rejects quoted local part', () => {
+        expect(isEmail('"foo bar"@bar.com')).toBe(true); // valid quoted
       });
 
       it('rejects missing domain dot / invalid TLD', () => {
@@ -84,7 +87,7 @@ describe('ValidateUtils', () => {
         // TLD issues
         expect(isEmail('foo@bar.c_m')).toBe(false); // invalid TLD characters
         expect(isEmail('foo@bar.123')).toBe(false); // numeric TLD not allowed in strict mode
-        expect(isEmail(`foo@bar.${'a'.repeat(64)}`)).toBe(false); // 64-char TLD → invalid
+        expect(isEmail(`foo@bar.${'a'.repeat(64)}`)).toBe(false); // 64-char TLD -> invalid
 
         // Quoted strings but invalid content
         expect(isEmail('"unclosed@bar.com')).toBe(false);
@@ -125,8 +128,8 @@ describe('ValidateUtils', () => {
       expect(isURL('http://example.com')).toBe(true);
       expect(isURL('https://a.co/cat?x=1')).toBe(true);
       expect(isURL('https://foo.bar/path/to?x=1')).toBe(true);
-      expect(isURL('ftp://domain.com')).toBe(true);
-      expect(isURL('mailto:abc@foo.com')).toBe(true);
+      expect(isURL('ftp://domain.com', ['ftp'])).toBe(true);
+      expect(isURL('mailto:abc@foo.com', ['mailto'])).toBe(true);
     });
     it('rejects invalid URLs', () => {
       expect(isURL('not a url')).toBe(false);
@@ -201,6 +204,9 @@ describe('ValidateUtils', () => {
       expect(isHexColor('#FFFF')).toBe(false);
       expect(isHexColor('#12345')).toBe(false);
       expect(isHexColor('#abcdex')).toBe(false);
+      expect(isHexColor(undefined as any)).toBe(false); // covers typeof str !== 'string'
+      expect(isHexColor(null as any)).toBe(false);
+      expect(isHexColor('')).toBe(false);
     });
   });
 
@@ -254,6 +260,8 @@ describe('ValidateUtils', () => {
       expect(isAlpha('abc1')).toBe(false);
       expect(isAlpha(' ')).toBe(false);
       expect(isAlpha('')).toBe(false);
+      expect(isAlpha(undefined as any)).toBe(false);
+      expect(isAlpha(null as any)).toBe(false);
     });
   });
 
@@ -303,6 +311,8 @@ describe('ValidateUtils', () => {
       expect(isCreditCard('1234 5678 9012 3456')).toBe(false);
       expect(isCreditCard('abcd')).toBe(false);
       expect(isCreditCard('')).toBe(false);
+      expect(isCreditCard(undefined as any)).toBe(false);
+      expect(isCreditCard(null as any)).toBe(false);
     });
   });
 
@@ -340,6 +350,8 @@ describe('ValidateUtils', () => {
     it('returns false for invalid base64', () => {
       expect(isBase64('not base64!')).toBe(false);
       expect(isBase64('123')).toBe(false);
+      expect(isBase64(undefined as any)).toBe(false);
+      expect(isBase64(null as any)).toBe(false);
     });
   });
 
@@ -377,6 +389,8 @@ describe('ValidateUtils', () => {
     });
     it('returns false if string does not match pattern', () => {
       expect(matchesPattern('abc', /^\d+$/)).toBe(false);
+      expect(matchesPattern(undefined as any, /^\d+$/)).toBe(false);
+      expect(matchesPattern(null as any, /^\d+$/)).toBe(false);
     });
   });
 
@@ -388,6 +402,10 @@ describe('ValidateUtils', () => {
     it('returns false if any validator fails', () => {
       const validators = [(x: any) => typeof x === 'string', (x: any) => x.length > 5];
       expect(validateAll('abc', validators)).toBe(false);
+    });
+    it('returns false if validators is not array', () => {
+      expect(validateAll('abc', undefined as any)).toBe(false);
+      expect(validateAll('abc', null as any)).toBe(false);
     });
   });
 });

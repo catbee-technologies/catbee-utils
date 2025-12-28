@@ -1,4 +1,4 @@
-import { TTLCache } from '../../src/utils/cache.utils';
+import { TTLCache } from '../../src/cache';
 
 describe('TTLCache', () => {
   // Use a fake timer to control time progression

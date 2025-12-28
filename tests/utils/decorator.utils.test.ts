@@ -30,14 +30,13 @@ import {
   ReqHeader,
   ReqCookie,
   ReqId
-} from '../../src/utils/decorators.utils';
+} from '../../src/decorators';
 import { jest } from '@jest/globals';
-import { HttpStatusCodes } from '../../src/utils/http-status-codes';
+import { HttpStatusCodes } from '../../src/http-status-codes';
 import { NextFunction } from 'express';
-import { getLogger } from '../../src/utils/logger.utils';
+import { getLogger } from '../../src/logger';
 
-jest.mock('../../src/utils/logger.utils');
-
+jest.mock('../../src/logger');
 // Helper to create mock Router
 function createMockRouter() {
   const methods = ['get', 'post', 'put', 'patch', 'delete', 'options', 'head', 'trace', 'connect', 'all'];
@@ -861,7 +860,7 @@ describe('Decorators and registerControllers', () => {
       expect(b.getCombined()).toBe('AB');
 
       // Use DI container to resolve
-      const { DIContainer } = require('../../src/utils/decorators.utils');
+      const { DIContainer } = require('../../src/decorators');
       const di = new DIContainer();
       di.register(ServiceA);
       di.register(ServiceB);
@@ -887,7 +886,7 @@ describe('Decorators and registerControllers', () => {
         }
       }
 
-      const { DIContainer } = require('../../src/utils/decorators.utils');
+      const { DIContainer } = require('../../src/decorators');
       const di = new DIContainer();
       di.register(ServiceC);
       di.register(ServiceD);
@@ -926,7 +925,7 @@ describe('Decorators and registerControllers', () => {
       CircularBClass = CircularB;
 
       // Patch DIContainer to allow string tokens for circular refs
-      const { DIContainer } = require('../../src/utils/decorators.utils');
+      const { DIContainer } = require('../../src/decorators');
       const di = new DIContainer();
       di.register(CircularAClass);
       di.register(CircularBClass);
@@ -963,7 +962,7 @@ describe('Decorators and registerControllers', () => {
       CircularYClass = CircularY;
 
       // Manual property wiring to avoid TypeError due to DIContainer not supporting string tokens
-      const { DIContainer } = require('../../src/utils/decorators.utils');
+      const { DIContainer } = require('../../src/decorators');
       const di = new DIContainer();
       di.register(CircularXClass);
       di.register(CircularYClass);
@@ -1002,7 +1001,7 @@ describe('Decorators and registerControllers', () => {
         }
       }
 
-      const { DIContainer } = require('../../src/utils/decorators.utils');
+      const { DIContainer } = require('../../src/decorators');
       const di = new DIContainer();
       di.register(ServiceX);
       di.register(ServiceY);
@@ -1022,7 +1021,7 @@ describe('Decorators and registerControllers', () => {
         }
       }
 
-      const { DIContainer } = require('../../src/utils/decorators.utils');
+      const { DIContainer } = require('../../src/decorators');
       const di = new DIContainer();
       di.register(TestService);
       const instance = di.get(TestService);
