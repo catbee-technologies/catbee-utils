@@ -31,7 +31,7 @@
  */
 
 export default {
-  $schema: "https://json.schemastore.org/commitlintrc.json",
+  $schema: 'https://json.schemastore.org/commitlintrc.json',
   extends: ['@commitlint/config-conventional'],
   rules: {
     'type-enum': [
@@ -64,6 +64,6 @@ export default {
     'subject-empty': [2, 'never'],
     'subject-max-length': [2, 'always', 72],
     'header-max-length': [2, 'always', 100],
-    'body-max-line-length': [0, 'always'],
+    'body-max-line-length': [0, 'always']
   }
 };

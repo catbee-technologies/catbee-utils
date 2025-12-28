@@ -1,51 +1,49 @@
 import { defineConfig, Options } from 'tsup';
-import { join } from 'path';
-import { readFileSync } from 'fs';
+import { readdirSync } from 'node:fs';
+import { join } from 'node:path';
 
-const licensePath = join(process.cwd(), 'LICENSE');
-const licenseRaw = readFileSync(licensePath, 'utf-8');
-const licenseBanner = `/*\n${licenseRaw
-  .split('\n')
-  .map(line => ` * ${line}`)
-  .join('\n')}\n */`;
+const buildDir = 'dist/';
 
-const baseConfig: Options = {
-  // entry: ['src/**/*.ts'],
-  entry: ['src/index.ts'],
-  outDir: 'build',
-  bundle: true,
-  splitting: false,
-  target: 'ES2022',
-  clean: true,
-  minify: false,
-  // noExternal: ['reflect-metadata'],
-  dts: false,
-  outExtension({ format }) {
-    return format === 'esm' ? { js: '.mjs' } : { js: '.cjs' };
-  },
-  esbuildOptions(options) {
-    options.platform = 'node';
-    // options.external = ['pino', 'os', 'fs', 'path', 'worker_threads'];
-    // options.banner = {
-    //   js: licenseBanner
-    // };
-  },
-  treeshake: true,
-  skipNodeModulesBundle: true
-}
+const external = ['@catbee/utils'];
+
+const cwd = process.cwd();
+const srcRoot = join(cwd, 'src');
+
+const modules = readdirSync(srcRoot, { withFileTypes: true })
+  .filter(d => d.isDirectory())
+  .map(d => d.name);
+
+const getBaseConfig = ({ bundle = true, sourcemap = false }): Options => {
+  const options: Options = {
+    bundle,
+    splitting: false,
+    target: 'es2022',
+    clean: true,
+    minify: false,
+    sourcemap,
+    format: ['cjs', 'esm'],
+    outExtension({ format }) {
+      return format === 'esm' ? { js: '.mjs' } : { js: '.cjs' };
+    },
+    treeshake: 'recommended',
+    external
+  };
+  return options;
+};
+
+const entryPoints = modules.flatMap((name: string): Options[] => [
+  {
+    ...getBaseConfig({ bundle: true, sourcemap: false }),
+    entry: [`src/${name}/index.ts`],
+    outDir: `${buildDir}${name}`
+  }
+]);
 
 export default defineConfig([
+  ...entryPoints,
   {
-    ...baseConfig,
-    format: 'esm',
-    dts: false,
-    tsconfig: './tsconfig.esm.json',
-  },
-  {
-    ...baseConfig,
-    format: 'cjs',
-    dts: true, //  { banner: licenseBanner }, -> To generate .d.ts files with license banner
-    tsconfig: './tsconfig.cjs.json',
-    cjsInterop: true,
+    ...getBaseConfig({ bundle: false, sourcemap: false }),
+    entry: ['src/index.ts'],
+    outDir: buildDir
   }
 ]);

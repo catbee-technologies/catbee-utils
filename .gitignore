@@ -6,3 +6,4 @@ logs/
 coverage/
 **/test-report.xml
 pack-output.json
+dist/
