@@ -56,60 +56,56 @@ export function omit<T extends object, K extends keyof T>(obj: T, keys: K[]): Om
 export function deepObjMerge<T extends object>(target: T, ...sources: any[]): T {
   const seen = new WeakMap<object, any>();
 
-  const mergeInto = (t: any, s: any): any => {
-    if (s === undefined) return t;
-    if (typeof s === 'function' || typeof s === 'symbol') return s;
+  for (const s of sources) {
+    target = mergeInto(target, s, seen);
+  }
 
-    if (Array.isArray(s)) {
+  return target;
+}
+
+function mergeInto(t: any, s: any, seen: WeakMap<object, any>): any {
+  if (s === undefined) return t;
+  if (typeof s === 'function' || typeof s === 'symbol') return s;
+
+  if (Array.isArray(s)) {
+    const cloned = deepClone(s);
+    seen.set(s, cloned);
+    return cloned;
+  }
+
+  if (s && typeof s === 'object') {
+    if (seen.has(s)) return seen.get(s);
+
+    if (
+      s instanceof Date ||
+      s instanceof Map ||
+      s instanceof Set ||
+      s instanceof RegExp ||
+      s instanceof ArrayBuffer ||
+      ArrayBuffer.isView(s)
+    ) {
       const cloned = deepClone(s);
       seen.set(s, cloned);
       return cloned;
     }
 
-    if (s && typeof s === 'object') {
-      // Return existing circular clone
-      if (seen.has(s)) return seen.get(s);
-
-      // Clone special types using your deepClone
-      if (
-        s instanceof Date ||
-        s instanceof Map ||
-        s instanceof Set ||
-        s instanceof RegExp ||
-        s instanceof ArrayBuffer ||
-        ArrayBuffer.isView(s)
-      ) {
-        const cloned = deepClone(s);
-        seen.set(s, cloned);
-        return cloned;
-      }
-
-      // Ensure target is an object and preserve prototype
-      if (!t || typeof t !== 'object') {
-        t = Object.create(Object.getPrototypeOf(s));
-      }
-
-      // Store circular reference BEFORE deep merging children
-      seen.set(s, t);
-
-      for (const key of Reflect.ownKeys(s)) {
-        if (key === '__proto__') continue;
-        const sv = (s as any)[key];
-        if (sv === undefined) continue;
-        t[key] = mergeInto(t[key], sv);
-      }
-
-      return t;
+    if (!t || typeof t !== 'object') {
+      t = Object.create(Object.getPrototypeOf(s));
     }
 
-    return s;
-  };
+    seen.set(s, t);
 
-  for (const s of sources) {
-    target = mergeInto(target, s);
+    for (const key of Reflect.ownKeys(s)) {
+      if (key === '__proto__') continue;
+      const sv = (s as any)[key];
+      if (sv === undefined) continue;
+      t[key] = mergeInto(t[key], sv, seen);
+    }
+
+    return t;
   }
 
-  return target;
+  return s;
 }
 
 /**
@@ -228,14 +224,58 @@ export function isEqual(a: any, b: any): boolean {
   if (a === b) return true;
   if (a == null || b == null || typeof a !== 'object' || typeof b !== 'object') return false;
 
-  if (a instanceof Date && b instanceof Date) return a.getTime() === b.getTime();
-  if (a instanceof RegExp && b instanceof RegExp) return a.source === b.source && a.flags === b.flags;
-  if (a instanceof Set && b instanceof Set) return a.size === b.size && [...a].every(v => b.has(v));
-  if (a instanceof Map && b instanceof Map) return a.size === b.size && [...a].every(([k, v]) => isEqual(v, b.get(k)));
-  if (a instanceof ArrayBuffer && b instanceof ArrayBuffer) return isEqual(new Uint8Array(a), new Uint8Array(b));
-  if (Array.isArray(a) && Array.isArray(b)) return a.length === b.length && a.every((v, i) => isEqual(v, b[i]));
+  if (a instanceof Date && b instanceof Date) return equalDates(a, b);
+  if (a instanceof RegExp && b instanceof RegExp) return equalRegExp(a, b);
+  if (a instanceof Set && b instanceof Set) return equalSet(a, b);
+  if (a instanceof Map && b instanceof Map) return equalMap(a, b);
+  if (a instanceof ArrayBuffer && b instanceof ArrayBuffer) return equalArrayBuffer(a, b);
+  if (Array.isArray(a) && Array.isArray(b)) return equalArray(a, b);
 
-  return Object.keys(a).length === Object.keys(b).length && Object.keys(a).every(key => isEqual(a[key], b[key]));
+  return equalPlainObjects(a, b);
+}
+
+function equalDates(a: Date, b: Date): boolean {
+  return a.getTime() === b.getTime();
+}
+
+function equalRegExp(a: RegExp, b: RegExp): boolean {
+  return a.source === b.source && a.flags === b.flags;
+}
+
+function equalSet(a: Set<any>, b: Set<any>): boolean {
+  if (a.size !== b.size) return false;
+  for (const v of a) if (!b.has(v)) return false;
+  return true;
+}
+
+function equalMap(a: Map<any, any>, b: Map<any, any>): boolean {
+  if (a.size !== b.size) return false;
+  for (const [k, v] of a) {
+    if (!b.has(k)) return false;
+    if (!isEqual(v, b.get(k))) return false;
+  }
+  return true;
+}
+
+function equalArrayBuffer(a: ArrayBuffer, b: ArrayBuffer): boolean {
+  return isEqual(new Uint8Array(a), new Uint8Array(b));
+}
+
+function equalArray(a: any[], b: any[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (!isEqual(a[i], b[i])) return false;
+  return true;
+}
+
+function equalPlainObjects(a: Record<string, any>, b: Record<string, any>): boolean {
+  const aKeys = Object.keys(a);
+  const bKeys = Object.keys(b);
+  if (aKeys.length !== bKeys.length) return false;
+  for (const key of aKeys) {
+    if (!Object.prototype.hasOwnProperty.call(b, key)) return false;
+    if (!isEqual(a[key], b[key])) return false;
+  }
+  return true;
 }
 
 /**
@@ -274,99 +314,86 @@ export function mapObject<T extends object, U>(
 
 function _deepClone<T>(value: T, seen: WeakMap<object, any>): T {
   // Primitive, function, or symbol
-  if (typeof value === 'function' || typeof value === 'symbol') {
-    return value;
-  }
+  if (typeof value === 'function' || typeof value === 'symbol') return value;
 
   // Primitive or null -> return as-is
-  if (value === null || typeof value !== 'object') {
-    return value;
-  }
+  if (value === null || typeof value !== 'object') return value;
 
   // Circular reference -> return stored clone
-  if (seen.has(value as object)) {
-    return seen.get(value as object) as T;
-  }
+  if (seen.has(value as object)) return seen.get(value as object) as T;
 
-  let result: any;
+  // Delegate to specialized cloners
+  if (Array.isArray(value)) return cloneArray(value as any, seen) as any;
+  if (value instanceof Date) return cloneDate(value as any) as any;
+  if (value instanceof Map) return cloneMap(value as any, seen) as any;
+  if (value instanceof Set) return cloneSet(value as any, seen) as any;
+  if (value instanceof RegExp) return cloneRegExp(value as any) as any;
+  if (ArrayBuffer.isView(value)) return cloneArrayBufferView(value as any, seen) as any;
+  if (value instanceof ArrayBuffer) return cloneArrayBuffer(value as any, seen) as any;
 
-  // Array -> clone each item
-  if (Array.isArray(value)) {
-    result = [];
-    seen.set(value, result);
-    for (const item of value) {
-      result.push(_deepClone(item, seen));
-    }
-    return result;
-  }
+  return cloneObject(value as any, seen) as T;
+}
 
-  // Date -> clone timestamp
-  if (value instanceof Date) {
-    result = new Date(value.getTime());
-    seen.set(value, result);
-    return result;
-  }
+function cloneArray<T>(arr: T[], seen: WeakMap<object, any>): T[] {
+  const result: any[] = [];
+  seen.set(arr as any, result);
+  for (const item of arr) result.push(_deepClone(item, seen));
+  return result as T[];
+}
 
-  // Map -> clone keys & values deeply
-  if (value instanceof Map) {
-    result = new Map();
-    seen.set(value, result);
-    for (const [k, v] of value) {
-      result.set(_deepClone(k, seen), _deepClone(v, seen));
-    }
-    return result;
-  }
+function cloneDate(d: Date): Date {
+  const r = new Date(d.getTime());
+  // Note: callers set seen where appropriate
+  return r;
+}
 
-  // Set -> clone values deeply
-  if (value instanceof Set) {
-    result = new Set();
-    seen.set(value, result);
-    for (const v of value) {
-      result.add(_deepClone(v, seen));
-    }
-    return result;
-  }
+function cloneMap(m: Map<any, any>, seen: WeakMap<object, any>): Map<any, any> {
+  const result = new Map();
+  seen.set(m, result);
+  for (const [k, v] of m) result.set(_deepClone(k, seen), _deepClone(v, seen));
+  return result;
+}
 
-  // RegExp -> clone source + flags
-  if (value instanceof RegExp) {
-    result = new RegExp(value.source, value.flags);
-    seen.set(value, result);
-    return result;
-  }
+function cloneSet(s: Set<any>, seen: WeakMap<object, any>): Set<any> {
+  const result = new Set();
+  seen.set(s, result);
+  for (const v of s) result.add(_deepClone(v, seen));
+  return result;
+}
 
-  if (ArrayBuffer.isView(value)) {
-    // Handle DataView separately
-    if (value instanceof DataView) {
-      const buf = _deepClone(value.buffer, seen);
-      const clone = new DataView(buf, value.byteOffset, value.byteLength);
-      seen.set(value, clone);
-      return clone as any;
-    }
+function cloneRegExp(r: RegExp): RegExp {
+  const result = new RegExp(r.source, r.flags);
+  return result;
+}
 
-    // Handle TypedArrays
-    const typed = value as any;
-    const buf = _deepClone(typed.buffer, seen);
-    const clone = new typed.constructor(buf, typed.byteOffset, typed.length);
-    seen.set(value, clone);
+function cloneArrayBufferView(view: ArrayBufferView, seen: WeakMap<object, any>): any {
+  if (view instanceof DataView) {
+    const buf = _deepClone(view.buffer, seen) as ArrayBuffer;
+    const clone = new DataView(buf, view.byteOffset, view.byteLength);
+    seen.set(view as any, clone);
     return clone;
   }
 
-  // ArrayBuffer -> clone bytes
-  if (value instanceof ArrayBuffer) {
-    result = value.slice(0);
-    seen.set(value, result);
-    return result;
-  }
+  const typed: any = view as any;
+  const buf = _deepClone(typed.buffer, seen) as ArrayBuffer;
+  const clone = new typed.constructor(buf, typed.byteOffset, typed.length);
+  seen.set(view as any, clone);
+  return clone;
+}
 
-  // Object -> clone props + preserve prototype
-  result = Object.create(Object.getPrototypeOf(value));
-  seen.set(value, result);
+function cloneArrayBuffer(buf: ArrayBuffer, seen: WeakMap<object, any>): ArrayBuffer {
+  const result = buf.slice(0);
+  seen.set(buf as any, result);
+  return result;
+}
 
-  for (const key of Reflect.ownKeys(value)) {
-    const desc = Object.getOwnPropertyDescriptor(value, key);
+function cloneObject(obj: any, seen: WeakMap<object, any>): any {
+  const result = Object.create(Object.getPrototypeOf(obj));
+  seen.set(obj, result);
 
+  for (const key of Reflect.ownKeys(obj)) {
+    const desc = Object.getOwnPropertyDescriptor(obj, key);
     if (desc?.get || desc?.set) {
-      // Accessor descriptor
       Object.defineProperty(result, key, {
         get: desc.get,
         set: desc.set,
@@ -374,9 +401,8 @@ function _deepClone<T>(value: T, seen: WeakMap<object, any>): T {
         configurable: desc.configurable
       });
     } else {
-      // Data descriptor
       Object.defineProperty(result, key, {
-        value: _deepClone((value as any)[key], seen),
+        value: _deepClone((obj as any)[key], seen),
         writable: desc?.writable ?? true,
         enumerable: desc?.enumerable ?? true,
         configurable: desc?.configurable ?? true

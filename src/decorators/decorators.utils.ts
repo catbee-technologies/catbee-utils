@@ -1208,293 +1208,427 @@ export function Log(options?: {
  */
 export function registerControllers(router: Router, controllers: any[]) {
   controllers.forEach(ControllerClass => {
-    // Register the controller class with the container first (important!)
-    if (!Reflect.getMetadata('injectable', ControllerClass)) {
-      // If not already marked as injectable, register it
-      Reflect.defineMetadata('injectable', true, ControllerClass);
-      diContainer.register(ControllerClass);
+    registerSingleController(router, ControllerClass);
+  });
+}
+
+/**
+ * Register a single controller class with the router.
+ */
+function registerSingleController(router: Router, ControllerClass: any) {
+  // Register the controller class with the container first (important!)
+  if (!Reflect.getMetadata('injectable', ControllerClass)) {
+    // If not already marked as injectable, register it
+    Reflect.defineMetadata('injectable', true, ControllerClass);
+    diContainer.register(ControllerClass);
+  }
+
+  // Use DI container to resolve controller (constructor injection + property injection)
+  const instance = diContainer.get(ControllerClass);
+  const controllerMetadata = getControllerMetadata(ControllerClass);
+  const routes: RouteDefinition[] = Reflect.getMetadata(ROUTES_KEY, ControllerClass as object) || [];
+
+  routes.forEach(routeDef => {
+    registerRoute(router, instance, controllerMetadata, routeDef);
+  });
+}
+
+/**
+ * Get all controller-level metadata.
+ */
+function getControllerMetadata(ControllerClass: any) {
+  let basePath: string = Reflect.getMetadata('basePath', ControllerClass as object) || '';
+  const controllerVersion = Reflect.getMetadata(VERSION_KEY, ControllerClass as object);
+
+  // Apply controller-level version prefix to base path
+  if (controllerVersion?.options?.addPrefix) {
+    basePath = `/${controllerVersion.version}${basePath || ''}`;
+  }
+
+  return {
+    basePath,
+    rateLimit: Reflect.getMetadata(RATE_LIMIT_KEY, ControllerClass as object),
+    cache: Reflect.getMetadata(CACHE_KEY, ControllerClass as object),
+    timeout: Reflect.getMetadata(TIMEOUT_KEY, ControllerClass as object),
+    version: controllerVersion,
+    roles: Reflect.getMetadata(ROLES_KEY, ControllerClass as object),
+    logConfig: Reflect.getMetadata(LOG_KEY, ControllerClass as object),
+    headers: Reflect.getMetadata(HEADER_KEY, ControllerClass as object) || {},
+    middlewares: Reflect.getMetadata(MIDDLEWARE_KEY, ControllerClass as object) || ([] as RequestHandler[]),
+    beforeHooks: Reflect.getMetadata(BEFORE_KEY, ControllerClass as object) || ([] as Function[]),
+    afterHooks: Reflect.getMetadata(AFTER_KEY, ControllerClass as object) || ([] as Function[]),
+    contentType: Reflect.getMetadata(CONTENT_TYPE_KEY, ControllerClass as object)
+  };
+}
+
+/**
+ * Register a single route with merged metadata from controller and method levels.
+ */
+function registerRoute(
+  router: Router,
+  instance: any,
+  controllerMetadata: ReturnType<typeof getControllerMetadata>,
+  routeDef: RouteDefinition
+) {
+  const { path, method, handlerName } = routeDef;
+  const routeMetadata = getRouteMetadata(instance, handlerName, controllerMetadata);
+  const handler = createRouteHandler(instance, handlerName, routeMetadata);
+  const finalPath = calculateFinalPath(path, routeMetadata, controllerMetadata);
+
+  (router as any)[method](controllerMetadata.basePath + finalPath, ...routeMetadata.middlewares, handler);
+}
+
+/**
+ * Get and merge route-level metadata with controller-level metadata.
+ */
+function getRouteMetadata(
+  instance: any,
+  handlerName: string,
+  controllerMetadata: ReturnType<typeof getControllerMetadata>
+) {
+  const methodMiddlewares: RequestHandler[] =
+    Reflect.getMetadata(MIDDLEWARE_KEY, instance as object, handlerName) || [];
+  const params: ParamDefinition[] = Reflect.getMetadata(PARAMS_KEY, instance as object, handlerName) || [];
+  const httpCode: number | undefined = Reflect.getMetadata(HTTP_CODE_KEY, instance as object, handlerName);
+  const methodHeaders: Record<string, string> = Reflect.getMetadata(HEADER_KEY, instance as object, handlerName) || {};
+  const methodBeforeHooks: Function[] = Reflect.getMetadata(BEFORE_KEY, instance as object, handlerName) || [];
+  const methodAfterHooks: Function[] = Reflect.getMetadata(AFTER_KEY, instance as object, handlerName) || [];
+  const redirect: { url?: string; statusCode: number } | undefined = Reflect.getMetadata(
+    REDIRECT_KEY,
+    instance as object,
+    handlerName
+  );
+  const methodContentType: { type: string } | undefined = Reflect.getMetadata(
+    CONTENT_TYPE_KEY,
+    instance as object,
+    handlerName
+  );
+  const methodVersion:
+    | { version: string; options: { addPrefix: boolean; addHeader: boolean; headerName: string } }
+    | undefined = Reflect.getMetadata(VERSION_KEY, instance as object, handlerName);
+
+  // Merge controller and method metadata
+  const headers = { ...controllerMetadata.headers, ...methodHeaders };
+  const middlewares = [...controllerMetadata.middlewares, ...methodMiddlewares];
+  const beforeHooks = [...controllerMetadata.beforeHooks, ...methodBeforeHooks];
+  const afterHooks = [...methodAfterHooks, ...controllerMetadata.afterHooks];
+  const contentType = methodContentType || controllerMetadata.contentType;
+  const roles: string[] =
+    Reflect.getMetadata(ROLES_KEY, instance as object, handlerName) || controllerMetadata.roles || [];
+  const cache: { ttlSeconds: number } | undefined =
+    Reflect.getMetadata(CACHE_KEY, instance as object, handlerName) || controllerMetadata.cache;
+  const rateLimitOptions:
+    | { max: number; windowMs: number; standardHeaders: boolean; legacyHeaders: boolean }
+    | undefined = Reflect.getMetadata(RATE_LIMIT_KEY, instance as object, handlerName) || controllerMetadata.rateLimit;
+  const version = methodVersion || controllerMetadata.version;
+  const timeout: { ms: number } | undefined =
+    Reflect.getMetadata(TIMEOUT_KEY, instance as object, handlerName) || controllerMetadata.timeout;
+  const logConfig = Reflect.getMetadata(LOG_KEY, instance as object, handlerName) || controllerMetadata.logConfig;
+
+  // Create rate limiter if needed
+  let rateLimiter: any = null;
+  if (rateLimitOptions) {
+    try {
+      rateLimiter = rateLimiterCache.get(rateLimitOptions);
+    } catch (err) {
+      getLogger().warn({ err }, 'express-rate-limit not available, skipping rate limiting for this route');
     }
+  }
 
-    // Use DI container to resolve controller (constructor injection + property injection)
-    const instance = diContainer.get(ControllerClass);
-    let basePath: string = Reflect.getMetadata('basePath', ControllerClass as object) || '';
-    const routes: RouteDefinition[] = Reflect.getMetadata(ROUTES_KEY, ControllerClass as object) || [];
+  return {
+    params,
+    httpCode,
+    headers,
+    middlewares,
+    beforeHooks,
+    afterHooks,
+    redirect,
+    contentType,
+    roles,
+    cache,
+    rateLimiter,
+    version,
+    methodVersion,
+    timeout,
+    logConfig
+  };
+}
 
-    // Get controller-level decorators (fallback values)
-    const controllerRateLimit = Reflect.getMetadata(RATE_LIMIT_KEY, ControllerClass as object);
-    const controllerCache = Reflect.getMetadata(CACHE_KEY, ControllerClass as object);
-    const controllerTimeout = Reflect.getMetadata(TIMEOUT_KEY, ControllerClass as object);
-    const controllerVersion = Reflect.getMetadata(VERSION_KEY, ControllerClass as object);
-    const controllerRoles = Reflect.getMetadata(ROLES_KEY, ControllerClass as object);
-    const controllerLogConfig = Reflect.getMetadata(LOG_KEY, ControllerClass as object);
-    const controllerHeaders = Reflect.getMetadata(HEADER_KEY, ControllerClass as object) || {};
-    const controllerMiddlewares: RequestHandler[] =
-      Reflect.getMetadata(MIDDLEWARE_KEY, ControllerClass as object) || [];
-    const controllerBeforeHooks: Function[] = Reflect.getMetadata(BEFORE_KEY, ControllerClass as object) || [];
-    const controllerAfterHooks: Function[] = Reflect.getMetadata(AFTER_KEY, ControllerClass as object) || [];
-    const controllerContentType = Reflect.getMetadata(CONTENT_TYPE_KEY, ControllerClass as object);
+/**
+ * Calculate the final path with version prefix if applicable.
+ */
+function calculateFinalPath(
+  path: string,
+  routeMetadata: ReturnType<typeof getRouteMetadata>,
+  controllerMetadata: ReturnType<typeof getControllerMetadata>
+) {
+  let finalPath = path;
+  // Only apply method-level version prefix if it's different from controller-level
+  if (
+    routeMetadata.methodVersion?.options?.addPrefix &&
+    routeMetadata.methodVersion.version !== controllerMetadata.version?.version
+  ) {
+    finalPath = `/${routeMetadata.methodVersion.version}${path}`;
+  }
+  return finalPath;
+}
 
-    // Apply controller-level version prefix to base path
-    if (controllerVersion?.options?.addPrefix) {
-      basePath = `/${controllerVersion.version}${basePath || ''}`;
-    }
+/**
+ * Create the Express route handler with all decorator logic.
+ */
+function createRouteHandler(
+  instance: any,
+  handlerName: string,
+  routeMetadata: ReturnType<typeof getRouteMetadata>
+): RequestHandler {
+  return async (req, res, next) => {
+    // Set start time for duration tracking
+    (req as any)['startTime'] = Date.now();
 
-    routes.forEach(({ path, method, handlerName }) => {
-      const methodMiddlewares: RequestHandler[] =
-        Reflect.getMetadata(MIDDLEWARE_KEY, instance as object, handlerName) || [];
-      const params: ParamDefinition[] = Reflect.getMetadata(PARAMS_KEY, instance as object, handlerName) || [];
+    const timeoutState = setupTimeout(req, res, routeMetadata.timeout);
 
-      const httpCode: number | undefined = Reflect.getMetadata(HTTP_CODE_KEY, instance as object, handlerName);
+    try {
+      if (timeoutState.timedOut) return;
 
-      // Merge controller-level and method-level headers
-      const methodHeaders: Record<string, string> =
-        Reflect.getMetadata(HEADER_KEY, instance as object, handlerName) || {};
-      const headers = { ...controllerHeaders, ...methodHeaders };
-
-      // Merge controller-level and method-level middlewares
-      const middlewares = [...controllerMiddlewares, ...methodMiddlewares];
-
-      // Merge controller-level and method-level hooks
-      const methodBeforeHooks: Function[] = Reflect.getMetadata(BEFORE_KEY, instance as object, handlerName) || [];
-      const methodAfterHooks: Function[] = Reflect.getMetadata(AFTER_KEY, instance as object, handlerName) || [];
-      const beforeHooks = [...controllerBeforeHooks, ...methodBeforeHooks];
-      const afterHooks = [...methodAfterHooks, ...controllerAfterHooks]; // Method hooks should run first, then class hooks
-
-      const redirect: { url?: string; statusCode: number } | undefined = Reflect.getMetadata(
-        REDIRECT_KEY,
-        instance as object,
-        handlerName
-      );
-      const methodContentType: { type: string } | undefined = Reflect.getMetadata(
-        CONTENT_TYPE_KEY,
-        instance as object,
-        handlerName
-      );
-      // Method content type overrides controller content type
-      const contentType = methodContentType || controllerContentType;
-
-      // Use method-level decorators if present, otherwise fall back to controller-level
-      const roles: string[] = Reflect.getMetadata(ROLES_KEY, instance as object, handlerName) || controllerRoles || [];
-      const cache: { ttlSeconds: number } | undefined =
-        Reflect.getMetadata(CACHE_KEY, instance as object, handlerName) || controllerCache;
-      const rateLimitOptions:
-        | { max: number; windowMs: number; standardHeaders: boolean; legacyHeaders: boolean }
-        | undefined = Reflect.getMetadata(RATE_LIMIT_KEY, instance as object, handlerName) || controllerRateLimit;
-      const methodVersion:
-        | { version: string; options: { addPrefix: boolean; addHeader: boolean; headerName: string } }
-        | undefined = Reflect.getMetadata(VERSION_KEY, instance as object, handlerName);
-      // Method-level version overrides controller-level version
-      const version = methodVersion || controllerVersion;
-      const timeout: { ms: number } | undefined =
-        Reflect.getMetadata(TIMEOUT_KEY, instance as object, handlerName) || controllerTimeout;
-      const logConfig:
-        | {
-            logEntry?: boolean;
-            logExit?: boolean;
-            logBody?: boolean;
-            logParams?: boolean;
-            logResponse?: boolean;
-          }
-        | undefined = Reflect.getMetadata(LOG_KEY, instance as object, handlerName) || controllerLogConfig;
-
-      // Create rate limiter for this specific route if needed
-      let rateLimiter: any = null;
-      if (rateLimitOptions) {
-        try {
-          rateLimiter = rateLimiterCache.get(rateLimitOptions);
-        } catch (err) {
-          getLogger().warn({ err }, 'express-rate-limit not available, skipping rate limiting for this route');
-        }
+      // Handle rate limiting
+      if (routeMetadata.rateLimiter) {
+        await applyRateLimiting(req, res, routeMetadata.rateLimiter);
       }
 
-      let finalPath = path;
-      // Only apply method-level version prefix if it's different from controller-level
-      if (methodVersion?.options?.addPrefix && methodVersion.version !== controllerVersion?.version) {
-        finalPath = `/${methodVersion.version}${path}`;
+      // Apply response headers
+      applyResponseHeaders(res, routeMetadata);
+
+      // Handle logging - entry
+      logRouteEntry(req, routeMetadata.logConfig);
+
+      // Handle roles-based access control
+      if (!checkRoles(req, res, routeMetadata.roles, timeoutState)) {
+        return;
       }
 
-      const handler: RequestHandler = async (req, res, next) => {
-        // Set start time for duration tracking
-        (req as any)['startTime'] = Date.now();
+      // Process static redirect if configured
+      if (routeMetadata.redirect?.url) {
+        clearTimeout(timeoutState.timeoutId);
+        return res.redirect(routeMetadata.redirect.statusCode, routeMetadata.redirect.url);
+      }
 
-        let timeoutId: NodeJS.Timeout | undefined;
-        let timedOut = false;
+      for (const fn of routeMetadata.beforeHooks) await fn(req, res);
+      const args = extractHandlerArgs(req, res, routeMetadata.params);
+      const result = (instance as any)[handlerName](...args);
+      // Support both sync and async handlers
+      const awaited = result instanceof Promise ? await result : result;
 
-        try {
-          // Handle timeout setup
-          if (timeout) {
-            timeoutId = setTimeout(() => {
-              if (!res.headersSent && !timedOut) {
-                timedOut = true;
-                const errorResponse = createFinalErrorResponse(
-                  req,
-                  HttpStatusCodes.REQUEST_TIMEOUT,
-                  'Request timed out'
-                );
-                res.status(HttpStatusCodes.REQUEST_TIMEOUT).json(errorResponse);
-              }
-            }, timeout.ms);
-          }
+      // Clear timeout if operation completed
+      clearTimeout(timeoutState.timeoutId);
 
-          if (timedOut) return;
+      if (timeoutState.timedOut) return;
 
-          // Handle rate limiting
-          if (rateLimiter) {
-            await new Promise<void>((resolve, reject) => {
-              rateLimiter(req, res, (err: any) => {
-                if (err) reject(err);
-                else resolve();
-              });
-            });
-          }
+      // Handle dynamic redirects
+      if (handleDynamicRedirect(res, routeMetadata.redirect, awaited)) {
+        return;
+      }
 
-          // Handle content type
-          if (!res.headersSent && contentType) {
-            res.setHeader('Content-Type', contentType.type);
-          }
+      // Send response
+      sendResponse(res, awaited, routeMetadata.httpCode, routeMetadata.headers);
 
-          // Handle versioning header
-          if (version?.options?.addHeader && version?.options?.headerName && version?.version) {
-            if (!res.headersSent) {
-              res.setHeader(version.options.headerName, version.version);
-            }
-          }
+      // Handle logging - exit
+      logRouteExit(req, res, awaited, routeMetadata.logConfig);
 
-          // Handle caching
-          if (cache && !res.headersSent) {
-            res.setHeader('Cache-Control', `public, max-age=${cache.ttlSeconds}`);
-          }
+      for (const fn of routeMetadata.afterHooks) await fn(req, res, awaited);
+    } catch (err) {
+      clearTimeout(timeoutState.timeoutId);
+      next(err);
+    }
+  };
+}
 
-          // Handle logging - entry
-          if (logConfig?.logEntry) {
-            const logger = getLogger();
-            const logData: any = {
-              method: req.method,
-              url: req.originalUrl || req.url,
-              userAgent: req.get('User-Agent')
-            };
-            if (logConfig.logParams) {
-              logData.params = req.params;
-              logData.query = req.query;
-            }
-            if (logConfig.logBody) logData.body = req.body;
-            logger.info({ entry: logData }, 'Route Entry:');
-          }
+/**
+ * Setup timeout for the request.
+ */
+function setupTimeout(req: Request, res: Response, timeout?: { ms: number }) {
+  const state = { timeoutId: undefined as NodeJS.Timeout | undefined, timedOut: false };
 
-          // Handle roles-based access control
-          if (roles.length && !(req as any)?.user?.roles?.some((role: string) => roles.includes(role))) {
-            const errorResponse = createFinalErrorResponse(
-              req,
-              HttpStatusCodes.FORBIDDEN,
-              'Forbidden Insufficient Roles'
-            );
-            res.status(HttpStatusCodes.FORBIDDEN).json(errorResponse);
-            if (timeoutId) {
-              clearTimeout(timeoutId);
-            }
-            return;
-          }
+  if (timeout) {
+    state.timeoutId = setTimeout(() => {
+      if (!res.headersSent && !state.timedOut) {
+        state.timedOut = true;
+        const errorResponse = createFinalErrorResponse(req, HttpStatusCodes.REQUEST_TIMEOUT, 'Request timed out');
+        res.status(HttpStatusCodes.REQUEST_TIMEOUT).json(errorResponse);
+      }
+    }, timeout.ms);
+  }
 
-          // Process static redirect if configured
-          if (redirect?.url) {
-            if (timeoutId) {
-              clearTimeout(timeoutId);
-            }
-            return res.redirect(redirect.statusCode, redirect.url);
-          }
+  return state;
+}
 
-          for (const fn of beforeHooks) await fn(req, res);
-          const args: any[] = [];
-          if (params.length) {
-            params.forEach(({ index, type, key, options }) => {
-              let rawValue: any;
-              switch (type) {
-                case 'query':
-                  rawValue = key ? req.query[key] : req.query;
-                  args[index] = options ? applyParamOptions(rawValue, options, key) : rawValue;
-                  break;
-                case 'param':
-                  rawValue = key ? req.params[key] : req.params;
-                  args[index] = options ? applyParamOptions(rawValue, options, key) : rawValue;
-                  break;
-                case 'body':
-                  args[index] = key ? req.body?.[key] : req.body;
-                  break;
-                case 'req':
-                  args[index] = req;
-                  break;
-                case 'res':
-                  args[index] = res;
-                  break;
-                case 'logger':
-                  args[index] = getLogger();
-                  break;
-                case 'reqHeader':
-                  args[index] = key ? req.headers[key.toLowerCase()] : req.headers;
-                  break;
-                case 'reqId':
-                  args[index] = req.headers['x-request-id'] || req?.id || undefined;
-                  break;
-                case 'cookie':
-                  args[index] = key ? req.cookies?.[key] : req.cookies;
-                  break;
-              }
-            });
-          }
-          const result = (instance as any)[handlerName](...args);
-          // Support both sync and async handlers
-          const awaited = result instanceof Promise ? await result : result;
-
-          // Clear timeout if operation completed
-          if (timeoutId) {
-            clearTimeout(timeoutId);
-          }
-
-          if (timedOut) return;
-
-          // Handle dynamic redirects
-          if (redirect && awaited && typeof awaited === 'object' && 'url' in awaited) {
-            const redirectUrl = awaited.url as string;
-            const redirectStatus = (awaited.statusCode as number) || redirect.statusCode;
-            return res.redirect(redirectStatus, redirectUrl);
-          }
-
-          if (!res.headersSent && typeof awaited !== 'undefined') {
-            if (httpCode) res.status(httpCode);
-            for (const [k, v] of Object.entries(headers)) {
-              const normalized = normalizeHeaderValue(v);
-              if (typeof normalized !== 'undefined') {
-                res.set(k, normalized);
-              }
-            }
-            res.json(awaited);
-          }
-
-          // Handle logging - exit
-          if (logConfig?.logExit) {
-            const logger = getLogger();
-            const logData: any = {
-              method: req.method,
-              url: req.originalUrl || req.url,
-              statusCode: res.statusCode,
-              duration: `${Date.now() - (req as any).startTime}ms`
-            };
-            if (logConfig.logResponse) logData.response = awaited;
-            logger.info({ exit: logData }, 'Route Exit:');
-          }
-
-          for (const fn of afterHooks) await fn(req, res, awaited);
-        } catch (err) {
-          if (timeoutId) {
-            clearTimeout(timeoutId);
-          }
-          next(err);
-        }
-      };
-
-      (router as any)[method](basePath + finalPath, ...middlewares, handler);
+/**
+ * Apply rate limiting to the request.
+ */
+async function applyRateLimiting(req: Request, res: Response, rateLimiter: any) {
+  await new Promise<void>((resolve, reject) => {
+    rateLimiter(req, res, (err: any) => {
+      if (err) reject(err);
+      else resolve();
     });
   });
+}
+
+/**
+ * Apply response headers for content type, versioning, and caching.
+ */
+function applyResponseHeaders(res: Response, routeMetadata: ReturnType<typeof getRouteMetadata>) {
+  // Handle content type
+  if (!res.headersSent && routeMetadata.contentType) {
+    res.setHeader('Content-Type', routeMetadata.contentType.type);
+  }
+
+  // Handle versioning header
+  if (
+    routeMetadata.version?.options?.addHeader &&
+    routeMetadata.version?.options?.headerName &&
+    routeMetadata.version?.version
+  ) {
+    if (!res.headersSent) {
+      res.setHeader(routeMetadata.version.options.headerName, routeMetadata.version.version);
+    }
+  }
+
+  // Handle caching
+  if (routeMetadata.cache && !res.headersSent) {
+    res.setHeader('Cache-Control', `public, max-age=${routeMetadata.cache.ttlSeconds}`);
+  }
+}
+
+/**
+ * Log route entry if logging is enabled.
+ */
+function logRouteEntry(req: Request, logConfig: any) {
+  if (logConfig?.logEntry) {
+    const logger = getLogger();
+    const logData: any = {
+      method: req.method,
+      url: req.originalUrl || req.url,
+      userAgent: req.get('User-Agent')
+    };
+    if (logConfig.logParams) {
+      logData.params = req.params;
+      logData.query = req.query;
+    }
+    if (logConfig.logBody) logData.body = req.body;
+    logger.info({ entry: logData }, 'Route Entry:');
+  }
+}
+
+/**
+ * Log route exit if logging is enabled.
+ */
+function logRouteExit(req: Request, res: Response, result: any, logConfig: any) {
+  if (logConfig?.logExit) {
+    const logger = getLogger();
+    const logData: any = {
+      method: req.method,
+      url: req.originalUrl || req.url,
+      statusCode: res.statusCode,
+      duration: `${Date.now() - (req as any).startTime}ms`
+    };
+    if (logConfig.logResponse) logData.response = result;
+    logger.info({ exit: logData }, 'Route Exit:');
+  }
+}
+
+/**
+ * Check if user has required roles.
+ */
+function checkRoles(
+  req: Request,
+  res: Response,
+  roles: string[],
+  timeoutState: { timeoutId?: NodeJS.Timeout; timedOut: boolean }
+): boolean {
+  if (roles.length && !(req as any)?.user?.roles?.some((role: string) => roles.includes(role))) {
+    const errorResponse = createFinalErrorResponse(req, HttpStatusCodes.FORBIDDEN, 'Forbidden Insufficient Roles');
+    res.status(HttpStatusCodes.FORBIDDEN).json(errorResponse);
+    clearTimeout(timeoutState.timeoutId);
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Extract handler arguments from request based on parameter decorators.
+ */
+function extractHandlerArgs(req: Request, res: Response, params: ParamDefinition[]): any[] {
+  const args: any[] = [];
+  if (params.length) {
+    params.forEach(({ index, type, key, options }) => {
+      let rawValue: any;
+      switch (type) {
+        case 'query':
+          rawValue = key ? req.query[key] : req.query;
+          args[index] = options ? applyParamOptions(rawValue, options, key) : rawValue;
+          break;
+        case 'param':
+          rawValue = key ? req.params[key] : req.params;
+          args[index] = options ? applyParamOptions(rawValue, options, key) : rawValue;
+          break;
+        case 'body':
+          args[index] = key ? req.body?.[key] : req.body;
+          break;
+        case 'req':
+          args[index] = req;
+          break;
+        case 'res':
+          args[index] = res;
+          break;
+        case 'logger':
+          args[index] = getLogger();
+          break;
+        case 'reqHeader':
+          args[index] = key ? req.headers[key.toLowerCase()] : req.headers;
+          break;
+        case 'reqId':
+          args[index] = req.headers['x-request-id'] || req?.id || undefined;
+          break;
+        case 'cookie':
+          args[index] = key ? req.cookies?.[key] : req.cookies;
+          break;
+      }
+    });
+  }
+  return args;
+}
+
+/**
+ * Handle dynamic redirect if applicable.
+ */
+function handleDynamicRedirect(
+  res: Response,
+  redirect: { url?: string; statusCode: number } | undefined,
+  result: any
+): boolean {
+  if (redirect && result && typeof result === 'object' && 'url' in result) {
+    const redirectUrl = result.url as string;
+    const redirectStatus = (result.statusCode as number) || redirect.statusCode;
+    res.redirect(redirectStatus, redirectUrl);
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Send the response with proper status code and headers.
+ */
+function sendResponse(res: Response, result: any, httpCode: number | undefined, headers: Record<string, string>) {
+  if (!res.headersSent && typeof result !== 'undefined') {
+    if (httpCode) res.status(httpCode);
+    for (const [k, v] of Object.entries(headers)) {
+      const normalized = normalizeHeaderValue(v);
+      if (typeof normalized !== 'undefined') {
+        res.set(k, normalized);
+      }
+    }
+    res.json(result);
+  }
 }
 
 // Helper for type conversion and ParamOptions handling
@@ -1519,128 +1653,11 @@ function applyParamOptions(rawValue: any, options: ParamOptions, key?: string) {
   // Apply type conversions only if value is defined
   if (value !== undefined && value !== null) {
     if (options.dataType === 'array') {
-      // Handle array data type
-      const delimiter = options.delimiter || ',';
-      if (typeof value === 'string') {
-        value = value.split(delimiter).map(v => v.trim());
-      } else if (!Array.isArray(value)) {
-        value = [value];
-      }
-
-      // Pattern check
-      if (options.type === 'string' && options.pattern) {
-        const hasInvalidPattern = value.some((v: any) => !options.pattern!.test(v));
-        if (hasInvalidPattern) {
-          throw new BadRequestException(
-            `Parameter '${key}' array contains values that do not match pattern: ${options.patternName || options.pattern}`
-          );
-        }
-      }
-
-      // Handle number pattern validation
-      if (options.type === 'number' && options.pattern) {
-        const hasInvalidPattern = value.some((v: any) => !options.pattern!.test(String(v)));
-        if (hasInvalidPattern) {
-          throw new BadRequestException(
-            `Parameter '${key}' array contains values that do not match pattern: ${options.patternName || options.pattern}`
-          );
-        }
-      }
-
-      // Validate array elements BEFORE conversion for better error messages
-      if (options.type === 'number' && options.throwError !== false) {
-        const hasInvalidNumber = value.some((v: any) => Number.isNaN(Number(v)));
-        if (hasInvalidNumber) {
-          throw new BadRequestException(`Type error: expected number array${paramName}`);
-        }
-        if (options.min !== undefined) {
-          const hasBelowMin = value.some((v: any) => Number(v) < options.min!);
-          if (hasBelowMin) {
-            throw new BadRequestException(
-              `Validation error: number array values must be >= ${options.min}${paramName}`
-            );
-          }
-        }
-        if (options.max !== undefined) {
-          const hasAboveMax = value.some((v: any) => Number(v) > options.max!);
-          if (hasAboveMax) {
-            throw new BadRequestException(
-              `Validation error: number array values must be <= ${options.max}${paramName}`
-            );
-          }
-        }
-      }
-
-      if (options.type === 'boolean' && options.throwError !== false) {
-        const hasInvalidBoolean = value.some((v: any) => !isValidBooleanInput(v));
-        if (hasInvalidBoolean) {
-          throw new BadRequestException(`Type error: expected boolean array${paramName}`);
-        }
-      }
-
-      // Apply type conversion to each array element
-      if (options.type) {
-        value = value.map((v: any) => convertType(v, options.type || 'string'));
-      }
+      value = handleArrayParam(value, options, key);
     } else if (options.dataType === 'object') {
-      // Handle object data type
-      if (typeof value === 'string') {
-        try {
-          value = JSON.parse(value);
-        } catch (_e) {
-          if (options.throwError !== false) {
-            throw new BadRequestException(`Invalid JSON object${paramName}`);
-          }
-        }
-      }
+      value = handleObjectParam(value, options, key);
     } else if (options.type) {
-      // Handle simple type conversion for non-array/object values
-      const originalValue = value;
-      value = convertType(value, options.type);
-
-      if (options.throwError === false) {
-        if (options.type === 'number' && typeof value === 'number') {
-          if (options.min !== undefined && value < options.min) {
-            value = undefined;
-          }
-          if (options.max !== undefined && value > options.max) {
-            value = undefined;
-          }
-        }
-      }
-
-      const paramNotMatchMsg = `Parameter '${key}' does not match pattern: ${options.patternName || options.pattern}`;
-      if (options.type === 'string' && options.pattern && typeof value === 'string' && !options.pattern.test(value)) {
-        throw new BadRequestException(paramNotMatchMsg);
-      } else if (
-        options.type === 'number' &&
-        options.pattern &&
-        typeof value === 'number' &&
-        !options.pattern.test(String(value))
-      ) {
-        throw new BadRequestException(paramNotMatchMsg);
-      }
-
-      // Check for type conversion errors
-      if (options.throwError !== false) {
-        if (options.type === 'number' && typeof value === 'number' && Number.isNaN(value)) {
-          throw new BadRequestException(`Type error: expected number${paramName}`);
-        }
-
-        if (options.type === 'number' && typeof value === 'number') {
-          if (options.min !== undefined && value < options.min) {
-            throw new BadRequestException(`Validation error: number must be >= ${options.min}${paramName}`);
-          }
-          if (options.max !== undefined && value > options.max) {
-            throw new BadRequestException(`Validation error: number must be <= ${options.max}${paramName}`);
-          }
-        }
-
-        // Check for boolean type validation
-        if (options.type === 'boolean' && !isValidBooleanInput(originalValue)) {
-          throw new BadRequestException(`Type error: expected boolean${paramName}`);
-        }
-      }
+      value = handleSingleParam(value, options, key);
     }
   }
 
@@ -1660,6 +1677,168 @@ function applyParamOptions(rawValue: any, options: ParamOptions, key?: string) {
   }
 
   return value;
+}
+
+/**
+ * Handle array parameter type conversion and validation.
+ */
+function handleArrayParam(value: any, options: ParamOptions, key?: string) {
+  const delimiter = options.delimiter || ',';
+  if (typeof value === 'string') {
+    value = value.split(delimiter).map(v => v.trim());
+  } else if (!Array.isArray(value)) {
+    value = [value];
+  }
+
+  validateArrayPattern(value, options, key);
+  validateArrayElements(value, options, key);
+
+  // Apply type conversion to each array element
+  if (options.type) {
+    value = value.map((v: any) => convertType(v, options.type || 'string'));
+  }
+
+  return value;
+}
+
+/**
+ * Validate array elements against pattern.
+ */
+function validateArrayPattern(value: any[], options: ParamOptions, key?: string) {
+  if (options.type === 'string' && options.pattern) {
+    const hasInvalidPattern = value.some((v: any) => !options.pattern!.test(v));
+    if (hasInvalidPattern) {
+      throw new BadRequestException(
+        `Parameter '${key}' array contains values that do not match pattern: ${options.patternName || options.pattern}`
+      );
+    }
+  }
+
+  if (options.type === 'number' && options.pattern) {
+    const hasInvalidPattern = value.some((v: any) => !options.pattern!.test(String(v)));
+    if (hasInvalidPattern) {
+      throw new BadRequestException(
+        `Parameter '${key}' array contains values that do not match pattern: ${options.patternName || options.pattern}`
+      );
+    }
+  }
+}
+
+/**
+ * Validate array elements type and range.
+ */
+function validateArrayElements(value: any[], options: ParamOptions, key?: string) {
+  const paramName = key ? `: ${key}` : '';
+
+  if (options.type === 'number' && options.throwError !== false) {
+    const hasInvalidNumber = value.some((v: any) => Number.isNaN(Number(v)));
+    if (hasInvalidNumber) {
+      throw new BadRequestException(`Type error: expected number array${paramName}`);
+    }
+    if (options.min !== undefined) {
+      const hasBelowMin = value.some((v: any) => Number(v) < options.min!);
+      if (hasBelowMin) {
+        throw new BadRequestException(`Validation error: number array values must be >= ${options.min}${paramName}`);
+      }
+    }
+    if (options.max !== undefined) {
+      const hasAboveMax = value.some((v: any) => Number(v) > options.max!);
+      if (hasAboveMax) {
+        throw new BadRequestException(`Validation error: number array values must be <= ${options.max}${paramName}`);
+      }
+    }
+  }
+
+  if (options.type === 'boolean' && options.throwError !== false) {
+    const hasInvalidBoolean = value.some((v: any) => !isValidBooleanInput(v));
+    if (hasInvalidBoolean) {
+      throw new BadRequestException(`Type error: expected boolean array${paramName}`);
+    }
+  }
+}
+
+/**
+ * Handle object parameter parsing.
+ */
+function handleObjectParam(value: any, options: ParamOptions, key?: string) {
+  const paramName = key ? `: ${key}` : '';
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value);
+    } catch (_e) {
+      if (options.throwError !== false) {
+        throw new BadRequestException(`Invalid JSON object${paramName}`);
+      }
+    }
+  }
+  return value;
+}
+
+/**
+ * Handle single parameter type conversion and validation.
+ */
+function handleSingleParam(value: any, options: ParamOptions, key?: string) {
+  const paramName = key ? `: ${key}` : '';
+  const originalValue = value;
+  const targetType: 'string' | 'number' | 'boolean' = (options.type as 'string' | 'number' | 'boolean') ?? 'string';
+  value = convertType(value, targetType);
+
+  if (options.throwError === false) {
+    if (options.type === 'number' && typeof value === 'number') {
+      if (options.min !== undefined && value < options.min) {
+        value = undefined;
+      }
+      if (options.max !== undefined && value > options.max) {
+        value = undefined;
+      }
+    }
+  }
+
+  validateSinglePattern(value, options, key);
+  validateSingleType(value, originalValue, options, paramName);
+
+  return value;
+}
+
+/**
+ * Validate single parameter against pattern.
+ */
+function validateSinglePattern(value: any, options: ParamOptions, key?: string) {
+  const paramNotMatchMsg = `Parameter '${key}' does not match pattern: ${options.patternName || options.pattern}`;
+  if (options.type === 'string' && options.pattern && typeof value === 'string' && !options.pattern.test(value)) {
+    throw new BadRequestException(paramNotMatchMsg);
+  } else if (
+    options.type === 'number' &&
+    options.pattern &&
+    typeof value === 'number' &&
+    !options.pattern.test(String(value))
+  ) {
+    throw new BadRequestException(paramNotMatchMsg);
+  }
+}
+
+/**
+ * Validate single parameter type and range.
+ */
+function validateSingleType(value: any, originalValue: any, options: ParamOptions, paramName: string) {
+  if (options.throwError !== false) {
+    if (options.type === 'number' && typeof value === 'number' && Number.isNaN(value)) {
+      throw new BadRequestException(`Type error: expected number${paramName}`);
+    }
+
+    if (options.type === 'number' && typeof value === 'number') {
+      if (options.min !== undefined && value < options.min) {
+        throw new BadRequestException(`Validation error: number must be >= ${options.min}${paramName}`);
+      }
+      if (options.max !== undefined && value > options.max) {
+        throw new BadRequestException(`Validation error: number must be <= ${options.max}${paramName}`);
+      }
+    }
+
+    if (options.type === 'boolean' && !isValidBooleanInput(originalValue)) {
+      throw new BadRequestException(`Type error: expected boolean${paramName}`);
+    }
+  }
 }
 
 // Helper function to validate boolean inputs

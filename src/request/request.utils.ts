@@ -180,36 +180,52 @@ export function extractSortParams(
   allowedFields: string[],
   defaultSort: { sortBy: string; sortOrder: 'asc' | 'desc' } = { sortBy: 'createdAt', sortOrder: 'desc' }
 ): { sortBy: string; sortOrder: 'asc' | 'desc' } {
-  let sortBy = defaultSort.sortBy;
-  let sortOrder: 'asc' | 'desc' = defaultSort.sortOrder;
-
-  // Extract from `sortBy` or `sort`
-  if (typeof query.sortBy === 'string') {
-    sortBy = query.sortBy;
-  } else if (Array.isArray(query.sortBy)) {
-    sortBy = query.sortBy[0];
-  } else if (typeof query.sort === 'string') {
-    sortBy = query.sort.startsWith('-') ? query.sort.slice(1) : query.sort;
-    sortOrder = query.sort.startsWith('-') ? 'desc' : 'asc';
-  } else if (Array.isArray(query.sort)) {
-    sortBy = query.sort[0].startsWith('-') ? query.sort[0].slice(1) : query.sort[0];
-    sortOrder = query.sort[0].startsWith('-') ? 'desc' : 'asc';
-  }
+  const inferredSortBy = getSortByFromQuery(query, defaultSort);
+  let sortOrder: 'asc' | 'desc' = getSortOrderFromQuery(query, defaultSort);
 
   // Explicit sortOrder (overrides inferred one if valid)
-  if (typeof query.sortOrder === 'string') {
-    const order = query.sortOrder.toLowerCase();
-    if (order === 'asc' || order === 'desc') {
-      sortOrder = order;
-    }
+  const explicit = applyExplicitSortOrder(query.sortOrder);
+  if (explicit) {
+    sortOrder = explicit;
   }
 
-  // Validate field
-  if (allowedFields.length && !allowedFields.includes(sortBy)) {
-    sortBy = defaultSort.sortBy;
-  }
+  const sortBy = validateSortField(inferredSortBy, allowedFields, defaultSort.sortBy);
 
   return { sortBy, sortOrder };
+}
+
+function getSortByFromQuery(
+  query: Record<string, string | string[]>,
+  defaultSort: { sortBy: string; sortOrder: 'asc' | 'desc' }
+): string {
+  if (typeof query.sortBy === 'string') return query.sortBy;
+  if (Array.isArray(query.sortBy)) return query.sortBy[0];
+
+  if (typeof query.sort === 'string') return query.sort.startsWith('-') ? query.sort.slice(1) : query.sort;
+  if (Array.isArray(query.sort)) return query.sort[0].startsWith('-') ? query.sort[0].slice(1) : query.sort[0];
+
+  return defaultSort.sortBy;
+}
+
+function getSortOrderFromQuery(
+  query: Record<string, string | string[]>,
+  defaultSort: { sortBy: string; sortOrder: 'asc' | 'desc' }
+): 'asc' | 'desc' {
+  if (typeof query.sort === 'string') return query.sort.startsWith('-') ? 'desc' : 'asc';
+  if (Array.isArray(query.sort)) return query.sort[0].startsWith('-') ? 'desc' : 'asc';
+  return defaultSort.sortOrder;
+}
+
+function applyExplicitSortOrder(sortOrderParam: unknown): 'asc' | 'desc' | null {
+  if (typeof sortOrderParam !== 'string') return null;
+  const order = sortOrderParam.toLowerCase();
+  if (order === 'asc' || order === 'desc') return order;
+  return null;
+}
+
+function validateSortField(sortBy: string, allowedFields: string[], defaultSortBy: string): string {
+  if (allowedFields.length && !allowedFields.includes(sortBy)) return defaultSortBy;
+  return sortBy;
 }
 
 /**
