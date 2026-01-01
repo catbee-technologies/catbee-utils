@@ -494,14 +494,23 @@ export class Env {
       throw new Error(`URL environment variable '${key}' is missing or empty`);
     }
 
-    let url: URL;
+    const url = this.parseUrl(value, key);
+    this.validateProtocol(url, key, options);
+    this.validateHostname(url, key, options);
+
+    this.cache.set(cacheKey, value);
+    return value;
+  }
+
+  private static parseUrl(value: string, key: string): URL {
     try {
-      url = new URL(value);
+      return new URL(value);
     } catch {
       throw new Error(`Environment variable '${key}' is not a valid URL: "${value}"`);
     }
+  }
 
-    // Validate protocol
+  private static validateProtocol(url: URL, key: string, options: UrlOptions): void {
     if (options.protocols && options.protocols.length > 0) {
       const protocol = url.protocol.replace(':', '');
       if (!options.protocols.includes(protocol)) {
@@ -510,23 +519,25 @@ export class Env {
         );
       }
     }
+  }
 
-    // Validate hostname
+  private static isIp(hostname: string): boolean {
+    return /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(hostname);
+  }
+
+  private static validateHostname(url: URL, key: string, options: UrlOptions): void {
     const { hostname } = url;
-    const isIp = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(hostname);
+    const isIp = Env.isIp(hostname);
     const isLocalhost = hostname === 'localhost';
 
-    // Check if hostname is an IP address when not allowed
     if (isIp && options.allowIp === false) {
       throw new Error(`Environment variable '${key}' cannot be an IP address: "${hostname}"`);
     }
 
-    // Check if hostname is localhost when not allowed
     if (isLocalhost && options.allowLocalhost === false) {
       throw new Error(`Environment variable '${key}' cannot be localhost`);
     }
 
-    // Check for TLD requirement - include localhost in check if requireTld is true and allowLocalhost is false
     if (options.requireTld === true) {
       if (isLocalhost && options.allowLocalhost !== false) {
         // Localhost is allowed, so no TLD check needed for it
@@ -536,9 +547,6 @@ export class Env {
         throw new Error(`Environment variable '${key}' must have a valid host with TLD: "${hostname}"`);
       }
     }
-
-    this.cache.set(cacheKey, value);
-    return value;
   }
 
   /**
@@ -744,6 +752,19 @@ export class Env {
     }
 
     const content = readFileSync(path, 'utf8');
+    const variables = this.parseEnvContent(content);
+
+    // Apply variables to process.env only for keys that are not already defined
+    for (const [k, v] of Object.entries(variables)) {
+      if (!process.env[k]) {
+        process.env[k] = v;
+      }
+    }
+
+    return variables;
+  }
+
+  private static parseEnvContent(content: string): Record<string, string> {
     const variables: Record<string, string> = {};
     const lines = content.split(/\r?\n/);
 
@@ -751,13 +772,12 @@ export class Env {
     while (i < lines.length) {
       let line = lines[i].trim();
 
-      // Skip empty lines or comment-only lines
-      if (!line || line.startsWith('#')) {
+      if (this.isCommentOrEmpty(line)) {
         i++;
         continue;
       }
 
-      const match = line.match(/^([^=]+)=(.*)$/);
+      const match = this.extractKeyValue(line);
       if (!match) {
         i++;
         continue;
@@ -766,48 +786,21 @@ export class Env {
       const key = match[1].trim();
       let value = match[2].trim();
 
-      // Remove inline comment for unquoted values
-      if (!/^['"]/.test(value)) {
-        const hashIndex = value.indexOf(' #');
-        if (hashIndex !== -1) {
-          value = value.slice(0, hashIndex).trim();
-        }
+      if (!this.isQuoted(value)) {
+        value = this.stripInlineComment(value);
       }
 
-      // Handle quoted values
-      if ((value.startsWith('"') || value.startsWith("'")) && value.length > 1) {
-        const quote = value[0];
-        if (!value.endsWith(quote) || value.length === 1) {
-          // multiline quoted
-          let multilineValue = value.slice(1);
-          i++;
-          while (i < lines.length) {
-            const nextLine = lines[i];
-            if (nextLine.endsWith(quote)) {
-              multilineValue += '\n' + nextLine.slice(0, -1);
-              break;
-            } else {
-              multilineValue += '\n' + nextLine;
-            }
-            i++;
-          }
-          value = multilineValue;
-        } else {
-          // single-line quoted
-          value = value.slice(1, -1);
-        }
+      if (this.isQuoted(value) && value.length > 1) {
+        const result = this.parseQuotedValue(lines, i, value);
+        value = result.value;
+        i = result.nextIndex;
       } else {
-        // Handle unquoted multiline: continue collecting until next key=value or empty line
-        i++;
-        while (i < lines.length && !lines[i].includes('=') && lines[i].trim() !== '') {
-          value += '\n' + lines[i];
-          i++;
-        }
-        i--; // adjust for outer loop
+        const result = this.parseUnquotedMultiline(lines, i, value);
+        value = result.value;
+        i = result.nextIndex;
       }
 
       if (!process.env[key]) {
-        process.env[key] = value;
         variables[key] = value;
       }
 
@@ -815,6 +808,64 @@ export class Env {
     }
 
     return variables;
+  }
+
+  private static isCommentOrEmpty(line: string): boolean {
+    return !line || line.startsWith('#');
+  }
+
+  private static extractKeyValue(line: string): RegExpMatchArray | null {
+    return line.match(/^([^=]+)=(.*)$/);
+  }
+
+  private static isQuoted(value: string): boolean {
+    return /^['"]/.test(value);
+  }
+
+  private static stripInlineComment(value: string): string {
+    const hashIndex = value.indexOf(' #');
+    if (hashIndex !== -1) {
+      return value.slice(0, hashIndex).trim();
+    }
+    return value;
+  }
+
+  private static parseQuotedValue(
+    lines: string[],
+    currentIndex: number,
+    value: string
+  ): { value: string; nextIndex: number } {
+    const quote = value[0];
+    if (!value.endsWith(quote) || value.length === 1) {
+      let multilineValue = value.slice(1);
+      let i = currentIndex + 1;
+      while (i < lines.length) {
+        const nextLine = lines[i];
+        if (nextLine.endsWith(quote)) {
+          multilineValue += '\n' + nextLine.slice(0, -1);
+          break;
+        } else {
+          multilineValue += '\n' + nextLine;
+        }
+        i++;
+      }
+      return { value: multilineValue, nextIndex: i };
+    }
+
+    return { value: value.slice(1, -1), nextIndex: currentIndex };
+  }
+
+  private static parseUnquotedMultiline(
+    lines: string[],
+    currentIndex: number,
+    value: string
+  ): { value: string; nextIndex: number } {
+    let i = currentIndex + 1;
+    while (i < lines.length && !lines[i].includes('=') && lines[i].trim() !== '') {
+      value += '\n' + lines[i];
+      i++;
+    }
+    return { value, nextIndex: i - 1 };
   }
 
   /**

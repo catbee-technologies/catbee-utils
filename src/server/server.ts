@@ -235,7 +235,25 @@ export class ExpressServer {
       await this.validateHttpsFiles();
     }
 
-    // Basic middleware should be first
+    this.setupBasicMiddleware();
+    this.setupSecurityMiddleware();
+    this.setupGlobalHeaders();
+    this.setupTimeoutMiddleware();
+    this.setupResponseTimeMiddleware();
+    this.setupRateLimitingMiddleware();
+    this.setupRequestLoggingMiddleware();
+    this.setupCompressionMiddleware();
+    this.setupStaticFilesMiddleware();
+    this.setupBodyParsingMiddleware();
+    this.setupCookieParsingMiddleware();
+    await this.setupOpenApiMiddleware();
+    this.setupMetricsMiddleware();
+  }
+
+  /**
+   * Set up basic middleware (trust proxy, request ID, context).
+   */
+  private setupBasicMiddleware(): void {
     this.app.disable('x-powered-by');
 
     if (this.config.trustProxy) {
@@ -270,8 +288,13 @@ export class ExpressServer {
       next();
       return;
     });
+  }
 
-    // Security middleware should come early
+  /**
+   * Set up security middleware (Helmet, CORS).
+   */
+  private setupSecurityMiddleware(): void {
+    // Helmet middleware should come early
     if (this.config.helmet) {
       const helmet = optionalRequire('helmet');
       if (!helmet) {
@@ -293,8 +316,12 @@ export class ExpressServer {
       }
       this.app.use(cors(this.config.cors === true ? {} : this.config.cors));
     }
+  }
 
-    // Global headers
+  /**
+   * Set up global headers middleware.
+   */
+  private setupGlobalHeaders(): void {
     this.app.use((_req, res, next) => {
       if (this.config.globalHeaders) {
         for (const key in this.config.globalHeaders) {
@@ -315,13 +342,21 @@ export class ExpressServer {
       }
       next();
     });
+  }
 
-    // Global request timeout protection
+  /**
+   * Set up request timeout middleware.
+   */
+  private setupTimeoutMiddleware(): void {
     if (this.config.requestTimeout) {
       this.app.use(timeout(this.config.requestTimeout));
     }
+  }
 
-    // Response time tracking for performance monitoring
+  /**
+   * Set up response time tracking middleware.
+   */
+  private setupResponseTimeMiddleware(): void {
     if (this.config.responseTime?.enable) {
       this.app.use(
         responseTime({
@@ -330,8 +365,12 @@ export class ExpressServer {
         })
       );
     }
+  }
 
-    // Rate limiting should be early to prevent unnecessary processing
+  /**
+   * Set up rate limiting middleware.
+   */
+  private setupRateLimitingMiddleware(): void {
     if (this.config.rateLimit?.enable) {
       const rateLimit = optionalRequire('express-rate-limit');
       if (!rateLimit) {
@@ -356,8 +395,12 @@ export class ExpressServer {
         })
       );
     }
+  }
 
-    // Request logging with filtering
+  /**
+   * Set up request logging middleware.
+   */
+  private setupRequestLoggingMiddleware(): void {
     if (this.config.requestLogging?.enable) {
       this.app.use((req, res, next) => {
         if (typeof this.config.requestLogging?.ignorePaths === 'function') {
@@ -384,8 +427,12 @@ export class ExpressServer {
     if (this.hooks.onRequest) {
       this.app.use(this.hooks.onRequest);
     }
+  }
 
-    // Response compression for better performance
+  /**
+   * Set up response compression middleware.
+   */
+  private setupCompressionMiddleware(): void {
     if (this.config.compression) {
       const compression = optionalRequire('compression');
       if (!compression) {
@@ -398,8 +445,12 @@ export class ExpressServer {
         this.app.use(compression());
       }
     }
+  }
 
-    // Static file serving (do NOT normalize filesystem path; only normalize route)
+  /**
+   * Set up static file serving middleware.
+   */
+  private setupStaticFilesMiddleware(): void {
     if (this.config.staticFolders) {
       this.config.staticFolders.forEach(folder => {
         this.app.use(
@@ -415,8 +466,12 @@ export class ExpressServer {
         getLogger().info(`Serving static folder: ${folder.directory} at path ${folder.path || '/'}`);
       });
     }
+  }
 
-    // Request body parsing with size limits
+  /**
+   * Set up body parsing middleware.
+   */
+  private setupBodyParsingMiddleware(): void {
     if (this.config.bodyParser) {
       if (this.config.bodyParser.json) {
         this.app.use(express.json(this.config.bodyParser.json));
@@ -425,8 +480,12 @@ export class ExpressServer {
         this.app.use(express.urlencoded(this.config.bodyParser.urlencoded));
       }
     }
+  }
 
-    // Cookie parser middleware
+  /**
+   * Set up cookie parsing middleware.
+   */
+  private setupCookieParsingMiddleware(): void {
     if (this.config.cookieParser) {
       const cookieParser = optionalRequire('cookie-parser');
       if (!cookieParser) {
@@ -439,8 +498,12 @@ export class ExpressServer {
         this.app.use(cookieParser());
       }
     }
+  }
 
-    // OpenAPI docs via @scalar/express-api-reference
+  /**
+   * Set up OpenAPI documentation middleware.
+   */
+  private async setupOpenApiMiddleware(): Promise<void> {
     if (this.config.openApi?.enable) {
       try {
         const openApiMountPath = this.normalizePath(
@@ -493,7 +556,12 @@ export class ExpressServer {
     if (this.hooks.onResponse) {
       this.app.use(this.globalPrefix, this.hooks.onResponse);
     }
+  }
 
+  /**
+   * Set up metrics tracking middleware.
+   */
+  private setupMetricsMiddleware(): void {
     if (this.config.metrics?.enable) {
       // Add metrics tracking middleware
       this.app.use((req, res, next) => {
@@ -551,38 +619,7 @@ export class ExpressServer {
     );
 
     this.app.get(healthCheckPath, async (_req: Request, res: Response) => {
-      try {
-        if (!this.healthChecks.length || getCatbeeServerGlobalConfig().skipHealthz) {
-          return res.status(HttpStatusCodes.OK).json(new SuccessResponse('OK'));
-        }
-
-        const checkResults = await Promise.allSettled(
-          this.healthChecks.map(async ({ name, check }) => {
-            try {
-              const status = await Promise.resolve(check());
-              return { name, status, error: null };
-            } catch (error) {
-              return { name, status: false, error: (error as Error).message };
-            }
-          })
-        );
-
-        const results = checkResults.map(result => {
-          if (result.status === 'fulfilled') return result.value;
-          return { name: 'unknown', status: false, error: result.reason };
-        });
-
-        const allOk = results.every(r => r.status);
-        const status = allOk ? HttpStatusCodes.OK : HttpStatusCodes.SERVICE_UNAVAILABLE;
-        const response = new SuccessResponse(allOk ? 'OK' : 'Service unavailable');
-        if (!allOk) response.error = true;
-        if (this.config.healthCheck?.detailed) response.data = { checks: results };
-        return res.status(status).json(response);
-      } catch {
-        return res
-          .status(HttpStatusCodes.INTERNAL_SERVER_ERROR)
-          .json(new InternalServerErrorException('Health check failed'));
-      }
+      return this.handleHealthCheckRequest(res);
     });
 
     // Metrics endpoint
@@ -632,6 +669,50 @@ export class ExpressServer {
   }
 
   /**
+   * Execute health check and return response.
+   */
+  private async handleHealthCheckRequest(res: Response): Promise<Response> {
+    try {
+      if (!this.healthChecks.length || getCatbeeServerGlobalConfig().skipHealthz) {
+        return res.status(HttpStatusCodes.OK).json(new SuccessResponse('OK'));
+      }
+
+      const results = await this.executeHealthChecks();
+      const allOk = results.every(r => r.status);
+      const status = allOk ? HttpStatusCodes.OK : HttpStatusCodes.SERVICE_UNAVAILABLE;
+      const response = new SuccessResponse(allOk ? 'OK' : 'Service unavailable');
+      if (!allOk) response.error = true;
+      if (this.config.healthCheck?.detailed) response.data = { checks: results };
+      return res.status(status).json(response);
+    } catch {
+      return res
+        .status(HttpStatusCodes.INTERNAL_SERVER_ERROR)
+        .json(new InternalServerErrorException('Health check failed'));
+    }
+  }
+
+  /**
+   * Execute all registered health checks and return results.
+   */
+  private async executeHealthChecks(): Promise<Array<{ name: string; status: boolean; error: string | null }>> {
+    const checkResults = await Promise.allSettled(
+      this.healthChecks.map(async ({ name, check }) => {
+        try {
+          const status = await Promise.resolve(check());
+          return { name, status, error: null };
+        } catch (error) {
+          return { name, status: false, error: (error as Error).message };
+        }
+      })
+    );
+
+    return checkResults.map(result => {
+      if (result.status === 'fulfilled') return result.value;
+      return { name: 'unknown', status: false, error: result.reason };
+    });
+  }
+
+  /**
    * Register a new health check function for monitoring service dependencies.
    *
    * Health checks are executed when the health endpoint is accessed and
@@ -661,21 +742,7 @@ export class ExpressServer {
   public async ready(): Promise<boolean> {
     try {
       if (!this.healthChecks.length || getCatbeeServerGlobalConfig().skipHealthz) return true;
-
-      const checkResults = await Promise.allSettled(
-        this.healthChecks.map(async ({ name, check }) => {
-          try {
-            const status = await Promise.resolve(check());
-            return { name, status, error: null };
-          } catch (error) {
-            return { name, status: false, error: (error as Error).message };
-          }
-        })
-      );
-
-      const results = checkResults.map(result =>
-        result.status === 'fulfilled' ? result.value : { name: 'unknown', status: false, error: result.reason }
-      );
+      const results = await this.executeHealthChecks();
       return results.every(r => r.status === true);
     } catch (err) {
       getLogger().error({ err }, 'Error while running readiness checks');
@@ -723,67 +790,92 @@ export class ExpressServer {
 
     return new Promise<http.Server | https.Server>((resolve, reject) => {
       try {
-        // Prepare listen arguments with optional host parameter
-        const listenArgs: [number, (string | undefined)?, (() => void)?] = [
-          this.config.port,
-          this.config.host,
-          async () => {
-            const protocol = this.config.https ? 'https' : 'http';
-            const url = `${protocol}://${this.config.host}:${this.config.port}`;
-            getLogger().info(`Server running on ${url}`);
-            if (this.config.healthCheck?.path) {
-              getLogger().info(
-                `Health check available at ${url}${this.normalizePath(this.config.healthCheck.path, this.config.healthCheck.withGlobalPrefix)}`
-              );
-            }
-            if (this.config.metrics?.enable && this.config.metrics.path) {
-              getLogger().info(
-                `Metrics available at ${url}${this.normalizePath(this.config.metrics.path, this.config.metrics.withGlobalPrefix)}`
-              );
-            }
-            if (this.config.openApi?.enable) {
-              getLogger().info(
-                `API docs available at ${url}${this.normalizePath(this.config.openApi.mountPath as string, this.config.openApi.withGlobalPrefix)}`
-              );
-            }
-            if (this.server) await this.runHook('afterStart', this.server);
-            resolve(this.server as http.Server | https.Server);
-          }
-        ];
+        const onListening = async () => {
+          this.logServerStartInfo();
+          if (this.server) await this.runHook('afterStart', this.server);
+          resolve(this.server as http.Server | https.Server);
+        };
 
-        if (this.config.https) {
-          const httpsOptions: https.ServerOptions = {
-            ...this.config.https,
-            key: readFileSync(this.config.https.key),
-            cert: readFileSync(this.config.https.cert)
-          };
-          if (this.config.https.ca) {
-            httpsOptions.ca = readFileSync(this.config.https.ca);
-          }
-          if (this.config.https.passphrase) {
-            httpsOptions.passphrase = this.config.https.passphrase;
-          }
-          this.server = https.createServer(httpsOptions, this.app).listen(...(listenArgs as any));
-        } else {
-          // Start the HTTP server
-          this.server = this.app.listen(...(listenArgs as any));
-        }
-
-        // Track connections
-        this.server.on('connection', (conn: Socket) => {
-          this.connections.add(conn);
-          conn.on('close', () => this.connections.delete(conn));
-        });
-
-        // Handle server startup errors (port in use, permission denied, etc.)
-        this.server.on('error', err => {
-          getLogger().error({ err }, 'Server failed to start');
-          reject(err);
-        });
+        this.server = this.createServerInstance(onListening);
+        this.setupConnectionTracking();
+        this.setupServerErrorHandling(reject);
       } catch (error) {
         reject(error);
       }
     });
+  }
+
+  /**
+   * Create HTTP or HTTPS server instance.
+   */
+  private createServerInstance(onListening: () => void): http.Server | https.Server {
+    const listenArgs: [number, (string | undefined)?, (() => void)?] = [
+      this.config.port,
+      this.config.host,
+      onListening
+    ];
+
+    if (this.config.https) {
+      const httpsOptions: https.ServerOptions = {
+        ...this.config.https,
+        key: readFileSync(this.config.https.key),
+        cert: readFileSync(this.config.https.cert)
+      };
+      if (this.config.https.ca) {
+        httpsOptions.ca = readFileSync(this.config.https.ca);
+      }
+      if (this.config.https.passphrase) {
+        httpsOptions.passphrase = this.config.https.passphrase;
+      }
+      return https.createServer(httpsOptions, this.app).listen(...(listenArgs as any));
+    }
+
+    return this.app.listen(...(listenArgs as any));
+  }
+
+  /**
+   * Set up connection tracking for graceful shutdown.
+   */
+  private setupConnectionTracking(): void {
+    this.server!.on('connection', (conn: Socket) => {
+      this.connections.add(conn);
+      conn.on('close', () => this.connections.delete(conn));
+    });
+  }
+
+  /**
+   * Set up error handling for server startup.
+   */
+  private setupServerErrorHandling(reject: (err: Error) => void): void {
+    this.server!.on('error', err => {
+      getLogger().error({ err }, 'Server failed to start');
+      reject(err);
+    });
+  }
+
+  /**
+   * Log server startup information.
+   */
+  private logServerStartInfo(): void {
+    const protocol = this.config.https ? 'https' : 'http';
+    const url = `${protocol}://${this.config.host}:${this.config.port}`;
+    getLogger().info(`Server running on ${url}`);
+
+    if (this.config.healthCheck?.path) {
+      getLogger().info(
+        `Health check available at ${url}${this.normalizePath(this.config.healthCheck.path, this.config.healthCheck.withGlobalPrefix)}`
+      );
+    }
+    if (this.config.metrics?.enable && this.config.metrics.path) {
+      getLogger().info(
+        `Metrics available at ${url}${this.normalizePath(this.config.metrics.path, this.config.metrics.withGlobalPrefix)}`
+      );
+    }
+    if (this.config.openApi?.enable) {
+      getLogger().info(
+        `API docs available at ${url}${this.normalizePath(this.config.openApi.mountPath as string, this.config.openApi.withGlobalPrefix)}`
+      );
+    }
   }
 
   /**
@@ -815,6 +907,23 @@ export class ExpressServer {
     this.isShuttingDown = true;
     await this.runHook('beforeStop', this.server);
 
+    try {
+      await this.gracefulShutdown();
+    } catch (err) {
+      getLogger().error({ err }, 'Graceful shutdown timed out');
+      if (force) {
+        getLogger().warn('Forcing connection destroy due to shutdown timeout');
+      }
+    } finally {
+      // Always clean up connections
+      await this.destroyConnections();
+    }
+  }
+
+  /**
+   * Perform graceful server shutdown with timeout.
+   */
+  private async gracefulShutdown(): Promise<void> {
     const shutdownTimeout = 10_000; // 10s max wait
 
     const serverClosePromise = new Promise<void>((resolve, reject) => {
@@ -837,17 +946,7 @@ export class ExpressServer {
       setTimeout(() => reject(new Error('Shutdown timeout')), shutdownTimeout)
     );
 
-    try {
-      await Promise.race([serverClosePromise, timeoutPromise]);
-    } catch (err) {
-      getLogger().error({ err }, 'Graceful shutdown timed out');
-      if (force) {
-        getLogger().warn('Forcing connection destroy due to shutdown timeout');
-      }
-    } finally {
-      // Always clean up connections
-      await this.destroyConnections();
-    }
+    await Promise.race([serverClosePromise, timeoutPromise]);
   }
 
   /**
