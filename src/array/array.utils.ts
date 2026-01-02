@@ -1,4 +1,4 @@
-import { getValueByPath } from '@catbee/utils/obj';
+import { getValueByPath } from '@catbee/utils/object';
 import { randomBytes } from 'node:crypto';
 
 /**
@@ -85,6 +85,8 @@ export function random<T>(array: readonly T[]): T | undefined {
   return array[secureIndex(array.length)];
 }
 
+type StrNumSym = string | number | symbol;
+
 /* eslint-disable no-redeclare */
 /**
  * Groups items in an array by a nested key or key function.
@@ -96,20 +98,17 @@ export function random<T>(array: readonly T[]): T | undefined {
  * @returns {Record<string, readonly T[]>}
  * @overload
  * @param {T[]} array - The array to group.
- * @param {(item: T) => string | number | symbol} keyFn - Function to generate group key from item.
+ * @param {(item: T) => StrNumSym} keyFn - Function to generate group key from item.
  * @returns {Record<K, readonly T[]>}
  * @param {T[]} array - The array to group.
- * @param {keyof T | ((item: T) => string | number | symbol)} keyOrFn - Nested property key or key selector.
- * @returns {Record<string | number | symbol, readonly T[]>} Grouped result object.
+ * @param {keyof T | ((item: T) => StrNumSym)} keyOrFn - Nested property key or key selector.
+ * @returns {Record<StrNumSym, readonly T[]>} Grouped result object.
  */
 export function groupBy<T>(array: T[], key: keyof T): Record<string, readonly T[]>;
-export function groupBy<T, K extends string | number | symbol>(
-  array: T[],
-  keyFn: (item: T) => K
-): Record<K, readonly T[]>;
+export function groupBy<T, K extends StrNumSym>(array: T[], keyFn: (item: T) => K): Record<K, readonly T[]>;
 export function groupBy<T>(
   array: readonly T[],
-  keyOrFn: keyof T | ((item: T) => string | number | symbol)
+  keyOrFn: keyof T | ((item: T) => StrNumSym)
 ): Record<string, readonly T[]> {
   if (!Array.isArray(array) || array.length === 0) return {};
 
@@ -119,7 +118,7 @@ export function groupBy<T>(
   const result: Record<string, T[]> = {};
   for (const item of array) {
     const key = String(keyFn(item));
-    if (Object.hasOwn?.(result, key) ?? Object.prototype.hasOwnProperty.call(result, key)) {
+    if (Object.hasOwn(result, key)) {
       result[key].push(item);
     } else {
       result[key] = [item];
@@ -403,10 +402,10 @@ export function compact<T>(array: readonly T[]): NonNullable<T>[] {
  *
  * @template T The type of array elements.
  * @param {T[]} array - The input array.
- * @param {(item: T) => string | number | symbol} keyFn - Function to generate count key.
+ * @param {(item: T) => StrNumSym} keyFn - Function to generate count key.
  * @returns {Record<string, number>} Object with counts by key.
  */
-export function countBy<T>(array: readonly T[], keyFn: (item: T) => string | number | symbol): Record<string, number> {
+export function countBy<T>(array: readonly T[], keyFn: (item: T) => StrNumSym): Record<string, number> {
   if (!Array.isArray(array)) return {};
   const result: Record<string, number> = {};
   for (const item of array) {
@@ -597,4 +596,76 @@ export function headOfArr<T>(array: readonly T[]): T | undefined {
  */
 export function lastOfArr<T>(array: readonly T[]): T | undefined {
   return Array.isArray(array) && array.length > 0 ? array.at(-1) : undefined;
+}
+
+/**
+ * Drops the first n elements from an array.
+ *
+ * @template T
+ * @param {readonly T[]} array - The source array.
+ * @param {number} n - Number of elements to drop.
+ * @returns {T[]} Array with first n elements removed.
+ *
+ * @example
+ * drop([1, 2, 3, 4, 5], 2); // [3, 4, 5]
+ */
+export function drop<T>(array: readonly T[], n: number): T[] {
+  if (!Array.isArray(array) || n <= 0) return [...array];
+  return array.slice(n);
+}
+
+/**
+ * Drops elements from the start of an array while predicate returns true.
+ *
+ * @template T
+ * @param {readonly T[]} array - The source array.
+ * @param {(item: T, index: number) => boolean} predicate - Condition function.
+ * @returns {T[]} Array with elements dropped.
+ *
+ * @example
+ * dropWhile([1, 2, 3, 4, 1], x => x < 3); // [3, 4, 1]
+ */
+export function dropWhile<T>(array: readonly T[], predicate: (item: T, index: number) => boolean): T[] {
+  if (!Array.isArray(array)) return [];
+  let i = 0;
+  while (i < array.length && predicate(array[i], i)) {
+    i++;
+  }
+  return array.slice(i);
+}
+
+/**
+ * Finds the element with the maximum value for a given key or function.
+ *
+ * @template T
+ * @param {readonly T[]} array - The source array.
+ * @param {keyof T | ((item: T) => number)} keyOrFn - Property key or function.
+ * @returns {T | undefined} Element with maximum value.
+ *
+ * @example
+ * maxBy([{a: 1}, {a: 5}, {a: 3}], 'a'); // {a: 5}
+ * maxBy([{a: 1}, {a: 5}, {a: 3}], x => x.a); // {a: 5}
+ */
+export function maxBy<T>(array: readonly T[], keyOrFn: keyof T | ((item: T) => number)): T | undefined {
+  if (!Array.isArray(array) || array.length === 0) return undefined;
+  const fn = typeof keyOrFn === 'function' ? keyOrFn : (item: T) => item[keyOrFn] as unknown as number;
+  return array.reduce<T>((max, item) => (fn(item) > fn(max) ? item : max), array[0]);
+}
+
+/**
+ * Finds the element with the minimum value for a given key or function.
+ *
+ * @template T
+ * @param {readonly T[]} array - The source array.
+ * @param {keyof T | ((item: T) => number)} keyOrFn - Property key or function.
+ * @returns {T | undefined} Element with minimum value.
+ *
+ * @example
+ * minBy([{a: 1}, {a: 5}, {a: 3}], 'a'); // {a: 1}
+ * minBy([{a: 1}, {a: 5}, {a: 3}], x => x.a); // {a: 1}
+ */
+export function minBy<T>(array: readonly T[], keyOrFn: keyof T | ((item: T) => number)): T | undefined {
+  if (!Array.isArray(array) || array.length === 0) return undefined;
+  const fn = typeof keyOrFn === 'function' ? keyOrFn : (item: T) => item[keyOrFn] as unknown as number;
+  return array.reduce<T>((min, item) => (fn(item) < fn(min) ? item : min), array[0]);
 }

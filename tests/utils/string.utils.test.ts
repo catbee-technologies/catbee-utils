@@ -10,7 +10,11 @@ import {
   stripHtml,
   equalsIgnoreCase,
   reverse,
-  countOccurrences
+  countOccurrences,
+  escapeRegex,
+  unescapeHtml,
+  isBlank,
+  ellipsis
 } from '../../src/string';
 
 describe('StringUtils', () => {
@@ -64,6 +68,11 @@ describe('StringUtils', () => {
     });
     it('works for empty string', () => {
       expect(toCamelCase('')).toBe('');
+    });
+    it('throws TypeError for non-string input', () => {
+      expect(() => toCamelCase(123 as any)).toThrow(TypeError);
+      expect(() => toCamelCase(null as any)).toThrow(TypeError);
+      expect(() => toCamelCase(undefined as any)).toThrow(TypeError);
     });
   });
 
@@ -193,6 +202,105 @@ describe('StringUtils', () => {
     });
     it('returns 0 if substring is not found', () => {
       expect(countOccurrences('foo', 'bar')).toBe(0);
+    });
+  });
+
+  describe('escapeRegex', () => {
+    it('escapes special regex characters', () => {
+      expect(escapeRegex('Hello (world)')).toBe('Hello \\(world\\)');
+      expect(escapeRegex('a.b+c*d?')).toBe('a\\.b\\+c\\*d\\?');
+      expect(escapeRegex('[test]')).toBe('\\[test\\]');
+    });
+
+    it('handles all special regex characters', () => {
+      const special = '.*+?^${}()|[]\\';
+      const escaped = escapeRegex(special);
+      expect(escaped).toBe('\\.\\*\\+\\?\\^\\$\\{\\}\\(\\)\\|\\[\\]\\\\');
+    });
+
+    it('returns same string if no special chars', () => {
+      expect(escapeRegex('abc123')).toBe('abc123');
+    });
+
+    it('throws for non-string input', () => {
+      expect(() => escapeRegex(123 as any)).toThrow('Expected a string');
+    });
+  });
+
+  describe('unescapeHtml', () => {
+    it('unescapes HTML entities', () => {
+      expect(unescapeHtml('&lt;div&gt;Hello&lt;/div&gt;')).toBe('<div>Hello</div>');
+      expect(unescapeHtml('&amp;')).toBe('&');
+      expect(unescapeHtml('&quot;test&quot;')).toBe('"test"');
+    });
+
+    it('handles apostrophes', () => {
+      expect(unescapeHtml('&#39;test&#39;')).toBe("'test'");
+      expect(unescapeHtml('&#x27;test&#x27;')).toBe("'test'");
+    });
+
+    it('returns same string if no entities', () => {
+      expect(unescapeHtml('plain text')).toBe('plain text');
+    });
+
+    it('returns empty string for non-string input', () => {
+      expect(unescapeHtml(null as any)).toBe('');
+      expect(unescapeHtml(123 as any)).toBe('');
+    });
+
+    it('handles mixed entities and text', () => {
+      expect(unescapeHtml('&lt;p&gt;Hello &amp; goodbye&lt;/p&gt;')).toBe('<p>Hello & goodbye</p>');
+    });
+  });
+
+  describe('isBlank', () => {
+    it('returns true for empty string', () => {
+      expect(isBlank('')).toBe(true);
+    });
+
+    it('returns true for whitespace-only string', () => {
+      expect(isBlank('   ')).toBe(true);
+      expect(isBlank('\t\n')).toBe(true);
+      expect(isBlank('  \t  \n  ')).toBe(true);
+    });
+
+    it('returns false for non-empty string', () => {
+      expect(isBlank('hello')).toBe(false);
+      expect(isBlank('  hello  ')).toBe(false);
+    });
+
+    it('returns false for non-string input', () => {
+      expect(isBlank(null as any)).toBe(false);
+      expect(isBlank(123 as any)).toBe(false);
+      expect(isBlank([] as any)).toBe(false);
+    });
+  });
+
+  describe('ellipsis', () => {
+    it('truncates string at word boundary with ellipsis', () => {
+      expect(ellipsis('The quick brown fox', 10)).toBe('The...');
+      expect(ellipsis('Hello world test', 15)).toBe('Hello world...');
+    });
+
+    it('uses custom suffix', () => {
+      expect(ellipsis('The quick brown fox', 10, '---')).toBe('The---');
+    });
+
+    it('returns original string if shorter than max length', () => {
+      expect(ellipsis('short', 10)).toBe('short');
+    });
+
+    it('truncates without word boundary if no space found', () => {
+      expect(ellipsis('verylongwordwithoutspaces', 10)).toBe('verylon...');
+    });
+
+    it('handles empty string', () => {
+      expect(ellipsis('', 10)).toBe('');
+    });
+
+    it('handles non-string input', () => {
+      expect(ellipsis(null as any, 10)).toBe(null);
+      expect(ellipsis(123 as any, 10)).toBe(123);
     });
   });
 });

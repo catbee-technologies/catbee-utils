@@ -61,6 +61,11 @@ export function debounce<T extends (...args: any[]) => void>(fn: T, delay: numbe
   };
 }
 
+const DEFAULT_THROTTLE_OPTS = {
+  leading: true,
+  trailing: false
+} as const;
+
 /**
  * Creates a throttled version of a function that limits its execution rate.
  * Allows control over leading/trailing invocation.
@@ -74,10 +79,7 @@ export function debounce<T extends (...args: any[]) => void>(fn: T, delay: numbe
 export function throttle<T extends (...args: any[]) => void>(
   fn: T,
   limit: number,
-  opts: { leading?: boolean; trailing?: boolean } = {
-    leading: true,
-    trailing: false
-  }
+  opts: { leading?: boolean; trailing?: boolean } = DEFAULT_THROTTLE_OPTS
 ): (...args: Parameters<T>) => void {
   let lastCall = 0;
   let timer: NodeJS.Timeout | null = null;
@@ -748,4 +750,33 @@ export function optionalRequire<T = any>(name: string): T | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Races promises and returns the first fulfilled value with its index.
+ * If all promises reject, the last rejection is thrown.
+ *
+ * @template T
+ * @param {Promise<T>[]} promises - Array of promises.
+ * @returns {Promise<{ value: T; index: number }>} First fulfilled value with index.
+ *
+ * @example
+ * const result = await raceWithValue([fetchA(), fetchB(), fetchC()]);
+ * console.log(result.value, result.index); // First fulfilled promise result
+ */
+export async function raceWithValue<T>(promises: Promise<T>[]): Promise<{ value: T; index: number }> {
+  return new Promise((resolve, reject) => {
+    let rejectedCount = 0;
+    let lastError: any;
+
+    promises.forEach((p, index) => {
+      p.then(value => resolve({ value, index })).catch(err => {
+        rejectedCount++;
+        lastError = err;
+        if (rejectedCount === promises.length) {
+          reject(lastError);
+        }
+      });
+    });
+  });
 }

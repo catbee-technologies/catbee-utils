@@ -13,7 +13,12 @@ import {
   encrypt,
   decrypt,
   createSignedToken,
-  verifySignedToken
+  verifySignedToken,
+  pbkdf2Hash,
+  generateNonce,
+  secureRandomInt,
+  hashPassword,
+  verifyPassword
 } from '../../src/crypto';
 import { randomUUID } from 'node:crypto';
 
@@ -212,6 +217,160 @@ describe('CryptoUtils', () => {
 
     it('returns null for malformed token', () => {
       expect(verifySignedToken('not.a.token', 'secret')).toBeNull();
+    });
+  });
+
+  describe('pbkdf2Hash', () => {
+    it('derives a key using PBKDF2 with default parameters', async () => {
+      const password = 'mypassword';
+      const salt = 'mysalt';
+      const derived = await pbkdf2Hash(password, salt);
+      expect(Buffer.isBuffer(derived)).toBe(true);
+      expect(derived).toHaveLength(32); // default keyLength
+    });
+
+    it('derives a key with custom keyLength', async () => {
+      const password = 'mypassword';
+      const salt = 'mysalt';
+      const derived = await pbkdf2Hash(password, salt, 64);
+      expect(derived).toHaveLength(64);
+    });
+
+    it('derives a key with custom iterations', async () => {
+      const password = 'mypassword';
+      const salt = 'mysalt';
+      const derived = await pbkdf2Hash(password, salt, 32, 1000);
+      expect(Buffer.isBuffer(derived)).toBe(true);
+      expect(derived).toHaveLength(32);
+    });
+
+    it('produces deterministic results for same inputs', async () => {
+      const password = 'test';
+      const salt = 'salt123';
+      const derived1 = await pbkdf2Hash(password, salt);
+      const derived2 = await pbkdf2Hash(password, salt);
+      expect(derived1.equals(derived2)).toBe(true);
+    });
+
+    it('produces different results for different salts', async () => {
+      const password = 'test';
+      const derived1 = await pbkdf2Hash(password, 'salt1');
+      const derived2 = await pbkdf2Hash(password, 'salt2');
+      expect(derived1.equals(derived2)).toBe(false);
+    });
+  });
+
+  describe('generateNonce', () => {
+    it('generates a nonce with default parameters', () => {
+      const nonce = generateNonce();
+      expect(typeof nonce).toBe('string');
+      expect(nonce).toHaveLength(32); // 16 bytes = 32 hex chars
+    });
+
+    it('generates a nonce with custom byte length', () => {
+      const nonce = generateNonce(8);
+      expect(nonce).toHaveLength(16); // 8 bytes = 16 hex chars
+    });
+
+    it('generates a nonce with base64 encoding', () => {
+      const nonce = generateNonce(16, 'base64');
+      expect(typeof nonce).toBe('string');
+      expect(nonce.length).toBeGreaterThan(0);
+    });
+
+    it('generates unique nonces', () => {
+      const nonce1 = generateNonce();
+      const nonce2 = generateNonce();
+      expect(nonce1).not.toBe(nonce2);
+    });
+  });
+
+  describe('secureRandomInt', () => {
+    it('generates a random integer within range', () => {
+      const min = 1;
+      const max = 10;
+      for (let i = 0; i < 100; i++) {
+        const random = secureRandomInt(min, max);
+        expect(random).toBeGreaterThanOrEqual(min);
+        expect(random).toBeLessThanOrEqual(max);
+        expect(Number.isInteger(random)).toBe(true);
+      }
+    });
+
+    it('handles single value range', () => {
+      const random = secureRandomInt(5, 5);
+      expect(random).toBe(5);
+    });
+
+    it('throws if min > max', () => {
+      expect(() => secureRandomInt(10, 5)).toThrow('min must be less than or equal to max');
+    });
+
+    it('handles negative numbers', () => {
+      const random = secureRandomInt(-10, -5);
+      expect(random).toBeGreaterThanOrEqual(-10);
+      expect(random).toBeLessThanOrEqual(-5);
+    });
+  });
+
+  describe('hashPassword', () => {
+    it('hashes a password and returns salt:hash format', async () => {
+      const password = 'mypassword';
+      const hash = await hashPassword(password);
+      expect(typeof hash).toBe('string');
+      expect(hash).toContain(':');
+      const [saltB64, keyB64] = hash.split(':');
+      expect(saltB64).toBeTruthy();
+      expect(keyB64).toBeTruthy();
+    });
+
+    it('generates different hashes for same password (due to salt)', async () => {
+      const password = 'mypassword';
+      const hash1 = await hashPassword(password);
+      const hash2 = await hashPassword(password);
+      expect(hash1).not.toBe(hash2);
+    });
+
+    it('supports custom salt and key lengths', async () => {
+      const password = 'test';
+      const hash = await hashPassword(password, 32, 64);
+      expect(hash).toContain(':');
+      const [saltB64, keyB64] = hash.split(':');
+      const salt = Buffer.from(saltB64, 'base64');
+      const key = Buffer.from(keyB64, 'base64');
+      expect(salt).toHaveLength(32);
+      expect(key).toHaveLength(64);
+    });
+  });
+
+  describe('verifyPassword', () => {
+    it('verifies a correct password', async () => {
+      const password = 'mypassword';
+      const hash = await hashPassword(password);
+      const isValid = await verifyPassword(password, hash);
+      expect(isValid).toBe(true);
+    });
+
+    it('rejects an incorrect password', async () => {
+      const password = 'mypassword';
+      const hash = await hashPassword(password);
+      const isValid = await verifyPassword('wrongpassword', hash);
+      expect(isValid).toBe(false);
+    });
+
+    it('returns false for malformed hash', async () => {
+      const isValid = await verifyPassword('password', 'notvalid');
+      expect(isValid).toBe(false);
+    });
+
+    it('returns false for hash without colon', async () => {
+      const isValid = await verifyPassword('password', 'nocolon');
+      expect(isValid).toBe(false);
+    });
+
+    it('returns false for invalid base64 in hash', async () => {
+      const isValid = await verifyPassword('password', 'invalid!!!:base64!!!');
+      expect(isValid).toBe(false);
     });
   });
 });

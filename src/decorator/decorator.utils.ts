@@ -234,7 +234,7 @@ export class DIContainer {
 const diContainer = new DIContainer();
 
 function normalizeHeaderValue(value: unknown): string | string[] | undefined {
-  if (typeof value === 'undefined') return undefined;
+  if (value === undefined) return undefined;
   if (typeof value === 'string') return value;
   if (Array.isArray(value) && value.every(item => typeof item === 'string')) {
     return value;
@@ -475,6 +475,8 @@ export function Use(...middlewares: RequestHandler[]): MethodDecorator & ClassDe
   };
 }
 
+type StrNumBool = 'string' | 'number' | 'boolean';
+
 /**
  * Options for parameter decorators
  * @template T - Type of the parameter value after transformation
@@ -490,7 +492,7 @@ export function Use(...middlewares: RequestHandler[]): MethodDecorator & ClassDe
  */
 export interface ParamOptions<T = any> {
   /** Base type of the parameter (default: 'string') */
-  type?: 'string' | 'number' | 'boolean';
+  type?: StrNumBool;
 
   /** Data structure type (default: 'single') */
   dataType?: 'single' | 'array' | 'object';
@@ -1619,11 +1621,11 @@ function handleDynamicRedirect(
  * Send the response with proper status code and headers.
  */
 function sendResponse(res: Response, result: any, httpCode: number | undefined, headers: Record<string, string>) {
-  if (!res.headersSent && typeof result !== 'undefined') {
+  if (!res.headersSent && result !== undefined) {
     if (httpCode) res.status(httpCode);
     for (const [k, v] of Object.entries(headers)) {
       const normalized = normalizeHeaderValue(v);
-      if (typeof normalized !== 'undefined') {
+      if (normalized !== undefined) {
         res.set(k, normalized);
       }
     }
@@ -1780,7 +1782,7 @@ function handleObjectParam(value: any, options: ParamOptions, key?: string) {
 function handleSingleParam(value: any, options: ParamOptions, key?: string) {
   const paramName = key ? `: ${key}` : '';
   const originalValue = value;
-  const targetType: 'string' | 'number' | 'boolean' = (options.type as 'string' | 'number' | 'boolean') ?? 'string';
+  const targetType: StrNumBool = (options.type as StrNumBool) ?? 'string';
   value = convertType(value, targetType);
 
   if (options.throwError === false) {
@@ -1853,7 +1855,7 @@ function isValidBooleanInput(value: any): boolean {
 }
 
 // Update the convertType function to be more robust
-function convertType(value: any, type: 'string' | 'number' | 'boolean') {
+function convertType(value: any, type: StrNumBool) {
   if (value === undefined || value === null) {
     return value;
   }

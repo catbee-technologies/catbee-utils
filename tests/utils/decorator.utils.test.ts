@@ -30,7 +30,7 @@ import {
   ReqHeader,
   ReqCookie,
   ReqId
-} from '../../src/decorators';
+} from '../../src/decorator';
 import { jest } from '@jest/globals';
 import { HttpStatusCodes } from '../../src/http-status-codes';
 import { NextFunction } from 'express';
@@ -860,7 +860,7 @@ describe('Decorators and registerControllers', () => {
       expect(b.getCombined()).toBe('AB');
 
       // Use DI container to resolve
-      const { DIContainer } = require('../../src/decorators');
+      const { DIContainer } = require('../../src/decorator');
       const di = new DIContainer();
       di.register(ServiceA);
       di.register(ServiceB);
@@ -886,7 +886,7 @@ describe('Decorators and registerControllers', () => {
         }
       }
 
-      const { DIContainer } = require('../../src/decorators');
+      const { DIContainer } = require('../../src/decorator');
       const di = new DIContainer();
       di.register(ServiceC);
       di.register(ServiceD);
@@ -925,7 +925,7 @@ describe('Decorators and registerControllers', () => {
       CircularBClass = CircularB;
 
       // Patch DIContainer to allow string tokens for circular refs
-      const { DIContainer } = require('../../src/decorators');
+      const { DIContainer } = require('../../src/decorator');
       const di = new DIContainer();
       di.register(CircularAClass);
       di.register(CircularBClass);
@@ -962,7 +962,7 @@ describe('Decorators and registerControllers', () => {
       CircularYClass = CircularY;
 
       // Manual property wiring to avoid TypeError due to DIContainer not supporting string tokens
-      const { DIContainer } = require('../../src/decorators');
+      const { DIContainer } = require('../../src/decorator');
       const di = new DIContainer();
       di.register(CircularXClass);
       di.register(CircularYClass);
@@ -1001,7 +1001,7 @@ describe('Decorators and registerControllers', () => {
         }
       }
 
-      const { DIContainer } = require('../../src/decorators');
+      const { DIContainer } = require('../../src/decorator');
       const di = new DIContainer();
       di.register(ServiceX);
       di.register(ServiceY);
@@ -1021,7 +1021,7 @@ describe('Decorators and registerControllers', () => {
         }
       }
 
-      const { DIContainer } = require('../../src/decorators');
+      const { DIContainer } = require('../../src/decorator');
       const di = new DIContainer();
       di.register(TestService);
       const instance = di.get(TestService);

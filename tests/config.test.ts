@@ -124,7 +124,7 @@ describe('config', () => {
           headerName: 'x-service-version',
           version: '0.0.0'
         },
-        skipHealthz: false
+        skipHealthzChecksValidation: false
       }
     };
 

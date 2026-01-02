@@ -2,7 +2,7 @@ import type { CatbeeConfig, CatbeeGlobalServerConfig } from '@catbee/utils/types
 import type { Logger, LoggerLevels } from '@catbee/utils/logger';
 import { Env } from '@catbee/utils/env';
 import { uuid } from '@catbee/utils/id';
-import { deepClone, deepObjMerge } from '@catbee/utils/obj';
+import { deepClone, deepObjMerge } from '@catbee/utils/object';
 
 /**
  * Extends Express Request interface to add request ID tracking.
@@ -83,9 +83,9 @@ export const defaultServerConfig: CatbeeGlobalServerConfig = {
   serviceVersion: {
     enable: Env.getBoolean('SERVER_SERVICE_VERSION_ENABLE', false),
     headerName: Env.get('SERVER_SERVICE_VERSION_HEADER_NAME', 'x-service-version'),
-    version: Env.get('SERVER_SERVICE_VERSION', '0.0.0')
+    version: Env.get('${npm_package_version}', '0.0.0')
   },
-  skipHealthz: Env.getBoolean('SERVER_SKIP_HEALTHZ', false)
+  skipHealthzChecksValidation: Env.getBoolean('SERVER_SKIP_HEALTHZ_CHECKS_VALIDATION', false)
 } as const;
 
 /** Default Catbee configuration loaded from environment variables. */

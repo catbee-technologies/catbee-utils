@@ -22,7 +22,7 @@ import {
   watchDirRecursive,
   getDirStats,
   walkDir
-} from '../../src/dir';
+} from '../../src/directory';
 
 describe('DirUtils', () => {
   let tempDir: string;

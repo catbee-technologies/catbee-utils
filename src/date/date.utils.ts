@@ -517,3 +517,143 @@ export function getDateFromDuration(input: string): Date {
   }
   return new Date(Date.now() + ms);
 }
+
+/**
+ * Checks if a date is on a weekend (Saturday or Sunday).
+ *
+ * @param {Date | number} date - The date to check.
+ * @returns {boolean} True if weekend.
+ *
+ * @example
+ * isWeekend(new Date('2024-01-06')); // true (Saturday)
+ */
+export function isWeekend(date: Date | number): boolean {
+  const d = date instanceof Date ? date : new Date(date);
+  const day = d.getDay();
+  return day === 0 || day === 6; // Sunday or Saturday
+}
+
+/**
+ * Checks if a date is today.
+ *
+ * @param {Date | number} date - The date to check.
+ * @returns {boolean} True if today.
+ *
+ * @example
+ * isToday(new Date()); // true
+ */
+export function isToday(date: Date | number): boolean {
+  const d = date instanceof Date ? date : new Date(date);
+  const today = new Date();
+  return (
+    d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth() && d.getDate() === today.getDate()
+  );
+}
+
+/**
+ * Checks if a date is in the future.
+ *
+ * @param {Date | number} date - The date to check.
+ * @returns {boolean} True if in the future.
+ *
+ * @example
+ * isFuture(new Date('2099-01-01')); // true
+ */
+export function isFuture(date: Date | number): boolean {
+  const d = date instanceof Date ? date : new Date(date);
+  return d.getTime() > Date.now();
+}
+
+/**
+ * Checks if a date is in the past.
+ *
+ * @param {Date | number} date - The date to check.
+ * @returns {boolean} True if in the past.
+ *
+ * @example
+ * isPast(new Date('2020-01-01')); // true
+ */
+export function isPast(date: Date | number): boolean {
+  const d = date instanceof Date ? date : new Date(date);
+  return d.getTime() < Date.now();
+}
+
+/**
+ * Adds days to a date.
+ *
+ * @param {Date | number} date - The base date.
+ * @param {number} days - Number of days to add (can be negative).
+ * @returns {Date} New date with days added.
+ *
+ * @example
+ * addDays(new Date('2024-01-15'), 7); // 2024-01-22
+ */
+export function addDays(date: Date | number, days: number): Date {
+  const d = new Date(date instanceof Date ? date : new Date(date));
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
+/**
+ * Adds months to a date.
+ *
+ * @param {Date | number} date - The base date.
+ * @param {number} months - Number of months to add (can be negative).
+ * @returns {Date} New date with months added.
+ *
+ * @example
+ * addMonths(new Date('2024-01-31'), 1); // 2024-02-29 (leap year)
+ */
+export function addMonths(date: Date | number, months: number): Date {
+  const d = new Date(date instanceof Date ? date : new Date(date));
+  d.setMonth(d.getMonth() + months);
+  return d;
+}
+
+/**
+ * Adds years to a date.
+ *
+ * @param {Date | number} date - The base date.
+ * @param {number} years - Number of years to add (can be negative).
+ * @returns {Date} New date with years added.
+ *
+ * @example
+ * addYears(new Date('2024-01-15'), 5); // 2029-01-15
+ */
+export function addYears(date: Date | number, years: number): Date {
+  const d = new Date(date instanceof Date ? date : new Date(date));
+  d.setFullYear(d.getFullYear() + years);
+  return d;
+}
+
+/**
+ * Gets the quarter of the year for a date (1-4).
+ *
+ * @param {Date | number} date - The date.
+ * @returns {1 | 2 | 3 | 4} Quarter number.
+ *
+ * @example
+ * quarterOf(new Date('2024-03-15')); // 1
+ * quarterOf(new Date('2024-07-15')); // 3
+ */
+export function quarterOf(date: Date | number): 1 | 2 | 3 | 4 {
+  const d = date instanceof Date ? date : new Date(date);
+  return (Math.floor(d.getMonth() / 3) + 1) as 1 | 2 | 3 | 4;
+}
+
+/**
+ * Gets the ISO week number of the year for a date.
+ *
+ * @param {Date | number} date - The date.
+ * @returns {number} Week number (1-53).
+ *
+ * @example
+ * weekOfYear(new Date('2024-01-15')); // 3
+ */
+export function weekOfYear(date: Date | number): number {
+  const d = new Date(date instanceof Date ? date : new Date(date));
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + 4 - (d.getDay() || 7));
+  const yearStart = new Date(d.getFullYear(), 0, 1);
+  return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+}

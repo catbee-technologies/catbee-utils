@@ -169,3 +169,71 @@ export function toTitleCase(str: string): string {
     .map(part => (part.trim().length === 0 ? part : part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()))
     .join('');
 }
+
+/**
+ * Escapes special regex characters in a string.
+ *
+ * @param {string} str - The input string.
+ * @returns {string} String with regex characters escaped.
+ *
+ * @example
+ * escapeRegex('Hello (world)'); // 'Hello \\(world\\)'
+ */
+export function escapeRegex(str: string): string {
+  if (typeof str !== 'string') throw new TypeError('Expected a string');
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Unescapes HTML entities in a string.
+ *
+ * @param {string} str - The HTML string.
+ * @returns {string} String with HTML entities unescaped.
+ *
+ * @example
+ * unescapeHtml('&lt;div&gt;Hello&lt;/div&gt;'); // '<div>Hello</div>'
+ */
+export function unescapeHtml(str: string): string {
+  if (typeof str !== 'string') return '';
+  const entities: Record<string, string> = {
+    '&amp;': '&',
+    '&lt;': '<',
+    '&gt;': '>',
+    '&quot;': '"',
+    '&#39;': "'",
+    '&#x27;': "'"
+  };
+  return str.replace(/&(?:amp|lt|gt|quot|#39|#x27);/g, match => entities[match] || match);
+}
+
+/**
+ * Checks if a string is blank (empty or only whitespace).
+ *
+ * @param {string} str - The input string.
+ * @returns {boolean} True if blank.
+ *
+ * @example
+ * isBlank('   '); // true
+ * isBlank('hello'); // false
+ */
+export function isBlank(str: string): boolean {
+  return typeof str === 'string' && str.trim().length === 0;
+}
+
+/**
+ * Truncates a string with an ellipsis, ensuring word boundaries.
+ *
+ * @param {string} str - The input string.
+ * @param {number} maxLength - Maximum length.
+ * @param {string} [suffix='...'] - Suffix to append.
+ * @returns {string} Truncated string.
+ *
+ * @example
+ * ellipsis('The quick brown fox', 10); // 'The quick...'
+ */
+export function ellipsis(str: string, maxLength: number, suffix: string = '...'): string {
+  if (typeof str !== 'string' || str.length <= maxLength) return str;
+  const truncated = str.slice(0, maxLength - suffix.length);
+  const lastSpace = truncated.lastIndexOf(' ');
+  return (lastSpace > 0 ? truncated.slice(0, lastSpace) : truncated) + suffix;
+}

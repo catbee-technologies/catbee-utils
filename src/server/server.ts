@@ -9,7 +9,7 @@ import { Env } from '@catbee/utils/env';
 import { getLogger } from '@catbee/utils/logger';
 import { InternalServerErrorException, ServiceUnavailableException, NotFoundException } from '@catbee/utils/exception';
 import { getCatbeeServerGlobalConfig } from '@catbee/utils/config';
-import { deepObjMerge } from '@catbee/utils/obj';
+import { deepObjMerge } from '@catbee/utils/object';
 import { fileExists, readFileSync, readFile } from '@catbee/utils/fs';
 import { CatbeeServerConfig, CatbeeServerHooks } from '@catbee/utils/types';
 import { isPort } from '@catbee/utils/validation';
@@ -281,12 +281,11 @@ export class ExpressServer {
     this.app.use((_req: Request, res: Response, next: NextFunction) => {
       if (this.isShuttingDown) {
         res.setHeader('Connection', 'close');
-        return res
+        res
           .status(HttpStatusCodes.SERVICE_UNAVAILABLE)
           .json(new ServiceUnavailableException('Server is shutting down'));
       }
       next();
-      return;
     });
   }
 
@@ -673,7 +672,7 @@ export class ExpressServer {
    */
   private async handleHealthCheckRequest(res: Response): Promise<Response> {
     try {
-      if (!this.healthChecks.length || getCatbeeServerGlobalConfig().skipHealthz) {
+      if (!this.healthChecks.length || getCatbeeServerGlobalConfig().skipHealthzChecksValidation) {
         return res.status(HttpStatusCodes.OK).json(new SuccessResponse('OK'));
       }
 
@@ -741,7 +740,7 @@ export class ExpressServer {
    */
   public async ready(): Promise<boolean> {
     try {
-      if (!this.healthChecks.length || getCatbeeServerGlobalConfig().skipHealthz) return true;
+      if (!this.healthChecks.length || getCatbeeServerGlobalConfig().skipHealthzChecksValidation) return true;
       const results = await this.executeHealthChecks();
       return results.every(r => r.status === true);
     } catch (err) {

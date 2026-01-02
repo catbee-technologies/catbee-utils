@@ -16,7 +16,8 @@ import {
   rateLimit,
   circuitBreaker,
   CircuitBreakerOpenError,
-  runWithConcurrency
+  runWithConcurrency,
+  raceWithValue
 } from '../../src/async';
 
 describe('sleep', () => {
@@ -576,5 +577,46 @@ describe('runWithConcurrency', () => {
     ).resolves.toEqual([1, 2]);
 
     consoleSpy.mockRestore();
+  });
+});
+
+describe('raceWithValue', () => {
+  it('returns first fulfilled value with its index', async () => {
+    const promises = [sleep(50).then(() => 'slow'), sleep(10).then(() => 'fast'), sleep(30).then(() => 'medium')];
+    const result = await raceWithValue(promises);
+    expect(result).toEqual({ value: 'fast', index: 1 });
+  });
+
+  it('returns first fulfilled value even if others are slower', async () => {
+    const promises = [
+      new Promise(resolve => setTimeout(() => resolve('first'), 100)),
+      new Promise(resolve => setTimeout(() => resolve('second'), 10)),
+      new Promise(resolve => setTimeout(() => resolve('third'), 50))
+    ];
+    const result = await raceWithValue(promises);
+    expect(result.value).toBe('second');
+    expect(result.index).toBe(1);
+  });
+
+  it('rejects with last error if all promises reject', async () => {
+    const promises = [Promise.reject('error1'), Promise.reject('error2'), Promise.reject('error3')];
+    await expect(raceWithValue(promises)).rejects.toBe('error3');
+  });
+
+  it('returns fulfilled promise even if some reject', async () => {
+    const promises = [Promise.reject('error1'), sleep(10).then(() => 'success'), Promise.reject('error2')];
+    const result = await raceWithValue(promises);
+    expect(result).toEqual({ value: 'success', index: 1 });
+  });
+
+  it('handles single promise', async () => {
+    const promises = [Promise.resolve('single')];
+    const result = await raceWithValue(promises);
+    expect(result).toEqual({ value: 'single', index: 0 });
+  });
+
+  it('handles single rejected promise', async () => {
+    const promises = [Promise.reject('error')];
+    await expect(raceWithValue(promises)).rejects.toBe('error');
   });
 });

@@ -477,7 +477,7 @@ export interface GlobalServerAddons {
   /**
    * Skip healthz endpoint even if health checks are configured
    *  - **default**: `false`
-   *  - **env**: `SERVER_SKIP_HEALTHZ`
+   *  - **env**: `SERVER_SKIP_HEALTHZ_CHECKS_VALIDATION`
    *
    * @additionalInfo
    * Set to true to return `200 OK` for `/healthz` without checks
@@ -488,7 +488,7 @@ export interface GlobalServerAddons {
    *       Health checks can still be performed programmatically
    *       or via other endpoints if needed
    */
-  skipHealthz: boolean;
+  skipHealthzChecksValidation: boolean;
 }
 
 /** Combined global server configuration type */

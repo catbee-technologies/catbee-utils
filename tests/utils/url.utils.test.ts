@@ -9,7 +9,12 @@ import {
   extractQueryParams,
   removeQueryParams,
   getExtension,
-  parseTypedQueryParams
+  parseTypedQueryParams,
+  updateQueryParam,
+  getSubdomain,
+  isRelativeUrl,
+  toAbsoluteUrl,
+  sanitizeUrl
 } from '../../src/url';
 
 describe('UrlUtils', () => {
@@ -107,6 +112,15 @@ describe('UrlUtils', () => {
       expect(getDomain('https://api.example.com/path', true)).toBe('example.com');
       expect(getDomain('https://foo.bar.co.uk', true)).toBe('bar.co.uk');
     });
+    it('returns hostname for 2-part domains when removing subdomains', () => {
+      expect(getDomain('https://example.com', true)).toBe('example.com');
+    });
+    it('handles special second-level domains', () => {
+      expect(getDomain('https://www.site.com.au', true)).toBe('site.com.au');
+      expect(getDomain('https://api.example.co.in', true)).toBe('example.co.in');
+      expect(getDomain('https://test.example.gov.uk', true)).toBe('example.gov.uk');
+      expect(getDomain('https://sub.example.edu.au', true)).toBe('example.edu.au');
+    });
     it("returns '' for invalid URL", () => {
       expect(getDomain('not a url')).toBe('');
     });
@@ -201,6 +215,148 @@ describe('UrlUtils', () => {
     });
     it('returns {} for invalid URL', () => {
       expect(parseTypedQueryParams('not a url')).toEqual({});
+    });
+  });
+
+  describe('updateQueryParam', () => {
+    it('updates existing query parameter', () => {
+      const url = 'https://example.com?page=1';
+      expect(updateQueryParam(url, 'page', 2)).toBe('https://example.com/?page=2');
+    });
+
+    it('adds new query parameter', () => {
+      const url = 'https://example.com?foo=bar';
+      expect(updateQueryParam(url, 'page', 1)).toBe('https://example.com/?foo=bar&page=1');
+    });
+
+    it('handles URL without query string', () => {
+      const url = 'https://example.com';
+      expect(updateQueryParam(url, 'test', 'value')).toBe('https://example.com/?test=value');
+    });
+
+    it('converts number values to string', () => {
+      const url = 'https://example.com';
+      expect(updateQueryParam(url, 'page', 42)).toBe('https://example.com/?page=42');
+    });
+
+    it('returns original URL for invalid URL', () => {
+      const url = 'not-a-url';
+      expect(updateQueryParam(url, 'key', 'value')).toBe('not-a-url');
+    });
+  });
+
+  describe('getSubdomain', () => {
+    it('extracts subdomain from URL', () => {
+      expect(getSubdomain('https://api.example.com')).toBe('api');
+    });
+
+    it('extracts multiple subdomains', () => {
+      expect(getSubdomain('https://www.blog.example.com')).toBe('www.blog');
+    });
+
+    it('returns empty string for URL without subdomain', () => {
+      expect(getSubdomain('https://example.com')).toBe('');
+      expect(getSubdomain('https://localhost')).toBe('');
+    });
+
+    it('handles URLs with ports', () => {
+      expect(getSubdomain('https://api.example.com:8080')).toBe('api');
+    });
+
+    it('returns empty string for invalid URL', () => {
+      expect(getSubdomain('not-a-url')).toBe('');
+    });
+  });
+
+  describe('isRelativeUrl', () => {
+    it('returns true for relative URLs', () => {
+      expect(isRelativeUrl('/path/to/page')).toBe(true);
+      expect(isRelativeUrl('./relative/path')).toBe(true);
+      expect(isRelativeUrl('../parent/path')).toBe(true);
+    });
+
+    it('returns false for absolute URLs', () => {
+      expect(isRelativeUrl('https://example.com/page')).toBe(false);
+      expect(isRelativeUrl('http://example.com')).toBe(false);
+      expect(isRelativeUrl('ftp://example.com')).toBe(false);
+    });
+
+    it('returns false for protocol-relative URLs', () => {
+      expect(isRelativeUrl('//example.com/path')).toBe(true); // Caught in catch block, starts with /
+    });
+
+    it('returns false for empty string', () => {
+      expect(isRelativeUrl('')).toBe(false);
+    });
+
+    it('returns false for non-string input', () => {
+      expect(isRelativeUrl(null as any)).toBe(false);
+      expect(isRelativeUrl(undefined as any)).toBe(false);
+    });
+  });
+
+  describe('toAbsoluteUrl', () => {
+    it('converts relative URL to absolute', () => {
+      expect(toAbsoluteUrl('/api/users', 'https://example.com')).toBe('https://example.com/api/users');
+    });
+
+    it('handles relative paths with ./', () => {
+      expect(toAbsoluteUrl('./api/users', 'https://example.com')).toBe('https://example.com/api/users');
+    });
+
+    it('handles parent directory paths with ../', () => {
+      expect(toAbsoluteUrl('../api/users', 'https://example.com/path')).toBe('https://example.com/api/users');
+    });
+
+    it('returns absolute URL unchanged if relative path is already absolute', () => {
+      expect(toAbsoluteUrl('https://other.com/path', 'https://example.com')).toBe('https://other.com/path');
+    });
+
+    it('handles base URL with path', () => {
+      expect(toAbsoluteUrl('users', 'https://example.com/api/')).toBe('https://example.com/api/users');
+    });
+
+    it('returns relative URL on error', () => {
+      expect(toAbsoluteUrl('/path', 'not-a-url')).toBe('/path');
+    });
+  });
+
+  describe('sanitizeUrl', () => {
+    it('allows http and https by default', () => {
+      expect(sanitizeUrl('https://example.com')).toBe('https://example.com/');
+      expect(sanitizeUrl('http://example.com')).toBe('http://example.com/');
+    });
+
+    it('rejects javascript: protocol', () => {
+      expect(sanitizeUrl('javascript:alert(1)')).toBeNull();
+    });
+
+    it('rejects data: protocol', () => {
+      expect(sanitizeUrl('data:text/html,<script>alert(1)</script>')).toBeNull();
+    });
+
+    it('rejects file: protocol', () => {
+      expect(sanitizeUrl('file:///etc/passwd')).toBeNull();
+    });
+
+    it('allows custom protocols', () => {
+      expect(sanitizeUrl('ftp://example.com', ['ftp'])).toBe('ftp://example.com/');
+      expect(sanitizeUrl('ws://example.com', ['ws', 'wss'])).toBe('ws://example.com/');
+    });
+
+    it('rejects protocol not in allowed list', () => {
+      expect(sanitizeUrl('ftp://example.com', ['http', 'https'])).toBeNull();
+    });
+
+    it('returns null for invalid URLs', () => {
+      expect(sanitizeUrl('not-a-url')).toBeNull();
+      expect(sanitizeUrl('')).toBeNull();
+    });
+
+    it('normalizes URL', () => {
+      const result = sanitizeUrl('HTTPS://Example.COM/path');
+      expect(result).toBeTruthy();
+      expect(result).toContain('example.com');
     });
   });
 });

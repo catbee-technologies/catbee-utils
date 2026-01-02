@@ -304,7 +304,7 @@ export function trackMemoryUsage<T>(
   // Calculate differences
   const diff: Record<string, number> = {};
   for (const key in afterMemory) {
-    if (Object.prototype.hasOwnProperty.call(afterMemory, key)) {
+    if (Object.hasOwn(afterMemory, key)) {
       diff[key] = (afterMemory as any)[key] - (beforeMemory as any)[key];
     }
   }

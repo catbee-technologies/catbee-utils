@@ -95,7 +95,7 @@ export class Env {
 
     // Clear all cached values for this key with any prefix
     this.cache.delete(key);
-    for (const cacheKey of [...this.cache.keys()]) {
+    for (const cacheKey of this.cache.keys()) {
       if (cacheKey.includes(`:${key}`)) {
         this.cache.delete(cacheKey);
       }

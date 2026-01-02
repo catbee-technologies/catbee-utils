@@ -167,6 +167,8 @@ export function extractPaginationParams(
   return { page, limit };
 }
 
+const DEFAULT_SORT = { sortBy: 'createdAt', sortOrder: 'desc' as 'asc' | 'desc' };
+
 /**
  * Extracts sorting parameters from request query parameters.
  *
@@ -178,7 +180,7 @@ export function extractPaginationParams(
 export function extractSortParams(
   query: Record<string, string | string[]>,
   allowedFields: string[],
-  defaultSort: { sortBy: string; sortOrder: 'asc' | 'desc' } = { sortBy: 'createdAt', sortOrder: 'desc' }
+  defaultSort: { sortBy: string; sortOrder: 'asc' | 'desc' } = DEFAULT_SORT
 ): { sortBy: string; sortOrder: 'asc' | 'desc' } {
   const inferredSortBy = getSortByFromQuery(query, defaultSort);
   let sortOrder: 'asc' | 'desc' = getSortOrderFromQuery(query, defaultSort);
