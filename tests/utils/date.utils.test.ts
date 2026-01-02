@@ -11,7 +11,16 @@ import {
   daysInMonth,
   formatDuration,
   parseDuration,
-  getDateFromDuration
+  getDateFromDuration,
+  isWeekend,
+  isToday,
+  isFuture,
+  isPast,
+  addDays,
+  addMonths,
+  addYears,
+  quarterOf,
+  weekOfYear
 } from '../../src/date';
 
 describe('date.utils', () => {
@@ -341,6 +350,236 @@ describe('date.utils', () => {
     });
     it('throws error for zero duration', () => {
       expect(() => getDateFromDuration('0')).toThrow();
+    });
+  });
+
+  describe('isWeekend', () => {
+    it('returns true for Saturday', () => {
+      const saturday = new Date('2024-01-06'); // A Saturday
+      expect(isWeekend(saturday)).toBe(true);
+    });
+
+    it('returns true for Sunday', () => {
+      const sunday = new Date('2024-01-07'); // A Sunday
+      expect(isWeekend(sunday)).toBe(true);
+    });
+
+    it('returns false for weekday', () => {
+      const monday = new Date('2024-01-08'); // A Monday
+      expect(isWeekend(monday)).toBe(false);
+    });
+
+    it('handles timestamp input', () => {
+      const saturday = new Date('2024-01-06').getTime();
+      expect(isWeekend(saturday)).toBe(true);
+    });
+  });
+
+  describe('isToday', () => {
+    it('returns true for current date', () => {
+      const now = new Date();
+      expect(isToday(now)).toBe(true);
+    });
+
+    it('returns false for yesterday', () => {
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      expect(isToday(yesterday)).toBe(false);
+    });
+
+    it('returns false for tomorrow', () => {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      expect(isToday(tomorrow)).toBe(false);
+    });
+
+    it('handles timestamp input', () => {
+      const now = Date.now();
+      expect(isToday(now)).toBe(true);
+    });
+  });
+
+  describe('isFuture', () => {
+    it('returns true for future date', () => {
+      const future = new Date('2099-01-01');
+      expect(isFuture(future)).toBe(true);
+    });
+
+    it('returns false for past date', () => {
+      const past = new Date('2020-01-01');
+      expect(isFuture(past)).toBe(false);
+    });
+
+    it('handles timestamp input', () => {
+      const future = new Date('2099-01-01').getTime();
+      expect(isFuture(future)).toBe(true);
+    });
+  });
+
+  describe('isPast', () => {
+    it('returns true for past date', () => {
+      const past = new Date('2020-01-01');
+      expect(isPast(past)).toBe(true);
+    });
+
+    it('returns false for future date', () => {
+      const future = new Date('2099-01-01');
+      expect(isPast(future)).toBe(false);
+    });
+
+    it('handles timestamp input', () => {
+      const past = new Date('2020-01-01').getTime();
+      expect(isPast(past)).toBe(true);
+    });
+  });
+
+  describe('addDays', () => {
+    it('adds positive days', () => {
+      const date = new Date('2024-01-15');
+      const result = addDays(date, 7);
+      expect(result.getDate()).toBe(22);
+      expect(result.getMonth()).toBe(0); // January
+    });
+
+    it('subtracts days with negative input', () => {
+      const date = new Date('2024-01-15');
+      const result = addDays(date, -5);
+      expect(result.getDate()).toBe(10);
+    });
+
+    it('handles month rollover', () => {
+      const date = new Date('2024-01-30');
+      const result = addDays(date, 5);
+      expect(result.getMonth()).toBe(1); // February
+      expect(result.getDate()).toBe(4);
+    });
+
+    it('handles timestamp input', () => {
+      const timestamp = new Date('2024-01-15').getTime();
+      const result = addDays(timestamp, 7);
+      expect(result).toBeInstanceOf(Date);
+    });
+  });
+
+  describe('addMonths', () => {
+    it('adds positive months', () => {
+      const date = new Date('2024-01-15');
+      const result = addMonths(date, 3);
+      expect(result.getMonth()).toBe(3); // April
+      expect(result.getFullYear()).toBe(2024);
+    });
+
+    it('subtracts months with negative input', () => {
+      const date = new Date('2024-04-15');
+      const result = addMonths(date, -2);
+      expect(result.getMonth()).toBe(1); // February
+    });
+
+    it('handles year rollover', () => {
+      const date = new Date('2024-11-15');
+      const result = addMonths(date, 3);
+      expect(result.getFullYear()).toBe(2025);
+      expect(result.getMonth()).toBe(1); // February
+    });
+
+    it('adjusts day for months with fewer days', () => {
+      const date = new Date('2024-01-31');
+      const result = addMonths(date, 1);
+      // JavaScript automatically adjusts to March 2 (31 Jan + 1 month = 2 Mar in non-leap adjustment)
+      expect(result.getMonth()).toBe(2); // March
+      expect(result.getDate()).toBe(2);
+    });
+
+    it('handles timestamp input', () => {
+      const timestamp = new Date('2024-01-15').getTime();
+      const result = addMonths(timestamp, 1);
+      expect(result).toBeInstanceOf(Date);
+    });
+  });
+
+  describe('addYears', () => {
+    it('adds positive years', () => {
+      const date = new Date('2024-01-15');
+      const result = addYears(date, 5);
+      expect(result.getFullYear()).toBe(2029);
+      expect(result.getMonth()).toBe(0); // January
+      expect(result.getDate()).toBe(15);
+    });
+
+    it('subtracts years with negative input', () => {
+      const date = new Date('2024-01-15');
+      const result = addYears(date, -3);
+      expect(result.getFullYear()).toBe(2021);
+    });
+
+    it('handles leap year edge case', () => {
+      const date = new Date('2024-02-29'); // Leap year
+      const result = addYears(date, 1);
+      expect(result.getFullYear()).toBe(2025);
+      // Feb 29 doesn't exist in 2025, so it becomes Feb 28 or Mar 1
+      expect(result.getMonth()).toBeGreaterThanOrEqual(1);
+    });
+
+    it('handles timestamp input', () => {
+      const timestamp = new Date('2024-01-15').getTime();
+      const result = addYears(timestamp, 5);
+      expect(result).toBeInstanceOf(Date);
+    });
+  });
+
+  describe('quarterOf', () => {
+    it('returns 1 for Q1 months', () => {
+      expect(quarterOf(new Date('2024-01-15'))).toBe(1);
+      expect(quarterOf(new Date('2024-02-15'))).toBe(1);
+      expect(quarterOf(new Date('2024-03-15'))).toBe(1);
+    });
+
+    it('returns 2 for Q2 months', () => {
+      expect(quarterOf(new Date('2024-04-15'))).toBe(2);
+      expect(quarterOf(new Date('2024-05-15'))).toBe(2);
+      expect(quarterOf(new Date('2024-06-15'))).toBe(2);
+    });
+
+    it('returns 3 for Q3 months', () => {
+      expect(quarterOf(new Date('2024-07-15'))).toBe(3);
+      expect(quarterOf(new Date('2024-08-15'))).toBe(3);
+      expect(quarterOf(new Date('2024-09-15'))).toBe(3);
+    });
+
+    it('returns 4 for Q4 months', () => {
+      expect(quarterOf(new Date('2024-10-15'))).toBe(4);
+      expect(quarterOf(new Date('2024-11-15'))).toBe(4);
+      expect(quarterOf(new Date('2024-12-15'))).toBe(4);
+    });
+
+    it('handles timestamp input', () => {
+      const timestamp = new Date('2024-07-15').getTime();
+      expect(quarterOf(timestamp)).toBe(3);
+    });
+  });
+
+  describe('weekOfYear', () => {
+    it('returns correct ISO week number', () => {
+      // Week 1 of 2024 starts on Jan 1 (Monday)
+      expect(weekOfYear(new Date('2024-01-01'))).toBe(1);
+      expect(weekOfYear(new Date('2024-01-15'))).toBe(3);
+    });
+
+    it('handles different months', () => {
+      expect(weekOfYear(new Date('2024-07-15'))).toBeGreaterThan(25);
+      expect(weekOfYear(new Date('2024-12-31'))).toBeGreaterThan(0);
+    });
+
+    it('handles timestamp input', () => {
+      const timestamp = new Date('2024-01-15').getTime();
+      expect(weekOfYear(timestamp)).toBe(3);
+    });
+
+    it('returns correct week for year boundary', () => {
+      // ISO week calculation can have week 53 or week 1 near year boundary
+      const result = weekOfYear(new Date('2024-12-30'));
+      expect(result).toBeGreaterThan(0);
+      expect(result).toBeLessThanOrEqual(53);
     });
   });
 });

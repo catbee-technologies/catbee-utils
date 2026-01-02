@@ -24,10 +24,14 @@ import {
   isSorted,
   lastOfArr,
   headOfArr,
-  findLastIndex
+  findLastIndex,
+  drop,
+  dropWhile,
+  maxBy,
+  minBy
 } from '../../src/array';
 
-jest.mock('../../src/obj', () => ({
+jest.mock('../../src/object', () => ({
   getValueByPath: (obj: any, path: string) => path.split('.').reduce((o, k) => (o ? o[k] : undefined), obj)
 }));
 
@@ -371,6 +375,56 @@ describe('ArrayUtils', () => {
       expect(lastOfArr([1, 2, 3])).toBe(3);
       expect(lastOfArr([])).toBeUndefined();
       expect(lastOfArr(null as any)).toBeUndefined();
+    });
+  });
+
+  describe('drop', () => {
+    it('drops first n elements', () => {
+      expect(drop([1, 2, 3, 4, 5], 2)).toEqual([3, 4, 5]);
+      expect(drop([1, 2, 3], 0)).toEqual([1, 2, 3]);
+      expect(drop([1, 2, 3], 5)).toEqual([]);
+    });
+    it('returns copy for non-positive n', () => {
+      expect(drop([1, 2, 3], -1)).toEqual([1, 2, 3]);
+    });
+  });
+
+  describe('dropWhile', () => {
+    it('drops elements while predicate is true', () => {
+      expect(dropWhile([1, 2, 3, 4, 1], x => x < 3)).toEqual([3, 4, 1]);
+      expect(dropWhile([1, 2, 3], () => true)).toEqual([]);
+      expect(dropWhile([1, 2, 3], () => false)).toEqual([1, 2, 3]);
+    });
+    it('handles non-array', () => {
+      expect(dropWhile(null as any, () => true)).toEqual([]);
+    });
+  });
+
+  describe('maxBy', () => {
+    it('finds element with maximum value by key', () => {
+      expect(maxBy([{ a: 1 }, { a: 5 }, { a: 3 }], 'a')).toEqual({ a: 5 });
+      expect(maxBy([{ a: 1 }, { a: 5 }, { a: 3 }], x => x.a)).toEqual({ a: 5 });
+    });
+    it('returns undefined for empty array or non-array', () => {
+      expect(maxBy([], 'a')).toBeUndefined();
+      expect(maxBy(null as any, 'a')).toBeUndefined();
+    });
+    it('handles single element', () => {
+      expect(maxBy([{ a: 10 }], 'a')).toEqual({ a: 10 });
+    });
+  });
+
+  describe('minBy', () => {
+    it('finds element with minimum value by key', () => {
+      expect(minBy([{ a: 1 }, { a: 5 }, { a: 3 }], 'a')).toEqual({ a: 1 });
+      expect(minBy([{ a: 1 }, { a: 5 }, { a: 3 }], x => x.a)).toEqual({ a: 1 });
+    });
+    it('returns undefined for empty array or non-array', () => {
+      expect(minBy([], 'a')).toBeUndefined();
+      expect(minBy(null as any, 'a')).toBeUndefined();
+    });
+    it('handles single element', () => {
+      expect(minBy([{ a: 10 }], 'a')).toEqual({ a: 10 });
     });
   });
 });

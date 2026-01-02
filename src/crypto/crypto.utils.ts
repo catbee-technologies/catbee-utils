@@ -6,11 +6,17 @@ import {
   createCipheriv,
   createDecipheriv,
   scrypt,
-  timingSafeEqual
+  timingSafeEqual,
+  pbkdf2
 } from 'node:crypto';
 import type { CipherGCMTypes } from 'node:crypto';
 import { promisify } from 'node:util';
 import { uuid } from '@catbee/utils/id';
+
+// Promisified version of pbkdf2 for key derivation
+const pbkdf2Async = promisify(pbkdf2);
+// Promisified version of scrypt for key derivation
+const scryptAsync = promisify<string | Buffer, string | Buffer, number, Buffer>(scrypt);
 
 export type BufferEncoding =
   | 'ascii'
@@ -203,10 +209,9 @@ export interface EncryptionResult {
   authTag?: Buffer;
   /** Algorithm used */
   algorithm: string;
+  /** Salt used for key derivation */
+  salt: Buffer;
 }
-
-// Promisified version of scrypt for key derivation
-const scryptAsync = promisify<string | Buffer, string | Buffer, number, Buffer>(scrypt);
 
 /**
  * Encrypts data using a symmetric key with secure defaults (AES-256-GCM).
@@ -229,7 +234,8 @@ export async function encrypt(
   const iv = randomBytes(16);
 
   // Derive key using scrypt if key is a string (passphrase)
-  const derivedKey = typeof key === 'string' ? await scryptAsync(key, iv.slice(0, 8), 32) : key;
+  const salt = randomBytes(8);
+  const derivedKey = typeof key === 'string' ? await scryptAsync(key, salt, 32) : key;
 
   // Create cipher
   const cipher = createCipheriv(algorithm, derivedKey, iv);
@@ -252,7 +258,8 @@ export async function encrypt(
     ciphertext,
     iv,
     authTag,
-    algorithm
+    algorithm,
+    salt
   };
 }
 
@@ -274,7 +281,7 @@ export async function decrypt(
   const outputEncoding = options.outputEncoding || 'utf8';
 
   // Derive key using scrypt if key is a string (passphrase)
-  const derivedKey = typeof key === 'string' ? await scryptAsync(key, encryptedData.iv.slice(0, 8), 32) : key;
+  const derivedKey = typeof key === 'string' ? await scryptAsync(key, encryptedData.salt, 32) : key;
 
   // Create decipher
   const decipher = createDecipheriv(algorithm, derivedKey, encryptedData.iv);
@@ -360,5 +367,111 @@ export function verifySignedToken(token: string, secret: string): Record<string,
     return payload;
   } catch {
     return null;
+  }
+}
+
+/**
+ * Derives a cryptographic key using PBKDF2 (SHA-256).
+ *
+ * @param password - Password to derive key from
+ * @param salt - Cryptographic salt (use unique per password)
+ * @param keyLength - Output key length in bytes (default 32)
+ * @param iterations - Number of hashing iterations (default 310000, OWASP recommended)
+ * @returns Derived key as Buffer
+ *
+ * @example
+ * const key = await pbkdf2Hash('myPassword', 'mySalt');
+ */
+export async function pbkdf2Hash(
+  password: string,
+  salt: string | Buffer,
+  keyLength = 32,
+  iterations = 310_000
+): Promise<Buffer> {
+  return pbkdf2Async(password, salt, iterations, keyLength, 'sha256') as Promise<Buffer>;
+}
+
+/**
+ * Generates a cryptographically secure nonce (number used once).
+ *
+ * @param {number} [byteLength=16] - Length of nonce in bytes.
+ * @param {BinaryToTextEncoding} [encoding='hex'] - Output encoding.
+ * @returns {string} Nonce string.
+ *
+ * @example
+ * const nonce = generateNonce(16, 'base64'); // Random nonce
+ */
+export function generateNonce(byteLength: number = 16, encoding: BinaryToTextEncoding = 'hex'): string {
+  return randomBytes(byteLength).toString(encoding);
+}
+
+/**
+ * Generates a cryptographically secure random integer in a range.
+ *
+ * @param {number} min - Minimum value (inclusive).
+ * @param {number} max - Maximum value (inclusive).
+ * @returns {number} Random integer.
+ *
+ * @example
+ * const random = secureRandomInt(1, 100); // Random number 1-100
+ */
+export function secureRandomInt(min: number, max: number): number {
+  if (min > max) throw new Error('min must be less than or equal to max');
+  const range = max - min + 1;
+  const bytesNeeded = Math.ceil(Math.log2(range) / 8);
+  const maxValid = Math.floor(256 ** bytesNeeded / range) * range;
+
+  let randomValue: number;
+  do {
+    const bytes = randomBytes(bytesNeeded);
+    randomValue = bytes.reduce((acc, byte, i) => acc + byte * 256 ** i, 0);
+  } while (randomValue >= maxValid);
+
+  return min + (randomValue % range);
+}
+
+/**
+ * Hashes a password using scrypt (memory-hard function).
+ *
+ * @param {string} password - The password to hash.
+ * @param {number} [saltLength=16] - Length of salt in bytes.
+ * @param {number} [keyLength=32] - Length of derived key.
+ * @returns {Promise<string>} Hash string containing salt and key.
+ *
+ * @example
+ * const hash = await hashPassword('myPassword');
+ * // Returns format: salt:hash (both base64)
+ */
+export async function hashPassword(password: string, saltLength: number = 16, keyLength: number = 32): Promise<string> {
+  const salt = randomBytes(saltLength);
+  const scryptAsync = promisify(scrypt);
+  const derivedKey = (await scryptAsync(password, salt, keyLength)) as Buffer;
+  return `${salt.toString('base64')}:${derivedKey.toString('base64')}`;
+}
+
+/**
+ * Verifies a password against a scrypt hash.
+ *
+ * @param {string} password - The password to verify.
+ * @param {string} hash - The hash to verify against (from hashPassword).
+ * @returns {Promise<boolean>} True if password matches.
+ *
+ * @example
+ * const isValid = await verifyPassword('myPassword', storedHash);
+ */
+export async function verifyPassword(password: string, hash: string): Promise<boolean> {
+  try {
+    const [saltB64, keyB64] = hash.split(':');
+    if (!saltB64 || !keyB64) return false;
+
+    const salt = Buffer.from(saltB64, 'base64');
+    const key = Buffer.from(keyB64, 'base64');
+
+    const scryptAsync = promisify(scrypt);
+    const derivedKey = (await scryptAsync(password, salt, key.length)) as Buffer;
+
+    return timingSafeEqual(key, derivedKey);
+  } catch {
+    return false;
   }
 }

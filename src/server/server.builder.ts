@@ -1,4 +1,4 @@
-import { deepClone, deepObjMerge } from '@catbee/utils/obj';
+import { deepClone, deepObjMerge } from '@catbee/utils/object';
 import type { CatbeeServerConfig } from '@catbee/utils/types';
 import { getCatbeeServerGlobalConfig } from '@catbee/utils/config';
 import { isPort } from '@catbee/utils/validation';

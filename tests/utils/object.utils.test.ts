@@ -12,8 +12,11 @@ import {
   deepFreeze,
   isObject,
   getAllPaths,
-  deepClone
-} from '../../src/obj';
+  deepClone,
+  invert,
+  invertBy,
+  transform
+} from '../../src/object';
 
 describe('ObjUtils', () => {
   describe('isObjEmpty', () => {
@@ -348,10 +351,94 @@ describe('ObjUtils', () => {
       expect(isEqual(new Date('2020-01-01'), new Date('2020-01-01'))).toBe(true);
       expect(isEqual(new Date('2020-01-01'), new Date('2021-01-01'))).toBe(false);
     });
+    it('handles RegExp objects', () => {
+      expect(isEqual(/abc/gi, /abc/gi)).toBe(true);
+      expect(isEqual(/abc/gi, /abc/i)).toBe(false);
+      expect(isEqual(/abc/, /xyz/)).toBe(false);
+    });
+    it('handles Set objects', () => {
+      expect(isEqual(new Set([1, 2, 3]), new Set([1, 2, 3]))).toBe(true);
+      expect(isEqual(new Set([1, 2]), new Set([1, 2, 3]))).toBe(false);
+      expect(isEqual(new Set([1, 2]), new Set([2, 3]))).toBe(false);
+    });
+    it('handles Map objects', () => {
+      const map1 = new Map([
+        ['a', 1],
+        ['b', 2]
+      ]);
+      const map2 = new Map([
+        ['a', 1],
+        ['b', 2]
+      ]);
+      const map3 = new Map([
+        ['a', 1],
+        ['b', 3]
+      ]);
+      const map4 = new Map([['a', 1]]);
+      expect(isEqual(map1, map2)).toBe(true);
+      expect(isEqual(map1, map3)).toBe(false);
+      expect(isEqual(map1, map4)).toBe(false);
+    });
+    it('handles Map objects with nested values', () => {
+      const map1 = new Map([['a', { x: 1 }]]);
+      const map2 = new Map([['a', { x: 1 }]]);
+      const map3 = new Map([['a', { x: 2 }]]);
+      expect(isEqual(map1, map2)).toBe(true);
+      expect(isEqual(map1, map3)).toBe(false);
+    });
+    it('handles ArrayBuffer objects', () => {
+      const buf1 = new ArrayBuffer(8);
+      const buf2 = new ArrayBuffer(8);
+      const buf3 = new ArrayBuffer(16);
+      const view1 = new Uint8Array(buf1);
+      const view2 = new Uint8Array(buf2);
+      view1[0] = 42;
+      view2[0] = 42;
+      expect(isEqual(buf1, buf2)).toBe(true);
+      expect(isEqual(buf1, buf3)).toBe(false);
+    });
+    it('handles arrays with different lengths', () => {
+      expect(isEqual([1, 2], [1, 2, 3])).toBe(false);
+      expect(isEqual([], [])).toBe(true);
+    });
+    it('handles nested arrays', () => {
+      expect(
+        isEqual(
+          [
+            [1, 2],
+            [3, 4]
+          ],
+          [
+            [1, 2],
+            [3, 4]
+          ]
+        )
+      ).toBe(true);
+      expect(
+        isEqual(
+          [
+            [1, 2],
+            [3, 4]
+          ],
+          [
+            [1, 2],
+            [3, 5]
+          ]
+        )
+      ).toBe(false);
+    });
     it('returns false for null/undefined', () => {
       expect(isEqual(null, {})).toBe(false);
       expect(isEqual(undefined, {})).toBe(false);
       expect(isEqual(null, null)).toBe(true);
+      expect(isEqual(undefined, undefined)).toBe(true);
+    });
+    it('handles objects with different number of keys', () => {
+      expect(isEqual({ a: 1 }, { a: 1, b: 2 })).toBe(false);
+      expect(isEqual({ a: 1, b: 2, c: 3 }, { a: 1, b: 2 })).toBe(false);
+    });
+    it('handles objects with missing keys', () => {
+      expect(isEqual({ a: 1 }, { b: 1 })).toBe(false);
     });
   });
 
@@ -618,6 +705,81 @@ describe('ObjUtils', () => {
       expect(out.arr[0].get('key')).toBe('value');
       expect(out.arr[1].nested).not.toBe(obj.arr[1].nested);
       expect(out.arr[1].nested.num).toBe(42);
+    });
+  });
+
+  describe('invert', () => {
+    it('inverts keys and values', () => {
+      expect(invert({ a: 'x', b: 'y' })).toEqual({ x: 'a', y: 'b' });
+    });
+
+    it('handles number values', () => {
+      expect(invert({ a: 1, b: 2 })).toEqual({ '1': 'a', '2': 'b' });
+    });
+
+    it('overwrites duplicate values', () => {
+      expect(invert({ a: 'x', b: 'x' })).toEqual({ x: 'b' });
+    });
+
+    it('returns empty object for non-object input', () => {
+      expect(invert(null as any)).toEqual({});
+      expect(invert([] as any)).toEqual({});
+      expect(invert('string' as any)).toEqual({});
+    });
+
+    it('handles empty object', () => {
+      expect(invert({})).toEqual({});
+    });
+  });
+
+  describe('invertBy', () => {
+    it('inverts using key function with arrays of original keys', () => {
+      expect(invertBy({ a: 1, b: 2, c: 1 }, v => String(v))).toEqual({
+        '1': ['a', 'c'],
+        '2': ['b']
+      });
+    });
+
+    it('groups multiple keys with same transformed value', () => {
+      const obj = { apple: 5, apricot: 5, banana: 6 };
+      expect(invertBy(obj, v => String(v))).toEqual({
+        '5': ['apple', 'apricot'],
+        '6': ['banana']
+      });
+    });
+
+    it('returns empty object for non-object input', () => {
+      expect(invertBy(null as any, v => v)).toEqual({});
+      expect(invertBy([] as any, v => v)).toEqual({});
+    });
+
+    it('handles empty object', () => {
+      expect(invertBy({}, v => String(v))).toEqual({});
+    });
+  });
+
+  describe('transform', () => {
+    it('transforms object values using mapping function', () => {
+      expect(transform({ a: 1, b: 2 }, v => v * 2)).toEqual({ a: 2, b: 4 });
+    });
+
+    it('provides key to mapping function', () => {
+      const result = transform({ a: 1, b: 2 }, (v, k) => `${k}:${v}`);
+      expect(result).toEqual({ a: 'a:1', b: 'b:2' });
+    });
+
+    it('handles different value types', () => {
+      const obj = { a: 'hello', b: 'world' };
+      expect(transform(obj, v => v.toUpperCase())).toEqual({ a: 'HELLO', b: 'WORLD' });
+    });
+
+    it('returns empty object for non-object input', () => {
+      expect(transform(null as any, v => v)).toEqual({});
+      expect(transform([] as any, v => v)).toEqual({});
+    });
+
+    it('handles empty object', () => {
+      expect(transform({}, v => v)).toEqual({});
     });
   });
 });

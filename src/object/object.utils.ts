@@ -272,7 +272,7 @@ function equalPlainObjects(a: Record<string, any>, b: Record<string, any>): bool
   const bKeys = Object.keys(b);
   if (aKeys.length !== bKeys.length) return false;
   for (const key of aKeys) {
-    if (!Object.prototype.hasOwnProperty.call(b, key)) return false;
+    if (!Object.hasOwn(b, key)) return false;
     if (!isEqual(a[key], b[key])) return false;
   }
   return true;
@@ -469,4 +469,64 @@ export function getAllPaths(obj: Record<string, any>, parentPath: string = ''): 
 
     return [currentPath];
   });
+}
+
+/**
+ * Inverts an object's keys and values.
+ *
+ * @template T
+ * @param {T} obj - The object to invert.
+ * @returns {Record<string, string>} Inverted object.
+ *
+ * @example
+ * invert({ a: 'x', b: 'y' }); // { x: 'a', y: 'b' }
+ */
+export function invert<T extends Record<string, any>>(obj: T): Record<string, string> {
+  if (!isObject(obj)) return {};
+  return Object.fromEntries(Object.entries(obj).map(([k, v]) => [String(v), k]));
+}
+
+/**
+ * Inverts an object using a function to generate keys from values.
+ *
+ * @template T
+ * @param {T} obj - The object to invert.
+ * @param {(value: any) => string} keyFn - Function to generate new keys.
+ * @returns {Record<string, string[]>} Inverted object with arrays of keys.
+ *
+ * @example
+ * invertBy({ a: 1, b: 2, c: 1 }, v => String(v)); // { '1': ['a', 'c'], '2': ['b'] }
+ */
+export function invertBy<T extends Record<string, any>>(
+  obj: T,
+  keyFn: (value: any) => string
+): Record<string, string[]> {
+  if (!isObject(obj)) return {};
+  const result: Record<string, string[]> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    const newKey = keyFn(value);
+    if (!result[newKey]) result[newKey] = [];
+    result[newKey].push(key);
+  }
+  return result;
+}
+
+/**
+ * Transforms object values using a mapping function.
+ *
+ * @template T
+ * @template U
+ * @param {T} obj - The source object.
+ * @param {(value: any, key: string) => U} fn - Transformation function.
+ * @returns {Record<string, U>} Object with transformed values.
+ *
+ * @example
+ * transform({ a: 1, b: 2 }, v => v * 2); // { a: 2, b: 4 }
+ */
+export function transform<T extends Record<string, any>, U>(
+  obj: T,
+  fn: (value: any, key: string) => U
+): Record<string, U> {
+  if (!isObject(obj)) return {};
+  return Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, fn(v, k)]));
 }

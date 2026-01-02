@@ -65,7 +65,7 @@ export function isEmail(str: string): boolean {
     if (label.startsWith('-') || label.endsWith('-')) return false;
   }
 
-  const tld = labels[labels.length - 1];
+  const tld = labels.at(-1) || '';
   if (!TLD_REGEX.test(tld)) return false;
 
   return true;
@@ -325,7 +325,7 @@ export function isBase64(str: string): boolean {
  */
 export function hasRequiredProps(obj: Record<string, unknown>, requiredProps: string[]): boolean {
   if (!obj || typeof obj !== 'object') return false;
-  return requiredProps.every(prop => Object.prototype.hasOwnProperty.call(obj, prop) && obj[prop] != null);
+  return requiredProps.every(prop => Object.hasOwn(obj, prop) && obj[prop] != null);
 }
 
 /**

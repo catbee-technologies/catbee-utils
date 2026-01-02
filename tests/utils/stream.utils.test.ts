@@ -83,6 +83,78 @@ describe('stream.utils', () => {
       });
       input.pipe(batchStream);
     });
+
+    it('flushes remaining batch in object mode', done => {
+      const input = Readable.from(['a', 'b', 'c'], { objectMode: true });
+      const batchStream = createBatchStream(5, { objectMode: true });
+      const batches: any[] = [];
+      batchStream.on('data', batch => batches.push(batch));
+      batchStream.on('end', () => {
+        expect(batches).toEqual([['a', 'b', 'c']]);
+        done();
+      });
+      input.pipe(batchStream);
+    });
+
+    it('flushes remaining buffer in binary mode', done => {
+      const input = bufferToStream(Buffer.from('abc'));
+      const batchStream = createBatchStream(5, { objectMode: false });
+      const batches: Buffer[] = [];
+      batchStream.on('data', batch => batches.push(batch));
+      batchStream.on('end', () => {
+        expect(batches.map(b => b.toString())).toEqual(['abc']);
+        done();
+      });
+      input.pipe(batchStream);
+    });
+
+    it('flushes partial buffer after full batches in binary mode', done => {
+      const input = bufferToStream(Buffer.from('abcdefgh'));
+      const batchStream = createBatchStream(3, { objectMode: false });
+      const batches: Buffer[] = [];
+      batchStream.on('data', batch => batches.push(batch));
+      batchStream.on('end', () => {
+        expect(batches.map(b => b.toString())).toEqual(['abc', 'def', 'gh']);
+        done();
+      });
+      input.pipe(batchStream);
+    });
+
+    it('handles empty stream in object mode', done => {
+      const input = Readable.from([], { objectMode: true });
+      const batchStream = createBatchStream(2, { objectMode: true });
+      const batches: any[] = [];
+      batchStream.on('data', batch => batches.push(batch));
+      batchStream.on('end', () => {
+        expect(batches).toEqual([]);
+        done();
+      });
+      input.pipe(batchStream);
+    });
+
+    it('handles empty stream in binary mode', done => {
+      const input = bufferToStream(Buffer.from(''));
+      const batchStream = createBatchStream(2, { objectMode: false });
+      const batches: Buffer[] = [];
+      batchStream.on('data', batch => batches.push(batch));
+      batchStream.on('end', () => {
+        expect(batches).toEqual([]);
+        done();
+      });
+      input.pipe(batchStream);
+    });
+
+    it('processes multiple full batches then flushes remainder in binary mode', done => {
+      const input = bufferToStream(Buffer.from('abcdefghij'));
+      const batchStream = createBatchStream(3, { objectMode: false });
+      const batches: Buffer[] = [];
+      batchStream.on('data', batch => batches.push(batch));
+      batchStream.on('end', () => {
+        expect(batches.map(b => b.toString())).toEqual(['abc', 'def', 'ghi', 'j']);
+        done();
+      });
+      input.pipe(batchStream);
+    });
   });
 
   describe('createLineStream', () => {

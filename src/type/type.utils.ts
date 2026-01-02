@@ -166,7 +166,7 @@ export function toBool(value: unknown, defaultValue: boolean = false): boolean {
  */
 export function ensureType<T>(value: unknown, expectedType: string, defaultValue: T): T {
   if (getTypeOf(value) === expectedType) {
-    return value as unknown as T;
+    return value as T;
   }
   return defaultValue;
 }
@@ -196,4 +196,55 @@ export function isEmpty(value: any): boolean {
   if (value instanceof Map || value instanceof Set) return value.size === 0;
   if (typeof value === 'object') return Object.keys(value).length === 0;
   return false;
+}
+
+/**
+ * Type guard to check if a value is iterable.
+ *
+ * @param {unknown} value - Value to check.
+ * @returns {boolean} True if value is iterable.
+ *
+ * @example
+ * isIterable([1, 2, 3]); // true
+ * isIterable('hello'); // true
+ * isIterable(new Set([1, 2])); // true
+ */
+export function isIterable<T = any>(value: unknown): value is Iterable<T> {
+  return value !== null && value !== undefined && typeof (value as any)[Symbol.iterator] === 'function';
+}
+
+/**
+ * Type guard to check if a value is an async iterable.
+ *
+ * @param {unknown} value - Value to check.
+ * @returns {boolean} True if value is async iterable.
+ *
+ * @example
+ * async function* gen() { yield 1; }
+ * isAsyncIterable(gen()); // true
+ */
+export function isAsyncIterable<T = any>(value: unknown): value is AsyncIterable<T> {
+  return value !== null && value !== undefined && typeof (value as any)[Symbol.asyncIterator] === 'function';
+}
+
+/**
+ * Asserts that a value is of a specific type, throwing an error if not.
+ *
+ * @template T
+ * @param {unknown} value - Value to assert.
+ * @param {(value: unknown) => value is T} guard - Type guard function.
+ * @param {string} [message] - Error message if assertion fails.
+ * @returns {asserts value is T}
+ *
+ * @example
+ * assertType(value, (v): v is string => typeof v === 'string', 'Expected string');
+ */
+export function assertType<T>(
+  value: unknown,
+  guard: (value: unknown) => value is T,
+  message?: string
+): asserts value is T {
+  if (!guard(value)) {
+    throw new TypeError(message || `Type assertion failed`);
+  }
 }

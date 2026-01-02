@@ -216,9 +216,7 @@ let cachedExpandedFields: string[] | null = null;
  * @returns Array of expanded sensitive field names
  */
 export function getExpandedSensitiveFields() {
-  if (!cachedExpandedFields) {
-    cachedExpandedFields = expandSensitiveFields(defaultSensitiveFields);
-  }
+  cachedExpandedFields ??= expandSensitiveFields(defaultSensitiveFields);
   return cachedExpandedFields;
 }
 
@@ -435,7 +433,7 @@ export function createRequestLogger(requestId: string, additionalContext: Record
  * @param {string} [message] - Optional message to include
  * @param {Record<string, any>} [context] - Additional context properties
  */
-export function logError(error: Error | unknown, message?: string, context?: Record<string, any>): void {
+export function logError(error: Error | string, message?: string, context?: Record<string, any>): void {
   const logger = getLogger();
 
   const errObj = error instanceof Error ? error : new Error(String(error));

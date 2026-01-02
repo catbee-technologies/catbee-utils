@@ -263,8 +263,7 @@ export class TypedContextKey<T> {
    * @returns The value or defaultValue if not found
    */
   get(): T | undefined {
-    const value = ContextStore.get<T>(this.symbol);
-    return value !== undefined ? value : this.defaultValue;
+    return ContextStore.get<T>(this.symbol) ?? this.defaultValue;
   }
 
   /**

@@ -147,6 +147,27 @@ export function normalizeUrl(url: string, base?: string): string {
 }
 
 /**
+ * Updates or sets a single query parameter in a URL.
+ *
+ * @param {string} url - The source URL.
+ * @param {string} key - Parameter key.
+ * @param {string | number} value - Parameter value.
+ * @returns {string} URL with updated parameter.
+ *
+ * @example
+ * updateQueryParam('https://example.com?page=1', 'page', 2); // 'https://example.com?page=2'
+ */
+export function updateQueryParam(url: string, key: string, value: string | number): string {
+  try {
+    const urlObj = new URL(url);
+    urlObj.searchParams.set(key, String(value));
+    return urlObj.toString();
+  } catch {
+    return url;
+  }
+}
+
+/**
  * Creates a URL builder for constructing URLs with a base URL.
  *
  * @param {string} baseUrl - The base URL to build upon.
@@ -289,5 +310,90 @@ export function parseTypedQueryParams<T extends Record<string, any>>(
     return result;
   } catch {
     return {};
+  }
+}
+
+/**
+ * Extracts the subdomain from a URL.
+ *
+ * @param {string} url - The URL.
+ * @returns {string} Subdomain or empty string.
+ *
+ * @example
+ * getSubdomain('https://api.example.com'); // 'api'
+ * getSubdomain('https://www.blog.example.com'); // 'www.blog'
+ */
+export function getSubdomain(url: string): string {
+  try {
+    const { hostname } = new URL(url);
+    const parts = hostname.split('.');
+    if (parts.length <= 2) return '';
+    return parts.slice(0, -2).join('.');
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Checks if a URL is relative (not absolute).
+ *
+ * @param {string} url - The URL to check.
+ * @returns {boolean} True if relative.
+ *
+ * @example
+ * isRelativeUrl('/path/to/page'); // true
+ * isRelativeUrl('https://example.com/page'); // false
+ */
+export function isRelativeUrl(url: string): boolean {
+  if (!url || typeof url !== 'string') return false;
+  try {
+    new URL(url);
+    return false; // If URL constructor succeeds, it's absolute
+  } catch {
+    return url.startsWith('/') || url.startsWith('./') || url.startsWith('../');
+  }
+}
+
+/**
+ * Converts a relative URL to an absolute URL using a base URL.
+ *
+ * @param {string} relativeUrl - The relative URL.
+ * @param {string} baseUrl - The base URL.
+ * @returns {string} Absolute URL.
+ *
+ * @example
+ * toAbsoluteUrl('/api/users', 'https://example.com'); // 'https://example.com/api/users'
+ */
+export function toAbsoluteUrl(relativeUrl: string, baseUrl: string): string {
+  try {
+    return new URL(relativeUrl, baseUrl).toString();
+  } catch {
+    return relativeUrl;
+  }
+}
+
+/**
+ * Sanitizes a URL by removing dangerous protocols and normalizing.
+ *
+ * @param {string} url - The URL to sanitize.
+ * @param {string[]} [allowedProtocols=['http', 'https']] - Allowed protocols.
+ * @returns {string | null} Sanitized URL or null if unsafe.
+ *
+ * @example
+ * sanitizeUrl('javascript:alert(1)'); // null
+ * sanitizeUrl('https://example.com'); // 'https://example.com/'
+ */
+export function sanitizeUrl(url: string, allowedProtocols: string[] = ['http', 'https']): string | null {
+  try {
+    const parsedUrl = new URL(url);
+    const protocol = parsedUrl.protocol.replace(':', '');
+
+    if (!allowedProtocols.includes(protocol)) {
+      return null;
+    }
+
+    return parsedUrl.toString();
+  } catch {
+    return null;
   }
 }
