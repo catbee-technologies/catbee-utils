@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, writeFileSync, copyFileSync, existsSync, rmSync  } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync, copyFileSync, existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
 const cwd = process.cwd();
@@ -32,6 +32,24 @@ pkg.main = `index.cjs`;
 pkg.module = `index.mjs`;
 pkg.types = `index.d.ts`;
 pkg.files = [...filePatterns, 'LICENSE', 'README.md'];
+pkg.keywords = [
+  'catbee',
+  'catbee-utils',
+  'utils',
+  'utilities',
+  'helper',
+  'helpers',
+  'tools',
+  'typescript',
+  'nodejs',
+  'node',
+  'esm',
+  'commonjs',
+  'express',
+  'expressjs',
+  'express-server',
+  'developer-tools'
+];
 
 function rewriteImports(filePath) {
   if (!existsSync(filePath)) return;
