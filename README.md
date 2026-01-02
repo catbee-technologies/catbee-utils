@@ -1,11 +1,5 @@
 # @catbee/utils
 
-<!-- <div style="width: 100%; display: flex; align-items: center; justify-content: space-between;">
-  <b style="font-size: 24px; text-decoration: none;">@catbee/utils</b>
-  <a href="https://sonarcloud.io/summary/new_code?id=catbee-technologies_catbee-utils">
-    <img src="https://sonarcloud.io/images/project_badges/sonarcloud-dark.svg" alt="SonarQube Cloud" width="200"/>
-  </a>
-</div> -->
 
 ## 🧰 Utility Modules for Node.js
 
@@ -20,7 +14,7 @@ A modular, production-grade utility toolkit for Node.js and TypeScript, designed
   <img src="https://img.shields.io/npm/v/@catbee/utils/next" alt="NPM Next Version" /> -->
   <img src="https://img.shields.io/npm/dt/@catbee/utils" alt="NPM Downloads" />
   <img src="https://img.shields.io/npm/types/@catbee/utils" alt="TypeScript Types" />
-  <img src="https://img.shields.io/maintenance/yes/2025" alt="Maintenance" />
+  <img src="https://img.shields.io/maintenance/yes/2050" alt="Maintenance" />
   <img src="https://snyk.io/test/github/catbee-technologies/catbee-utils/badge.svg" alt="Snyk Vulnerabilities" />
   <img src="https://sonarcloud.io/api/project_badges/measure?project=catbee-technologies_catbee-utils&metric=alert_status&token=93da835f2d48d37b41fa628cc7fc764c873bd700" alt="Quality Gate Status" />
   <img src="https://sonarcloud.io/api/project_badges/measure?project=catbee-technologies_catbee-utils&metric=ncloc&token=93da835f2d48d37b41fa628cc7fc764c873bd700" alt="Lines of Code" />
@@ -111,43 +105,63 @@ server.enableGracefulShutdown();
 
 ## 📚 Modules Overview
 
-| Module | Description |
-| ------ | ----------- |
-| [Express Server](https://catbee.in/docs/@catbee/utils/express-server) | Fast, secure, and scalable server setup |
-| [Array Utilities](https://catbee.in/docs/@catbee/utils/modules/array) | Advanced array manipulation |
-| [Async Utilities](https://catbee.in/docs/@catbee/utils/modules/async) | Promise helpers, concurrency, timing |
-| [Cache Utilities](https://catbee.in/docs/@catbee/utils/modules/cache) | In-memory caching with TTL |
-| [Context Store](https://catbee.in/docs/@catbee/utils/modules/context-store) | Per-request context via AsyncLocalStorage |
-| [Crypto Utilities](https://catbee.in/docs/@catbee/utils/modules/crypto) | Hashing, encryption, tokens |
-| [Date Utilities](https://catbee.in/docs/@catbee/utils/modules/date) | Date/time manipulation |
-| [Decorators Utilities](https://catbee.in/docs/@catbee/utils/modules/decorators) | TypeScript decorators for Express |
-| [Directory Utilities](https://catbee.in/docs/@catbee/utils/modules/directory) | Directory and file system helpers |
-| [Environment Utilities](https://catbee.in/docs/@catbee/utils/modules/environment) | Env variable management |
-| [Exception Utilities](https://catbee.in/docs/@catbee/utils/modules/exception) | HTTP and error handling |
-| [File System Utilities](https://catbee.in/docs/@catbee/utils/modules/file-system) | File operations |
-| [HTTP Status Codes](https://catbee.in/docs/@catbee/utils/modules/http-status-codes) | Typed status codes |
-| [ID Utilities](https://catbee.in/docs/@catbee/utils/modules/id) | UUID and ID generation |
-| [Logger Utilities](https://catbee.in/docs/@catbee/utils/modules/logger) | Structured logging with Pino |
-| [Middleware Utilities](https://catbee.in/docs/@catbee/utils/modules/middleware) | Express middleware collection |
-| [Object Utilities](https://catbee.in/docs/@catbee/utils/modules/object) | Deep merge, flatten, pick/omit, etc. |
-| [Performance Utilities](https://catbee.in/docs/@catbee/utils/modules/performance) | Timing, memoization, memory tracking |
-| [Request Utilities](https://catbee.in/docs/@catbee/utils/modules/request) | HTTP request parameter parsing/validation |
-| [Response Utilities](https://catbee.in/docs/@catbee/utils/modules/response) | Standardized API response formatting |
-| [Stream Utilities](https://catbee.in/docs/@catbee/utils/modules/stream) | Stream conversion, batching, throttling, line splitting |
-| [String Utilities](https://catbee.in/docs/@catbee/utils/modules/string) | Casing, masking, slugifying, formatting |
-| [Type Utilities](https://catbee.in/docs/@catbee/utils/modules/type) | Type checking, conversion, guards |
-| [URL Utilities](https://catbee.in/docs/@catbee/utils/modules/url) | URL parsing, query manipulation, normalization |
-| [Validate Utilities](https://catbee.in/docs/@catbee/utils/modules/validation) | Input validation functions |
+| Module                                                                      | Description                                             |
+| --------------------------------------------------------------------------- | ------------------------------------------------------- |
+| [Express Server](https://catbee.in/docs/@catbee/utils/server)               | Fast, secure, and scalable server setup                 |
+| [Array Utilities](https://catbee.in/docs/@catbee/utils/array)               | Advanced array manipulation                             |
+| [Async Utilities](https://catbee.in/docs/@catbee/utils/async)               | Promise helpers, concurrency, timing                    |
+| [Cache Utilities](https://catbee.in/docs/@catbee/utils/cache)               | In-memory caching with TTL                              |
+| [Context Store](https://catbee.in/docs/@catbee/utils/context-store)         | Per-request context via AsyncLocalStorage               |
+| [Crypto Utilities](https://catbee.in/docs/@catbee/utils/crypto)             | Hashing, encryption, tokens                             |
+| [Date Utilities](https://catbee.in/docs/@catbee/utils/date)                 | Date/time manipulation                                  |
+| [Decorators Utilities](https://catbee.in/docs/@catbee/utils/decorator)      | TypeScript decorators for Express                       |
+| [Directory Utilities](https://catbee.in/docs/@catbee/utils/directory)       | Directory and file system helpers                       |
+| [Environment Utilities](https://catbee.in/docs/@catbee/utils/environment)   | Env variable management                                 |
+| [Exception Utilities](https://catbee.in/docs/@catbee/utils/exception)       | HTTP and error handling                                 |
+| [File System Utilities](https://catbee.in/docs/@catbee/utils/fs)            | File operations                                         |
+| [HTTP Status Codes](https://catbee.in/docs/@catbee/utils/http-status-codes) | Typed status codes                                      |
+| [ID Utilities](https://catbee.in/docs/@catbee/utils/id)                     | UUID and ID generation                                  |
+| [Logger Utilities](https://catbee.in/docs/@catbee/utils/logger)             | Structured logging with Pino                            |
+| [Middleware Utilities](https://catbee.in/docs/@catbee/utils/middleware)     | Express middleware collection                           |
+| [Object Utilities](https://catbee.in/docs/@catbee/utils/object)             | Deep merge, flatten, pick/omit, etc.                    |
+| [Performance Utilities](https://catbee.in/docs/@catbee/utils/performance)   | Timing, memoization, memory tracking                    |
+| [Request Utilities](https://catbee.in/docs/@catbee/utils/request)           | HTTP request parameter parsing/validation               |
+| [Response Utilities](https://catbee.in/docs/@catbee/utils/response)         | Standardized API response formatting                    |
+| [Stream Utilities](https://catbee.in/docs/@catbee/utils/stream)             | Stream conversion, batching, throttling, line splitting |
+| [String Utilities](https://catbee.in/docs/@catbee/utils/string)             | Casing, masking, slugifying, formatting                 |
+| [Type Utilities](https://catbee.in/docs/@catbee/utils/type)                 | Type checking, conversion, guards                       |
+| [Types Utilities](https://catbee.in/docs/@catbee/utils/types)               | Common TypeScript types and interfaces                  |
+| [URL Utilities](https://catbee.in/docs/@catbee/utils/url)                   | URL parsing, query manipulation, normalization          |
+| [Validate Utilities](https://catbee.in/docs/@catbee/utils/validation)       | Input validation functions                              |
 
 ---
 
 ## 🏁 Usage
 
-Import only what you need:
+This library supports flexible import patterns to suit your needs:
+
+### Root-level imports (everything available)
+Import any utility directly from the root package:
 
 ```ts
-import { chunk, sleep, TTLCache, getLogger } from "@catbee/utils";
+import { chunk, sleep, TTLCache, getLogger, ServerConfigBuilder } from '@catbee/utils';
 ```
+
+### Module-level imports (scoped imports)
+Import only from specific modules for better organization and smaller bundles:
+
+```ts
+// Import only server-related exports
+import { ServerConfigBuilder, ExpressServer } from '@catbee/utils/server';
+
+// Import only date utilities
+import { formatDate, addDays, DateBuilder } from '@catbee/utils/date';
+
+// Import only crypto utilities
+import { hashPassword, verifyPassword } from '@catbee/utils/crypto';
+```
+
+Both import styles are fully supported and tree-shakable. Use whichever fits your project structure best!
 
 ---
 
