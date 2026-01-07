@@ -6,7 +6,7 @@
 A modular, production-grade utility toolkit for Node.js and TypeScript, designed for robust, scalable applications. All utilities are tree-shakable and can be imported independently.
 
 <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 1rem 0;">
-  <img src="https://img.shields.io/badge/build-passing-brightgreen" alt="Build Status" />
+  <img src="https://github.com/catbee-technologies/catbee-utils/actions/workflows/ci.yml/badge.svg?label=Build" alt="Build Status" />
   <img src="https://codecov.io/gh/catbee-technologies/catbee-utils/graph/badge.svg?token=XAJHK6R1OQ" alt="Coverage" />
   <img src="https://img.shields.io/node/v/@catbee/utils" alt="Node Version" />
   <img src="https://img.shields.io/npm/v/@catbee/utils" alt="NPM Version" />
@@ -173,4 +173,4 @@ Both import styles are fully supported and tree-shakable. Use whichever fits you
 
 ## 📜 License
 
-MIT © Catbee Technologies (see the [LICENSE](https://catbee.in/license/) file for the full text)
+MIT © Catbee Technologies (see the [LICENSE](https://catbee.in/license) file for the full text)
