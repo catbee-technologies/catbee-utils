@@ -65,7 +65,10 @@ const config = new ServerConfigBuilder()
 
 const server = new ExpressServer(config, {
   beforeInit: srv => console.log('Initializing server...'),
+  beforeRoutes: app => console.log('Setting up routes...'),
+  afterRoutes: app => console.log('Routes initialized.'),
   afterInit: srv => console.log('Server initialized'),
+  onServerCreated: srv => console.log('HTTP/HTTPS server instance created.'),
   beforeStart: app => console.log('Starting server...'),
   afterStart: srv => console.log('Server started!'),
   beforeStop: srv => console.log('Stopping server...'),

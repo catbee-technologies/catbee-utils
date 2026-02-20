@@ -1,5 +1,6 @@
 import type { Express, json, NextFunction, urlencoded, Request, Response } from 'express';
 import type http from 'node:http';
+import type https from 'node:https';
 import type { ExpressServer } from '@catbee/utils/server';
 import type { HelmetOptions } from 'helmet';
 import type { CompressionOptions } from 'compression';
@@ -454,8 +455,14 @@ export interface CatbeeServerConfig {
 export interface CatbeeServerHooks {
   /** Called before middleware & routes initialize */
   beforeInit?: (server: ExpressServer) => Promise<void> | void;
+  /** Called before any routes are registered */
+  beforeRoutes?: (app: Express) => Promise<void> | void;
+  /** Called after all routes are registered, before error handling middleware */
+  afterRoutes?: (app: Express) => Promise<void> | void;
   /** Called after middleware & routes initialize */
   afterInit?: (server: ExpressServer) => Promise<void> | void;
+  /** Called when the underlying HTTP/HTTPS server instance is created */
+  onServerCreated?: (server: http.Server | https.Server) => Promise<void> | void;
   /** Called before server starts listening */
   beforeStart?: (app: Express) => Promise<void> | void;
   /** Called after server is ready */

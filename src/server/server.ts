@@ -205,6 +205,9 @@ export class ExpressServer {
     // Set up middleware stack (order is critical)
     await this.setupMiddleware();
 
+    // Allow users to run custom logic before routes are registered (e.g. for adding global middleware, modifying app instance, etc.)
+    await this.runHook('beforeRoutes', this.app);
+
     // Set up default routes and error handling
     await this.setupRoutes();
 
@@ -637,6 +640,9 @@ export class ExpressServer {
     const routerToUse = this.externalRouter || this.rootRouter;
     this.app.use(this.globalPrefix, routerToUse);
 
+    // Allow users to run custom logic after routes are registered but before error handling is set up
+    await this.runHook('afterRoutes', this.app);
+
     // 404 handler (must be after all other routes)
     this.app.use((req: Request, res: Response) => {
       const status = HttpStatusCodes.NOT_FOUND;
@@ -796,6 +802,7 @@ export class ExpressServer {
         };
 
         this.server = this.createServerInstance(onListening);
+        this.runHook('onServerCreated', this.server);
         this.setupConnectionTracking();
         this.setupServerErrorHandling(reject);
       } catch (error) {
