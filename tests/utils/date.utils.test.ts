@@ -20,7 +20,13 @@ import {
   addMonths,
   addYears,
   quarterOf,
-  weekOfYear
+  weekOfYear,
+  getTimezoneOffset,
+  toTimeZone,
+  formatDateInTimeZone,
+  isDST,
+  getTimezoneAbbreviation,
+  dateDiffDaysTZ
 } from '../../src/date';
 
 describe('date.utils', () => {
@@ -45,6 +51,80 @@ describe('date.utils', () => {
       const now = new Date();
       const fiveMinAgo = new Date(now.getTime() - 5 * 60 * 1000);
       expect(formatDate(fiveMinAgo, { format: 'relative' })).toContain('minute');
+    });
+
+    // Named presets (Angular-style) — use UTC date + UTC timezone for deterministic output
+    const presetDate = new Date('2015-06-15T09:03:01Z');
+
+    it('formats with "short" preset', () => {
+      const result = formatDate(presetDate, { format: 'short', locale: 'en-US', timeZone: 'UTC' });
+      expect(result).toBe('6/15/15, 9:03 AM');
+    });
+
+    it('formats with "medium" preset', () => {
+      const result = formatDate(presetDate, { format: 'medium', locale: 'en-US', timeZone: 'UTC' });
+      expect(result).toBe('Jun 15, 2015, 9:03:01 AM');
+    });
+
+    it('formats with "long" preset', () => {
+      const result = formatDate(presetDate, { format: 'long', locale: 'en-US', timeZone: 'UTC' });
+      expect(result).toBe('June 15, 2015 at 9:03:01 AM UTC');
+    });
+
+    it('formats with "full" preset', () => {
+      const result = formatDate(presetDate, { format: 'full', locale: 'en-US', timeZone: 'UTC' });
+      expect(result).toBe('Monday, June 15, 2015 at 9:03:01 AM Coordinated Universal Time');
+    });
+
+    it('formats with "shortDate" preset', () => {
+      const result = formatDate(presetDate, { format: 'shortDate', locale: 'en-US', timeZone: 'UTC' });
+      expect(result).toBe('6/15/15');
+    });
+
+    it('formats with "mediumDate" preset', () => {
+      const result = formatDate(presetDate, { format: 'mediumDate', locale: 'en-US', timeZone: 'UTC' });
+      expect(result).toBe('Jun 15, 2015');
+    });
+
+    it('formats with "longDate" preset', () => {
+      const result = formatDate(presetDate, { format: 'longDate', locale: 'en-US', timeZone: 'UTC' });
+      expect(result).toBe('June 15, 2015');
+    });
+
+    it('formats with "fullDate" preset', () => {
+      const result = formatDate(presetDate, { format: 'fullDate', locale: 'en-US', timeZone: 'UTC' });
+      expect(result).toBe('Monday, June 15, 2015');
+    });
+
+    it('formats with "shortTime" preset', () => {
+      const result = formatDate(presetDate, { format: 'shortTime', locale: 'en-US', timeZone: 'UTC' });
+      expect(result).toBe('9:03 AM');
+    });
+
+    it('formats with "mediumTime" preset', () => {
+      const result = formatDate(presetDate, { format: 'mediumTime', locale: 'en-US', timeZone: 'UTC' });
+      expect(result).toBe('9:03:01 AM');
+    });
+
+    it('formats with "longTime" preset', () => {
+      const result = formatDate(presetDate, { format: 'longTime', locale: 'en-US', timeZone: 'UTC' });
+      expect(result).toBe('9:03:01 AM UTC');
+    });
+
+    it('formats with "fullTime" preset', () => {
+      const result = formatDate(presetDate, { format: 'fullTime', locale: 'en-US', timeZone: 'UTC' });
+      expect(result).toBe('9:03:01 AM Coordinated Universal Time');
+    });
+
+    it('respects timeZone with presets', () => {
+      const utcDate = new Date('2024-06-15T12:00:00Z');
+      const result = formatDate(utcDate, { format: 'short', locale: 'en-US', timeZone: 'Asia/Tokyo' });
+      expect(result).toBe('6/15/24, 9:00 PM');
+    });
+
+    it('respects locale with presets', () => {
+      const result = formatDate(presetDate, { format: 'longDate', locale: 'de-DE', timeZone: 'UTC' });
+      expect(result).toBe('15. Juni 2015');
     });
   });
 
@@ -84,6 +164,46 @@ describe('date.utils', () => {
     it('returns null for invalid input without fallback', () => {
       expect(parseDate('invalid')).toBeNull();
     });
+
+    it('parses date-only string as local midnight', () => {
+      const date = parseDate('2023-05-15');
+      expect(date?.getHours()).toBe(0);
+      expect(date?.getMinutes()).toBe(0);
+      expect(date?.getSeconds()).toBe(0);
+      expect(date?.getMilliseconds()).toBe(0);
+    });
+
+    it('parses ISO string with timezone correctly', () => {
+      const date = parseDate('2023-05-15T10:30:00Z');
+      expect(date).toBeInstanceOf(Date);
+      // Should parse as UTC
+      expect(date?.toISOString()).toContain('2023-05-15T10:30:00');
+    });
+
+    it('handles date-only input differently from new Date()', () => {
+      // parseDate should give local midnight, not UTC midnight
+      const parsed = parseDate('2023-05-15');
+      const native = new Date('2023-05-15');
+
+      // They should be different unless in UTC timezone
+      expect(parsed).toBeInstanceOf(Date);
+      expect(native).toBeInstanceOf(Date);
+
+      // Verify local midnight behavior
+      expect(parsed?.getHours()).toBe(0);
+      expect(parsed?.getMinutes()).toBe(0);
+    });
+
+    it('returns null for invalid date format', () => {
+      expect(parseDate('not-a-date')).toBeNull();
+      expect(parseDate('2023-13-45')).toBeNull();
+    });
+
+    it('uses fallback for malformed date strings', () => {
+      const fallback = new Date(2020, 0, 1);
+      expect(parseDate('abc-def-ghi', fallback)).toEqual(fallback);
+      expect(parseDate('', fallback)).toEqual(fallback);
+    });
   });
 
   describe('dateDiff', () => {
@@ -102,7 +222,7 @@ describe('date.utils', () => {
       expect(dateDiff(d1, d2, 'hours')).toBeCloseTo((d1.getTime() - d2.getTime()) / (1000 * 60 * 60));
     });
     it('calculates difference in days', () => {
-      expect(dateDiff(d1, d2, 'days')).toBeCloseTo((d1.getTime() - d2.getTime()) / (1000 * 60 * 60 * 24));
+      expect(dateDiff(d1, d2, 'days')).toBe(5);
     });
     it('calculates difference in months', () => {
       expect(dateDiff(new Date('2023-07-01'), new Date('2023-05-01'), 'months')).toBe(2);
@@ -112,6 +232,52 @@ describe('date.utils', () => {
     });
     it('throws error for unsupported unit', () => {
       expect(() => dateDiff(d1, d2, 'unsupported' as any)).toThrow();
+    });
+  });
+
+  describe('dateDiffDaysTZ', () => {
+    it('calculates calendar days in a specific timezone', () => {
+      const d1 = new Date('2024-06-15T23:00:00Z'); // June 16 in Asia/Tokyo
+      const d2 = new Date('2024-06-14T14:00:00Z'); // June 14 in Asia/Tokyo
+      expect(dateDiffDaysTZ(d1, d2, 'Asia/Tokyo')).toBe(2);
+    });
+
+    it('handles same calendar day in timezone', () => {
+      const d1 = new Date('2024-06-15T02:00:00Z'); // June 15 11:00 in Asia/Tokyo
+      const d2 = new Date('2024-06-14T22:00:00Z'); // June 15 07:00 in Asia/Tokyo
+      expect(dateDiffDaysTZ(d1, d2, 'Asia/Tokyo')).toBe(0);
+    });
+
+    it('handles date rollover correctly', () => {
+      const d1 = new Date('2024-06-15T23:59:00Z'); // June 16 08:59 in Asia/Tokyo
+      const d2 = new Date('2024-06-15T14:59:00Z'); // June 15 23:59 in Asia/Tokyo
+      expect(dateDiffDaysTZ(d1, d2, 'Asia/Tokyo')).toBe(1);
+    });
+
+    it('works across DST boundaries', () => {
+      // March 10, 2024: US DST spring forward
+      const before = new Date('2024-03-09T12:00:00Z');
+      const after = new Date('2024-03-11T12:00:00Z');
+      expect(dateDiffDaysTZ(after, before, 'America/New_York')).toBe(2);
+    });
+
+    it('calculates negative difference correctly', () => {
+      const d1 = new Date('2024-06-15T00:00:00Z');
+      const d2 = new Date('2024-06-18T00:00:00Z');
+      expect(dateDiffDaysTZ(d1, d2, 'UTC')).toBe(-3);
+    });
+
+    it('works in UTC timezone', () => {
+      const d1 = new Date('2024-06-18T12:00:00Z');
+      const d2 = new Date('2024-06-15T12:00:00Z');
+      expect(dateDiffDaysTZ(d1, d2, 'UTC')).toBe(3);
+    });
+
+    it('handles timezone-specific date boundaries', () => {
+      // 2024-06-15 00:30 UTC is still June 14 in New York (EDT, UTC-4)
+      const utcMorning = new Date('2024-06-15T00:30:00Z');
+      const nyEvening = new Date('2024-06-14T20:00:00Z'); // June 14 16:00 EDT
+      expect(dateDiffDaysTZ(utcMorning, nyEvening, 'America/New_York')).toBe(0);
     });
   });
 
@@ -148,6 +314,135 @@ describe('date.utils', () => {
     });
     it('throws error for unsupported unit', () => {
       expect(() => addToDate(base, 1, 'unsupported' as any)).toThrow();
+    });
+
+    describe('with timezone option', () => {
+      it('adds days in specific timezone', () => {
+        const utcDate = new Date('2024-06-15T12:00:00Z');
+        const result = addToDate(utcDate, 1, 'days', { timeZone: 'Asia/Tokyo' });
+
+        // Should add 1 calendar day in Tokyo timezone
+        const tokyo = toTimeZone(result, 'Asia/Tokyo');
+        const original = toTimeZone(utcDate, 'Asia/Tokyo');
+        expect(tokyo.day).toBe(original.day + 1);
+      });
+
+      it('adds months in specific timezone', () => {
+        const utcDate = new Date('2024-01-31T12:00:00Z');
+        const result = addToDate(utcDate, 1, 'months', { timeZone: 'America/New_York' });
+
+        const ny = toTimeZone(result, 'America/New_York');
+        // January 31 + 1 month = February 29 (2024 is leap year)
+        expect(ny.month).toBe(2);
+        expect(ny.day).toBe(29); // Clamped to last day of February
+      });
+
+      it('adds years in specific timezone', () => {
+        const utcDate = new Date('2024-02-29T12:00:00Z'); // Leap year
+        const result = addToDate(utcDate, 1, 'years', { timeZone: 'Europe/London' });
+
+        const london = toTimeZone(result, 'Europe/London');
+        expect(london.year).toBe(2025);
+        expect(london.day).toBe(28); // Clamped to Feb 28 in non-leap year
+      });
+
+      it('handles month overflow correctly with timezone', () => {
+        const utcDate = new Date('2024-01-31T00:00:00Z');
+        const result = addToDate(utcDate, 1, 'months', { timeZone: 'UTC' });
+
+        expect(result.getUTCMonth()).toBe(1); // February
+        expect(result.getUTCDate()).toBe(29); // 2024 is leap year
+      });
+
+      it('handles year-end month addition with timezone', () => {
+        const utcDate = new Date('2024-12-31T12:00:00Z');
+        const result = addToDate(utcDate, 1, 'months', { timeZone: 'Asia/Tokyo' });
+
+        const tokyo = toTimeZone(result, 'Asia/Tokyo');
+        expect(tokyo.year).toBe(2025);
+        expect(tokyo.month).toBe(1); // January
+      });
+
+      it('adds days across DST boundary in timezone', () => {
+        // March 10, 2024: US DST spring forward (2am → 3am)
+        const beforeDST = new Date('2024-03-09T12:00:00Z');
+        const result = addToDate(beforeDST, 2, 'days', { timeZone: 'America/New_York' });
+
+        const ny = toTimeZone(result, 'America/New_York');
+        expect(ny.day).toBe(11); // March 11
+      });
+
+      it('preserves wall-clock time when adding months in timezone', () => {
+        const utcDate = new Date('2024-01-15T15:00:00Z'); // 10:00 EST in New York
+        const result = addToDate(utcDate, 1, 'months', { timeZone: 'America/New_York' });
+
+        const ny = toTimeZone(result, 'America/New_York');
+        expect(ny.month).toBe(2); // February
+        expect(ny.day).toBe(15);
+        expect(ny.hour).toBe(10); // Wall-clock time preserved
+      });
+
+      it('handles negative additions with timezone', () => {
+        const utcDate = new Date('2024-03-15T12:00:00Z');
+        const result = addToDate(utcDate, -2, 'months', { timeZone: 'Europe/Paris' });
+
+        const paris = toTimeZone(result, 'Europe/Paris');
+        expect(paris.month).toBe(1); // January
+      });
+
+      it('clamps day correctly for February in timezone', () => {
+        const utcDate = new Date('2024-01-31T00:00:00Z');
+        const result = addToDate(utcDate, 1, 'months', { timeZone: 'UTC' });
+
+        expect(result.getUTCMonth()).toBe(1); // February
+        expect(result.getUTCDate()).toBe(29); // Clamped (2024 is leap year)
+
+        // Test non-leap year
+        const utcDate2023 = new Date('2023-01-31T00:00:00Z');
+        const result2023 = addToDate(utcDate2023, 1, 'months', { timeZone: 'UTC' });
+        expect(result2023.getUTCDate()).toBe(28);
+      });
+
+      it('works with absolute time units and timezone (should ignore timezone)', () => {
+        const utcDate = new Date('2024-06-15T12:00:00Z');
+
+        // Absolute units should ignore timezone
+        const withMs = addToDate(utcDate, 1000, 'milliseconds', { timeZone: 'Asia/Tokyo' });
+        const withoutMs = addToDate(utcDate, 1000, 'milliseconds');
+        expect(withMs.getTime()).toBe(withoutMs.getTime());
+
+        const withHours = addToDate(utcDate, 2, 'hours', { timeZone: 'Asia/Tokyo' });
+        const withoutHours = addToDate(utcDate, 2, 'hours');
+        expect(withHours.getTime()).toBe(withoutHours.getTime());
+      });
+
+      it('preserves milliseconds when adding calendar units with timezone', () => {
+        const utcDate = new Date('2024-06-15T12:30:45.789Z');
+
+        // Adding days should preserve milliseconds
+        const resultDays = addToDate(utcDate, 1, 'days', { timeZone: 'Asia/Tokyo' });
+        expect(resultDays.getMilliseconds()).toBe(789);
+
+        // Adding months should preserve milliseconds
+        const resultMonths = addToDate(utcDate, 1, 'months', { timeZone: 'America/New_York' });
+        expect(resultMonths.getMilliseconds()).toBe(789);
+
+        // Adding years should preserve milliseconds
+        const resultYears = addToDate(utcDate, 1, 'years', { timeZone: 'Europe/London' });
+        expect(resultYears.getMilliseconds()).toBe(789);
+      });
+
+      it('matches non-timezone path millisecond behavior', () => {
+        const utcDate = new Date('2024-06-15T12:30:45.456Z');
+
+        // Local path preserves milliseconds
+        const localResult = addToDate(utcDate, 5, 'days');
+        expect(localResult.getMilliseconds()).toBe(456);
+
+        // Timezone path should also preserve milliseconds
+        const tzResult = addToDate(utcDate, 5, 'days', { timeZone: 'America/New_York' });
+        expect(tzResult.getMilliseconds()).toBe(456);
+      });
     });
   });
 
@@ -580,6 +875,162 @@ describe('date.utils', () => {
       const result = weekOfYear(new Date('2024-12-30'));
       expect(result).toBeGreaterThan(0);
       expect(result).toBeLessThanOrEqual(53);
+    });
+  });
+
+  // ==================== Timezone & DST Tests ====================
+
+  describe('formatDate with timeZone option', () => {
+    it('formats yyyy-MM-dd respecting timezone', () => {
+      // 2024-06-15 23:30 UTC → 2024-06-16 in Tokyo (UTC+9)
+      const utcLateNight = new Date('2024-06-15T23:30:00Z');
+      expect(formatDate(utcLateNight, { format: 'yyyy-MM-dd', timeZone: 'Asia/Tokyo' })).toBe('2024-06-16');
+    });
+
+    it('formats yyyy-MM-dd HH:mm:ss respecting timezone', () => {
+      const utcNoon = new Date('2024-06-15T12:00:00Z');
+      const result = formatDate(utcNoon, { format: 'yyyy-MM-dd HH:mm:ss', timeZone: 'Asia/Tokyo' });
+      expect(result).toBe('2024-06-15 21:00:00');
+    });
+
+    it('formats correctly in UTC', () => {
+      const date = new Date('2024-03-10T05:00:00Z');
+      expect(formatDate(date, { format: 'yyyy-MM-dd HH:mm:ss', timeZone: 'UTC' })).toBe('2024-03-10 05:00:00');
+    });
+  });
+
+  describe('dateDiff DST safety', () => {
+    it('returns exact calendar days across US spring-forward DST', () => {
+      // US DST spring forward: March 10, 2024 (23-hour day)
+      const before = new Date(2024, 2, 9, 12, 0, 0); // March 9
+      const after = new Date(2024, 2, 11, 12, 0, 0); // March 11
+      expect(dateDiff(after, before, 'days')).toBe(2);
+    });
+
+    it('returns exact calendar days across US fall-back DST', () => {
+      // US DST fall back: November 3, 2024 (25-hour day)
+      const before = new Date(2024, 10, 2, 12, 0, 0); // Nov 2
+      const after = new Date(2024, 10, 4, 12, 0, 0); // Nov 4
+      expect(dateDiff(after, before, 'days')).toBe(2);
+    });
+
+    it('returns 1 for consecutive days across spring-forward', () => {
+      const day1 = new Date(2024, 2, 10, 1, 0, 0);
+      const day2 = new Date(2024, 2, 11, 1, 0, 0);
+      expect(dateDiff(day2, day1, 'days')).toBe(1);
+    });
+  });
+
+  describe('getTimezoneOffset', () => {
+    it('returns UTC offset for a timezone', () => {
+      // UTC should always be 0
+      expect(getTimezoneOffset('UTC')).toBeCloseTo(0);
+    });
+
+    it('returns correct offset for Tokyo (no DST)', () => {
+      // Asia/Tokyo is always UTC+9 (540 minutes)
+      const date = new Date('2024-06-15T12:00:00Z');
+      expect(getTimezoneOffset('Asia/Tokyo', date)).toBe(540);
+    });
+
+    it('distinguishes EST vs EDT offsets', () => {
+      const winter = new Date('2024-01-15T12:00:00Z');
+      const summer = new Date('2024-07-15T12:00:00Z');
+      const winterOffset = getTimezoneOffset('America/New_York', winter);
+      const summerOffset = getTimezoneOffset('America/New_York', summer);
+      // EST = -300, EDT = -240
+      expect(winterOffset).toBe(-300);
+      expect(summerOffset).toBe(-240);
+    });
+  });
+
+  describe('toTimeZone', () => {
+    it('converts UTC noon to Tokyo evening', () => {
+      const utcNoon = new Date('2024-06-15T12:00:00Z');
+      const tokyo = toTimeZone(utcNoon, 'Asia/Tokyo');
+      expect(tokyo.year).toBe(2024);
+      expect(tokyo.month).toBe(6);
+      expect(tokyo.day).toBe(15);
+      expect(tokyo.hour).toBe(21);
+      expect(tokyo.minute).toBe(0);
+    });
+
+    it('handles date rollover across timezone', () => {
+      // 2024-06-15 23:30 UTC → 2024-06-16 08:30 in Tokyo
+      const utcLate = new Date('2024-06-15T23:30:00Z');
+      const tokyo = toTimeZone(utcLate, 'Asia/Tokyo');
+      expect(tokyo.day).toBe(16);
+      expect(tokyo.hour).toBe(8);
+      expect(tokyo.minute).toBe(30);
+    });
+
+    it('handles timestamp input', () => {
+      const ts = new Date('2024-06-15T12:00:00Z').getTime();
+      const result = toTimeZone(ts, 'UTC');
+      expect(result.hour).toBe(12);
+    });
+  });
+
+  describe('formatDateInTimeZone', () => {
+    it('formats date in yyyy-MM-dd for a timezone', () => {
+      const date = new Date('2024-06-15T23:30:00Z');
+      expect(formatDateInTimeZone(date, 'Asia/Tokyo', 'yyyy-MM-dd')).toBe('2024-06-16');
+      expect(formatDateInTimeZone(date, 'UTC', 'yyyy-MM-dd')).toBe('2024-06-15');
+    });
+
+    it('formats date with time for a timezone', () => {
+      const date = new Date('2024-06-15T12:00:00Z');
+      expect(formatDateInTimeZone(date, 'UTC', 'yyyy-MM-dd HH:mm:ss')).toBe('2024-06-15 12:00:00');
+    });
+
+    it('defaults to yyyy-MM-dd HH:mm:ss format', () => {
+      const date = new Date('2024-06-15T12:00:00Z');
+      const result = formatDateInTimeZone(date, 'UTC');
+      expect(result).toBe('2024-06-15 12:00:00');
+    });
+  });
+
+  describe('isDST', () => {
+    it('detects DST in summer for New York', () => {
+      expect(isDST('America/New_York', new Date('2024-07-15T12:00:00Z'))).toBe(true);
+    });
+
+    it('detects no DST in winter for New York', () => {
+      expect(isDST('America/New_York', new Date('2024-01-15T12:00:00Z'))).toBe(false);
+    });
+
+    it('returns false for timezone without DST', () => {
+      // Tokyo never observes DST
+      expect(isDST('Asia/Tokyo', new Date('2024-07-15T12:00:00Z'))).toBe(false);
+      expect(isDST('Asia/Tokyo', new Date('2024-01-15T12:00:00Z'))).toBe(false);
+    });
+
+    it('detects DST in southern hemisphere (reversed seasons)', () => {
+      // Australia/Sydney: DST in January (southern summer), not in July
+      expect(isDST('Australia/Sydney', new Date('2024-01-15T12:00:00Z'))).toBe(true);
+      expect(isDST('Australia/Sydney', new Date('2024-07-15T12:00:00Z'))).toBe(false);
+    });
+  });
+
+  describe('getTimezoneAbbreviation', () => {
+    it('returns EST for New York in winter', () => {
+      const result = getTimezoneAbbreviation('America/New_York', new Date('2024-01-15T12:00:00Z'));
+      expect(result).toBe('EST');
+    });
+
+    it('returns EDT for New York in summer', () => {
+      const result = getTimezoneAbbreviation('America/New_York', new Date('2024-07-15T12:00:00Z'));
+      expect(result).toBe('EDT');
+    });
+
+    it('returns JST or GMT+9 for Tokyo', () => {
+      const result = getTimezoneAbbreviation('Asia/Tokyo', new Date('2024-07-15T12:00:00Z'));
+      expect(['JST', 'GMT+9']).toContain(result);
+    });
+
+    it('returns UTC for UTC timezone', () => {
+      const result = getTimezoneAbbreviation('UTC', new Date('2024-07-15T12:00:00Z'));
+      expect(result).toBe('UTC');
     });
   });
 });

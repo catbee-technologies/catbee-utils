@@ -15,7 +15,12 @@ import {
   getDateFromDuration,
   DateFormatOptions,
   formatDate,
-  formatRelativeTime
+  formatRelativeTime,
+  formatDateInTimeZone,
+  toTimeZone,
+  getTimezoneOffset,
+  isDST,
+  getTimezoneAbbreviation
 } from './date.utils';
 
 /**
@@ -704,5 +709,48 @@ export class DateBuilder {
    */
   toString(): string {
     return this.date.toString();
+  }
+
+  // ========== Timezone Methods ==========
+
+  /**
+   * Format the date in a specific timezone.
+   * @param timeZone - IANA timezone identifier (e.g., 'America/New_York')
+   * @param format - Format pattern (default: 'yyyy-MM-dd HH:mm:ss')
+   */
+  formatInTimeZone(timeZone: string, format: string = 'yyyy-MM-dd HH:mm:ss'): string {
+    return formatDateInTimeZone(this.date, timeZone, format);
+  }
+
+  /**
+   * Get the wall-clock components in a specific timezone.
+   * @param timeZone - IANA timezone identifier
+   */
+  toTimeZone(timeZone: string) {
+    return toTimeZone(this.date, timeZone);
+  }
+
+  /**
+   * Get the UTC offset in minutes for a specific timezone at this date's instant.
+   * @param timeZone - IANA timezone identifier
+   */
+  getTimezoneOffset(timeZone: string): number {
+    return getTimezoneOffset(timeZone, this.date);
+  }
+
+  /**
+   * Check if the specified timezone is observing DST at this date's instant.
+   * @param timeZone - IANA timezone identifier
+   */
+  isDST(timeZone: string): boolean {
+    return isDST(timeZone, this.date);
+  }
+
+  /**
+   * Get the timezone abbreviation (e.g., 'EST', 'EDT') for a specific timezone.
+   * @param timeZone - IANA timezone identifier
+   */
+  getTimezoneAbbreviation(timeZone: string): string {
+    return getTimezoneAbbreviation(timeZone, this.date);
   }
 }
