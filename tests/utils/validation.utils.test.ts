@@ -13,6 +13,7 @@ import {
   isStrongPassword,
   isIPv4,
   isIPv6,
+  isHostname,
   isCreditCard,
   isValidJSON,
   isArray,
@@ -299,6 +300,231 @@ describe('ValidationUtils', () => {
     it('returns false for invalid IPv6', () => {
       expect(isIPv6('not:ipv6')).toBe(false);
       expect(isIPv6('123.123.123.123')).toBe(false);
+    });
+  });
+
+  describe('isHostname', () => {
+    describe('IPv4 addresses', () => {
+      it('accepts valid IPv4 addresses', () => {
+        expect(isHostname('127.0.0.1')).toBe(true);
+        expect(isHostname('0.0.0.0')).toBe(true);
+        expect(isHostname('192.168.1.1')).toBe(true);
+        expect(isHostname('10.0.0.1')).toBe(true);
+        expect(isHostname('255.255.255.255')).toBe(true);
+        expect(isHostname('8.8.8.8')).toBe(true);
+      });
+
+      it('rejects invalid IPv4 addresses', () => {
+        expect(isHostname('256.0.0.1')).toBe(false);
+        expect(isHostname('192.168.1.256')).toBe(false);
+        expect(isHostname('192.168.1.1.1')).toBe(false);
+      });
+    });
+
+    describe('IPv6 addresses', () => {
+      it('accepts valid IPv6 addresses', () => {
+        expect(isHostname('::1')).toBe(true);
+        expect(isHostname('::')).toBe(true);
+        expect(isHostname('2001:0db8:85a3:0000:0000:8a2e:0370:7334')).toBe(true);
+        expect(isHostname('2001:db8::1')).toBe(true);
+        expect(isHostname('fe80::1')).toBe(true);
+        expect(isHostname('::ffff:192.0.2.1')).toBe(true); // IPv4-mapped IPv6
+      });
+
+      it('rejects invalid IPv6 addresses', () => {
+        expect(isHostname('gggg::1')).toBe(false);
+        expect(isHostname(':::')).toBe(false);
+        expect(isHostname('not:valid:ipv6')).toBe(false);
+      });
+    });
+
+    describe('localhost', () => {
+      it('accepts localhost', () => {
+        expect(isHostname('localhost')).toBe(true);
+      });
+    });
+
+    describe('valid domain names', () => {
+      it('accepts standard domain names', () => {
+        expect(isHostname('example.com')).toBe(true);
+        expect(isHostname('sub.example.com')).toBe(true);
+        expect(isHostname('deep.sub.example.com')).toBe(true);
+        expect(isHostname('api.github.com')).toBe(true);
+        expect(isHostname('test-server.example.org')).toBe(true);
+      });
+
+      it('accepts single-label hostnames', () => {
+        expect(isHostname('server1')).toBe(true);
+        expect(isHostname('my-server')).toBe(true);
+        expect(isHostname('app123')).toBe(true);
+      });
+
+      it('accepts hostnames with numbers', () => {
+        expect(isHostname('server1.example.com')).toBe(true);
+        expect(isHostname('api2.example.com')).toBe(true);
+        expect(isHostname('123server.com')).toBe(true);
+      });
+
+      it('accepts maximum length labels (63 chars)', () => {
+        const maxLabel = 'a'.repeat(63);
+        expect(isHostname(`${maxLabel}.com`)).toBe(true);
+      });
+
+      it('accepts exactly 255 character hostname', () => {
+        const label = 'a'.repeat(63);
+        const hostname = `${label}.${label}.${label}.${label}`;
+        expect(hostname.length).toBe(255);
+        expect(isHostname(hostname)).toBe(true);
+      });
+
+      it('accepts trailing dot (FQDN)', () => {
+        expect(isHostname('example.com.')).toBe(true);
+      });
+
+      it('accepts punycode domains', () => {
+        expect(isHostname('xn--d1acpjx3f.xn--p1ai')).toBe(true);
+      });
+
+      it('handles IPv6 with zone index', () => {
+        expect(isHostname('fe80::1%eth0')).toBe(true);
+      });
+
+      it('accepts uppercase domains', () => {
+        expect(isHostname('EXAMPLE.COM')).toBe(true);
+        expect(isHostname('Sub.Domain.COM')).toBe(true);
+      });
+    });
+
+    describe('invalid cases', () => {
+      it('rejects empty or whitespace strings', () => {
+        expect(isHostname('')).toBe(false);
+        expect(isHostname(' ')).toBe(false);
+        expect(isHostname('  ')).toBe(false);
+        expect(isHostname('\t')).toBe(false);
+      });
+
+      it('rejects null and undefined', () => {
+        expect(isHostname(null as any)).toBe(false);
+        expect(isHostname(undefined as any)).toBe(false);
+      });
+
+      it('rejects non-string values', () => {
+        expect(isHostname(123 as any)).toBe(false);
+        expect(isHostname({} as any)).toBe(false);
+        expect(isHostname([] as any)).toBe(false);
+      });
+
+      it('rejects hostnames with consecutive dots', () => {
+        expect(isHostname('example..com')).toBe(false);
+        expect(isHostname('..example.com')).toBe(false);
+        expect(isHostname('example.com..')).toBe(false);
+        expect(isHostname('sub..example.com')).toBe(false);
+      });
+
+      it('rejects hostnames starting or ending with hyphen', () => {
+        expect(isHostname('-example.com')).toBe(false);
+        expect(isHostname('example-.com')).toBe(false);
+        expect(isHostname('sub.-example.com')).toBe(false);
+        expect(isHostname('sub.example-.com')).toBe(false);
+      });
+
+      it('rejects hostnames with invalid characters', () => {
+        expect(isHostname('exa_mple.com')).toBe(false);
+        expect(isHostname('exa!mple.com')).toBe(false);
+        expect(isHostname('exa@mple.com')).toBe(false);
+        expect(isHostname('exa#mple.com')).toBe(false);
+        expect(isHostname('exa$mple.com')).toBe(false);
+        expect(isHostname('exa%mple.com')).toBe(false);
+        expect(isHostname('exa mple.com')).toBe(false);
+        expect(isHostname('exa\tmple.com')).toBe(false);
+      });
+
+      it('rejects hostnames exceeding 255 characters', () => {
+        const tooLong = 'a'.repeat(256);
+        expect(isHostname(tooLong)).toBe(false);
+
+        const longHostname = 'a'.repeat(200) + '.com';
+        expect(isHostname(longHostname)).toBe(false);
+      });
+
+      it('rejects labels exceeding 63 characters', () => {
+        const tooLongLabel = 'a'.repeat(64);
+        expect(isHostname(`${tooLongLabel}.com`)).toBe(false);
+        expect(isHostname(`sub.${tooLongLabel}.com`)).toBe(false);
+      });
+
+      it('rejects double hyphen edge misuse (optional strict)', () => {
+        expect(isHostname('a--.com')).toBe(false);
+      });
+
+      it('rejects hostnames starting with dots', () => {
+        expect(isHostname('.example.com')).toBe(false);
+        expect(isHostname('.com')).toBe(false);
+      });
+
+      it('rejects hostnames ending with more than one dot', () => {
+        expect(isHostname('example.com..')).toBe(false);
+        expect(isHostname('sub.example.com..')).toBe(false);
+      });
+
+      it('rejects empty labels', () => {
+        expect(isHostname('example..com')).toBe(false);
+        expect(isHostname('.com')).toBe(false);
+        expect(isHostname('example..')).toBe(false);
+      });
+
+      it('rejects hostnames with only special characters', () => {
+        expect(isHostname('...')).toBe(false);
+        expect(isHostname('___')).toBe(false);
+        expect(isHostname('-')).toBe(false);
+        expect(isHostname('a-')).toBe(false); // ends with hyphen
+        expect(isHostname('-a')).toBe(false); // starts with hyphen
+      });
+
+      it('rejects invalid IPv4-like but numeric hostnames', () => {
+        expect(isHostname('256.256.256.256')).toBe(false);
+        expect(isHostname('999.1.1.1')).toBe(false);
+      });
+    });
+
+    describe('edge cases', () => {
+      it('handles trimmed whitespace', () => {
+        expect(isHostname(' example.com ')).toBe(true);
+        expect(isHostname('\tlocalhost\t')).toBe(true);
+        expect(isHostname(' 192.168.1.1 ')).toBe(true);
+      });
+
+      it('accepts single character labels', () => {
+        expect(isHostname('a.b.c')).toBe(true);
+        expect(isHostname('x')).toBe(true);
+      });
+
+      it('accepts all-numeric single label (hostname, not domain)', () => {
+        expect(isHostname('123')).toBe(true);
+        expect(isHostname('456789')).toBe(true);
+      });
+
+      it('rejects label with only hyphens', () => {
+        expect(isHostname('a-b')).toBe(true); // valid
+        expect(isHostname('-')).toBe(false); // only hyphen
+      });
+    });
+
+    describe('real-world examples', () => {
+      it('accepts common server hostnames', () => {
+        expect(isHostname('web-server-01')).toBe(true);
+        expect(isHostname('db1.prod.internal')).toBe(true);
+        expect(isHostname('api-gateway.eu-west-1.aws.com')).toBe(true);
+      });
+
+      it('accepts common TLDs', () => {
+        expect(isHostname('example.com')).toBe(true);
+        expect(isHostname('example.org')).toBe(true);
+        expect(isHostname('example.net')).toBe(true);
+        expect(isHostname('example.io')).toBe(true);
+        expect(isHostname('example.dev')).toBe(true);
+        expect(isHostname('example.app')).toBe(true);
+      });
     });
   });
 
