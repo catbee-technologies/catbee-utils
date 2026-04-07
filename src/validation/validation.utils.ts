@@ -18,18 +18,21 @@ const TLD_REGEX = /^[A-Za-z]{2,63}$/;
 /**
  * Checks if a string is a valid port number.
  *
- * @param str - The input string or number.
+ * @param value - The input string or number.
+ * @param allowZero - Whether to allow zero as a valid port number.
  * @returns True if valid port number, else false.
  */
-export function isPort(value: string | number): boolean {
-  if (typeof value === 'number') return Number.isInteger(value) && value > 0 && value <= 65535;
+export function isPort(value: string | number, allowZero: boolean = false): boolean {
+  const minPort = allowZero ? 0 : 1;
+  const maxPort = 65535;
+  if (typeof value === 'number') return Number.isInteger(value) && value >= minPort && value <= maxPort;
   if (!value || typeof value !== 'string') return false;
 
   const str = value.trim();
   if (!PORT_REGEX.test(str)) return false;
 
   const port = Number(str);
-  return Number.isInteger(port) && port > 0 && port <= 65535;
+  return Number.isInteger(port) && port >= minPort && port <= maxPort;
 }
 
 /**
@@ -232,7 +235,7 @@ export function isIPv4(str: string): boolean {
   const parts = str.split('.');
   if (parts.length !== 4) return false;
   return parts.every(p => {
-    if (p.length > 3 || (p.startsWith('0') && p.length > 1)) return false;
+    if (!p || p.length > 3 || (p.startsWith('0') && p.length > 1)) return false;
     const n = Number(p);
     return Number.isInteger(n) && n >= 0 && n <= 255;
   });
@@ -251,6 +254,69 @@ export function isIPv6(str: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Checks if a string is a valid hostname or IP address.
+ *
+ * Validates:
+ * - IPv4 addresses (e.g., '192.168.1.1')
+ * - IPv6 addresses (e.g., '::1', '2001:db8::1')
+ * - Domain names (e.g., 'example.com', 'sub.example.com')
+ * - Localhost variants ('localhost', '0.0.0.0', '127.0.0.1')
+ *
+ * @param {string} str - The hostname or IP address to validate.
+ * @returns {boolean} True if valid hostname or IP address.
+ *
+ * @example
+ * ```typescript
+ * isHostname('localhost');        // true
+ * isHostname('0.0.0.0');          // true
+ * isHostname('192.168.1.1');      // true
+ * isHostname('example.com');      // true
+ * isHostname('sub.example.com');  // true
+ * isHostname('::1');              // true
+ * isHostname('invalid..com');     // false
+ * isHostname('');                 // false
+ * ```
+ */
+export function isHostname(str: string): boolean {
+  if (!str || typeof str !== 'string') return false;
+
+  let input = str.trim();
+  if (!input || input.length > 255) return false;
+
+  // Normalize trailing dot (FQDN)
+  if (input.endsWith('.')) {
+    input = input.slice(0, -1);
+  }
+
+  // IPv4
+  if (isIPv4(input)) return true;
+
+  // IPv6
+  if (isIPv6(input)) return true;
+
+  // Localhost
+  if (input === 'localhost') return true;
+
+  // Reject IPv4-like numeric patterns
+  if (/^\d+(\.\d+){3,}$/.test(input)) {
+    return false;
+  }
+
+  // Reject consecutive dots
+  if (input.includes('..')) return false;
+
+  const labels = input.split('.');
+  if (labels.length === 0) return false;
+
+  const labelRegex = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/i;
+
+  return labels.every(label => {
+    if (!label || label.length > 63) return false;
+    return labelRegex.test(label);
+  });
 }
 
 /**
