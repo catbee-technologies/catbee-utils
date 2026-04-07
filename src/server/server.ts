@@ -9,10 +9,10 @@ import { Env } from '@catbee/utils/env';
 import { getLogger } from '@catbee/utils/logger';
 import { InternalServerErrorException, ServiceUnavailableException, NotFoundException } from '@catbee/utils/exception';
 import { getCatbeeServerGlobalConfig } from '@catbee/utils/config';
-import { deepObjMerge } from '@catbee/utils/object';
+import { deepObjMerge, isPlainObject } from '@catbee/utils/object';
 import { fileExists, readFileSync, readFile } from '@catbee/utils/fs';
 import { CatbeeServerConfig, CatbeeServerHooks } from '@catbee/utils/types';
-import { isPort } from '@catbee/utils/validation';
+import { isPort, isHostname } from '@catbee/utils/validation';
 import { optionalRequire } from '@catbee/utils/async';
 import { BUILD_MARKER } from './server.builder';
 import { uuid } from '@catbee/utils/id';
@@ -115,8 +115,13 @@ export class ExpressServer {
       this.config = deepObjMerge({}, getCatbeeServerGlobalConfig(), config) as Required<CatbeeServerConfig>;
     }
 
-    if (!isPort(this.config.port)) {
-      const msg = `Port must be a valid number between 1 and 65535, got: ${this.config.port}`;
+    // Normalize host (strip brackets from IPv6 addresses for server.listen compatibility)
+    if (this.config.host) {
+      this.config.host = this.normalizeHost(this.config.host);
+    }
+
+    if (!isPort(this.config.port, true)) {
+      const msg = `Port must be a valid number between 0 and 65535, got: ${this.config.port}`;
       getLogger().error(msg);
       throw new Error(msg);
     }
@@ -415,7 +420,6 @@ export class ExpressServer {
 
         const logger = getLogger();
         const incomingRequestMetaData = {
-          requestId: req.id,
           method: req.method,
           url: req.originalUrl || req.url,
           ip: req.ip
@@ -474,12 +478,22 @@ export class ExpressServer {
    * Set up body parsing middleware.
    */
   private setupBodyParsingMiddleware(): void {
-    if (this.config.bodyParser) {
+    if (isPlainObject(this.config.bodyParser)) {
       if (this.config.bodyParser.json) {
         this.app.use(express.json(this.config.bodyParser.json));
       }
       if (this.config.bodyParser.urlencoded) {
         this.app.use(express.urlencoded(this.config.bodyParser.urlencoded));
+      }
+    } else if (this.config.bodyParser === true) {
+      const globalBodyParserConfig = getCatbeeServerGlobalConfig().bodyParser;
+      if (isPlainObject(globalBodyParserConfig)) {
+        if (globalBodyParserConfig.json) {
+          this.app.use(express.json(globalBodyParserConfig.json));
+        }
+        if (globalBodyParserConfig.urlencoded) {
+          this.app.use(express.urlencoded(globalBodyParserConfig.urlencoded));
+        }
       }
     }
   }
@@ -864,7 +878,9 @@ export class ExpressServer {
    */
   private logServerStartInfo(): void {
     const protocol = this.config.https ? 'https' : 'http';
-    const url = `${protocol}://${this.config.host}:${this.config.port}`;
+    const port = this.getPort();
+    const host = this.formatHostForUrl(this.config.host || 'localhost');
+    const url = `${protocol}://${host}:${port}`;
     getLogger().info(`Server running on ${url}`);
 
     if (this.config.healthCheck?.path) {
@@ -1113,11 +1129,149 @@ export class ExpressServer {
   }
 
   /**
+   * Get the port the server is listening on.
+   * Returns the actual port if server is running (useful when config.port was 0),
+   * otherwise returns the configured port.
+   *
+   * @returns The port number
+   */
+  public getPort(): number {
+    const address = this.server?.address();
+    if (address && typeof address === 'object' && 'port' in address) {
+      return address.port;
+    }
+    return this.config.port;
+  }
+
+  /**
+   * Get the full URL the server is running on.
+   * Returns the actual URL if server is running (useful when config.port was 0),
+   * otherwise returns the configured URL.
+   *
+   * @returns The full server URL (e.g., "http://localhost:3000")
+   */
+  public getUrl(): string {
+    const protocol = this.config.https ? 'https' : 'http';
+    const port = this.getPort();
+    const host = this.formatHostForUrl(this.config.host || 'localhost');
+    return `${protocol}://${host}:${port}`;
+  }
+
+  /**
+   * Check if the server is configured for dynamic port assignment.
+   * Returns true if the original port configuration was 0.
+   *
+   * @returns True if using dynamic port assignment, false otherwise
+   */
+  public isPortDynamic(): boolean {
+    return this.config.port === 0;
+  }
+
+  /**
+   * Check if the server is currently running and listening for requests.
+   *
+   * @returns True if server is running, false otherwise
+   */
+  public isRunning(): boolean {
+    return this.server !== null && this.server.listening;
+  }
+
+  /**
+   * Get the host address the server is bound to.
+   *
+   * @returns The host address
+   */
+  public getHost(): string {
+    return this.config.host || 'localhost';
+  }
+
+  /**
+   * Get the protocol the server is using ('http' or 'https').
+   *
+   * @returns The protocol string
+   */
+  public getProtocol(): string {
+    return this.config.https ? 'https' : 'http';
+  }
+
+  /**
+   * Check if the server is configured to use HTTPS.
+   *
+   * @returns True if using HTTPS, false otherwise
+   */
+  public isHttps(): boolean {
+    return this.config.https !== undefined;
+  }
+
+  /**
+   * Set a new port for the server.
+   * Can only be called before the server starts listening.
+   * Useful for testing scenarios where you need to change the port dynamically.
+   *
+   * @param port - The new port number (0-65535)
+   * @throws Error if server is already running or port is invalid
+   */
+  public setPort(port: number): void {
+    if (this.server) {
+      throw new Error('Cannot change port after server has started');
+    }
+    if (!isPort(port, true)) {
+      throw new Error(`Port must be a valid number between 0 and 65535, got: ${port}`);
+    }
+    this.config.port = port;
+  }
+
+  /**
+   * Set a new host for the server.
+   * Can only be called before the server starts listening.
+   * Useful for testing scenarios where you need to change the host dynamically.
+   *
+   * @param host - The new host (e.g., "localhost", "0.0.0.0", "127.0.0.1", "::1", or "[::1]")
+   * @throws {Error} If server is already running or host is invalid
+   */
+  public setHost(host: string): void {
+    if (this.server) {
+      throw new Error('Cannot change host after server has started');
+    }
+    const normalizedHost = this.normalizeHost(host);
+    if (!isHostname(normalizedHost)) {
+      throw new Error(`Host must be a valid hostname or IP address, got: ${host}`);
+    }
+    this.config.host = normalizedHost;
+  }
+
+  /**
    * Wait until server initialization (middleware + routes) has completed.
    * Useful for integration tests that inspect app before starting.
    */
   public async waitUntilReady(): Promise<void> {
     await this.initPromise;
+  }
+
+  /**
+   * Normalize host by stripping surrounding brackets from IPv6 addresses.
+   * This ensures the host value is compatible with server.listen().
+   * Brackets are URL syntax only and must be removed for Node.js binding.
+   */
+  private normalizeHost(host: string): string {
+    // Strip surrounding brackets from IPv6 addresses (e.g., "[::1]" -> "::1")
+    if (host.startsWith('[') && host.endsWith(']')) {
+      return host.slice(1, -1);
+    }
+    return host;
+  }
+
+  /**
+   * Format host for use in URLs.
+   * Wraps IPv6 addresses in brackets per RFC 3986.
+   */
+  private formatHostForUrl(host: string): string {
+    // IPv6 addresses contain colons and need to be wrapped in brackets
+    // Since we normalize at input (strip brackets), we never have pre-bracketed hosts
+    if (host.includes(':')) {
+      return `[${host}]`;
+    }
+    return host;
   }
 
   private normalizePath(path: string, withGlobalPrefix = false): string {

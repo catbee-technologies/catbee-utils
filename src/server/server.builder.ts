@@ -1,7 +1,7 @@
-import { deepClone, deepObjMerge } from '@catbee/utils/object';
+import { deepClone, deepObjMerge, isPlainObject } from '@catbee/utils/object';
 import type { CatbeeServerConfig } from '@catbee/utils/types';
 import { getCatbeeServerGlobalConfig } from '@catbee/utils/config';
-import { isPort } from '@catbee/utils/validation';
+import { isPort, isHostname } from '@catbee/utils/validation';
 
 export const BUILD_MARKER = Symbol.for('catbee.express.server.build');
 
@@ -29,18 +29,31 @@ export class ServerConfigBuilder {
    *
    * @private
    * @param port - The port number to validate
-   * @throws {Error} If port is not an integer or is outside the valid range (1-65535)
+   * @throws {Error} If port is not an integer or is outside the valid range (0-65535)
    */
   private validatePort(port: number): void {
-    if (!isPort(port)) {
-      throw new Error(`Port must be a valid number between 1 and 65535, got: ${port}`);
+    if (!isPort(port, true)) {
+      throw new Error(`Port must be a valid number between 0 and 65535, got: ${port}`);
+    }
+  }
+
+  /**
+   * Validates that a hostname is valid.
+   *
+   * @private
+   * @param host - The hostname to validate
+   * @throws {Error} If hostname is invalid
+   */
+  private validateHost(host: string): void {
+    if (!isHostname(host)) {
+      throw new Error(`Host must be a valid hostname or IP address, got: ${host}`);
     }
   }
 
   /**
    * Sets the port the server will listen on.
    *
-   * @param port - The port number (1-65535)
+   * @param port - The port number (0-65535). Use 0 for dynamic port assignment.
    * @returns The builder instance for chaining
    * @throws {Error} If port is invalid
    * @default 3000 (can be overridden via PORT env variable)
@@ -61,14 +74,17 @@ export class ServerConfigBuilder {
    *
    * @param host - The hostname (e.g., 'localhost', '0.0.0.0', '127.0.0.1')
    * @returns The builder instance for chaining
+   * @throws {Error} If hostname is invalid
    * @default '0.0.0.0' (can be overridden via HOST env variable)
    *
    * @example
    * ```typescript
    * builder.withHost('0.0.0.0') // Listen on all interfaces
+   * builder.withHost('localhost') // Listen on localhost only
    * ```
    */
   withHost(host: string): this {
+    this.validateHost(host);
     this.config.host = host;
     return this;
   }
@@ -512,10 +528,23 @@ export class ServerConfigBuilder {
    * ```
    */
   withBodyParser(opts: NonNullable<CatbeeServerConfig['bodyParser']>): this {
+    if (opts === true) {
+      this.config.bodyParser = getCatbeeServerGlobalConfig().bodyParser;
+      return this;
+    } else if (opts === false) {
+      this.config.bodyParser = false;
+      return this;
+    }
+
     this.config.bodyParser = {
-      ...this.config.bodyParser,
+      ...(this.config.bodyParser as object),
       ...opts
     };
+    return this;
+  }
+
+  disableBodyParser(): this {
+    this.config.bodyParser = false;
     return this;
   }
 
@@ -676,7 +705,7 @@ export class ServerConfigBuilder {
     key: K,
     value: Partial<NonNullable<CatbeeServerConfig[K]>>
   ): void {
-    const current = this.config[key] && typeof this.config[key] === 'object' ? deepClone(this.config[key]!) : {};
+    const current = isPlainObject(this.config[key]) ? deepClone(this.config[key]!) : {};
     this.config[key] = deepObjMerge({}, current, value) as NonNullable<CatbeeServerConfig[K]>;
   }
 

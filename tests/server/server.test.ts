@@ -95,6 +95,118 @@ describe('ExpressServer', () => {
       expect(server.getApp()).toBeDefined();
     });
 
+    it('should return configured port when server is not started', async () => {
+      const server = new ExpressServer({ ...baseConfig, port: 3001 });
+      await server.waitUntilReady();
+      expect(server.getPort()).toBe(3001);
+    });
+
+    it('should return server URL when server is not started', async () => {
+      const server = new ExpressServer({ ...baseConfig, port: 3001, host: '127.0.0.1' });
+      await server.waitUntilReady();
+      expect(server.getUrl()).toBe('http://127.0.0.1:3001');
+    });
+
+    it('should format IPv6 addresses correctly in URLs', async () => {
+      const server = new ExpressServer({ ...baseConfig, port: 3001, host: '::1' });
+      await server.waitUntilReady();
+      expect(server.getUrl()).toBe('http://[::1]:3001');
+
+      const server2 = new ExpressServer({ ...baseConfig, port: 3002, host: '2001:db8::1' });
+      await server2.waitUntilReady();
+      expect(server2.getUrl()).toBe('http://[2001:db8::1]:3002');
+
+      // Bracketed input should be normalized (brackets stripped for server.listen compatibility)
+      const server3 = new ExpressServer({ ...baseConfig, port: 3003, host: '[::1]' });
+      await server3.waitUntilReady();
+      expect(server3.getHost()).toBe('::1'); // Brackets stripped internally
+      expect(server3.getUrl()).toBe('http://[::1]:3003'); // But re-added for URLs
+    });
+
+    it('should detect dynamic port configuration', async () => {
+      const server = new ExpressServer({ ...baseConfig, port: 0 });
+      await server.waitUntilReady();
+      expect(server.isPortDynamic()).toBe(true);
+
+      const server2 = new ExpressServer({ ...baseConfig, port: 3000 });
+      await server2.waitUntilReady();
+      expect(server2.isPortDynamic()).toBe(false);
+    });
+
+    it('should return server state information', async () => {
+      const server = new ExpressServer(baseConfig);
+      await server.waitUntilReady();
+
+      expect(server.isRunning()).toBe(false);
+      expect(server.getHost()).toBe('localhost');
+      expect(server.getProtocol()).toBe('http');
+      expect(server.isHttps()).toBe(false);
+
+      await server.start();
+
+      expect(server.isRunning()).toBe(true);
+
+      await killServer(server);
+    });
+
+    it('should handle HTTPS configuration', async () => {
+      const httpsConfig = {
+        ...baseConfig,
+        https: { key: 'dummy', cert: 'dummy' }
+      };
+      const server = new ExpressServer(httpsConfig);
+      await server.waitUntilReady();
+
+      expect(server.getProtocol()).toBe('https');
+      expect(server.isHttps()).toBe(true);
+    });
+
+    it('should allow setting port before server starts', async () => {
+      const server = new ExpressServer(baseConfig);
+      await server.waitUntilReady();
+
+      server.setPort(4000);
+      expect(server.getPort()).toBe(4000);
+      expect(server.getUrl()).toBe('http://localhost:4000');
+    });
+
+    it('should throw when setting port after server starts', async () => {
+      const server = new ExpressServer(baseConfig);
+      await server.waitUntilReady();
+      await server.start();
+
+      expect(() => server.setPort(4000)).toThrow('Cannot change port after server has started');
+
+      await killServer(server);
+    });
+
+    it('should throw when setting invalid port', async () => {
+      const server = new ExpressServer(baseConfig);
+      await server.waitUntilReady();
+
+      expect(() => server.setPort(-1)).toThrow('Port must be a valid number between 0 and 65535');
+      expect(() => server.setPort(70000)).toThrow('Port must be a valid number between 0 and 65535');
+    });
+
+    it('should allow setting host before server starts', async () => {
+      const server = new ExpressServer(baseConfig);
+      await server.waitUntilReady();
+
+      server.setHost('127.0.0.1');
+      expect(server.getHost()).toBe('127.0.0.1');
+      expect(server.getUrl()).toBe('http://127.0.0.1:4000');
+
+      // IPv6 addresses should work
+      server.setHost('::1');
+      expect(server.getHost()).toBe('::1');
+      expect(server.getUrl()).toBe('http://[::1]:4000');
+
+      // Bracketed IPv6 should be normalized
+      server.setHost('[2001:db8::1]');
+      expect(server.getHost()).toBe('2001:db8::1');
+      expect(server.getUrl()).toBe('http://[2001:db8::1]:4000');
+    });
+
     it('should merge custom config with defaults', async () => {
       const customConfig = {
         ...baseConfig,
@@ -159,6 +271,29 @@ describe('ExpressServer', () => {
       expect(server.getServer()).toBeNull();
     });
 
+    it('should return the actual port when server is running', async () => {
+      const server = new ExpressServer({ ...baseConfig, port: 0 });
+      await server.waitUntilReady();
+
+      // Before starting, should return config port (0)
+      expect(server.getPort()).toBe(0);
+
+      // Start the server
+      await server.start();
+
+      // After starting, should return the actual assigned port
+      const actualPort = server.getPort();
+      expect(actualPort).toBeGreaterThan(0);
+      expect(actualPort).toBeLessThanOrEqual(65535);
+
+      // URL should include the actual port
+      const url = server.getUrl();
+      expect(url).toMatch(/^http:\/\/localhost:\d+$/);
+      expect(url).toContain(actualPort.toString());
+
+      await killServer(server);
+    });
+
     it('should handle HTTPS server configuration', async () => {
       const keyPath = 'localhost.pem';
       const certPath = 'localhost.crt';
@@ -179,6 +314,25 @@ describe('ExpressServer', () => {
       expect(httpServer).toBeDefined();
       expect(readFileSync).toHaveBeenCalledWith(keyPath);
       expect(readFileSync).toHaveBeenCalledWith(certPath);
+
+      await killServer(server);
+    });
+
+    it('should normalize bracketed IPv6 hosts for server.listen compatibility', async () => {
+      // Test that bracketed IPv6 input works (brackets stripped internally)
+      const server = new ExpressServer({ ...baseConfig, port: 0, host: '[::1]' });
+      await server.waitUntilReady();
+
+      // Host should be normalized (brackets stripped)
+      expect(server.getHost()).toBe('::1');
+
+      // Server should start successfully (proves server.listen works with normalized host)
+      await server.start();
+      expect(server.isRunning()).toBe(true);
+
+      // URL should have brackets re-added
+      const url = server.getUrl();
+      expect(url).toMatch(/^http:\/\/\[::1\]:\d+$/);
 
       await killServer(server);
     });

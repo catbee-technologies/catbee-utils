@@ -32,9 +32,14 @@ describe('ServerConfigBuilder', () => {
   });
 
   it('should throw on invalid port', () => {
-    expect(() => new ServerConfigBuilder().withPort(0).disableOpenApi().build()).toThrow();
+    expect(() => new ServerConfigBuilder().withPort(-1).disableOpenApi().build()).toThrow();
     expect(() => new ServerConfigBuilder().withPort(70000).disableOpenApi().build()).toThrow();
     expect(() => new ServerConfigBuilder().withPort(3.14).disableOpenApi().build()).toThrow();
+  });
+
+  it('should allow port 0 for dynamic assignment', () => {
+    const config = new ServerConfigBuilder().withPort(0).disableOpenApi().build();
+    expect(config.port).toBe(0);
   });
 
   it('should merge custom config', () => {
@@ -61,13 +66,13 @@ describe('ServerConfigBuilder', () => {
 
   it('should throw if port is not an integer', () => {
     expect(() => new ServerConfigBuilder().withPort(3.14).disableOpenApi().build()).toThrow(
-      'Port must be a valid number between 1 and 65535, got: 3.14'
+      'Port must be a valid number between 0 and 65535, got: 3.14'
     );
   });
 
   it('should throw if port is out of range', () => {
-    expect(() => new ServerConfigBuilder().withPort(0).disableOpenApi().build()).toThrow(/between 1 and 65535/);
-    expect(() => new ServerConfigBuilder().withPort(70000).disableOpenApi().build()).toThrow(/between 1 and 65535/);
+    expect(() => new ServerConfigBuilder().withPort(-1).disableOpenApi().build()).toThrow(/between 0 and 65535/);
+    expect(() => new ServerConfigBuilder().withPort(70000).disableOpenApi().build()).toThrow(/between 0 and 65535/);
   });
 
   it('should throw if OpenAPI is enabled but filePath is missing', () => {
@@ -193,7 +198,7 @@ describe('ServerConfigBuilder', () => {
       .withBodyParser({ json: { limit: '2mb' } })
       .disableOpenApi()
       .build();
-    expect(config.bodyParser?.json?.limit).toBe('2mb');
+    expect((config.bodyParser as any)?.json?.limit).toBe('2mb');
   });
 
   it('should configure cookies', () => {
