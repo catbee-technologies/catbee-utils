@@ -424,7 +424,7 @@ function cloneObject(obj: any, seen: WeakMap<object, any>): any {
  */
 export function deepClone<T>(value: T): T {
   const seen = new WeakMap();
-  return _deepClone(value, seen);
+  return _deepClone(value, seen as WeakMap<object, any>);
 }
 
 /**

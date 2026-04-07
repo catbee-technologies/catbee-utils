@@ -17,6 +17,7 @@ export interface CatbeeServerConfig {
   /** Server port
    *  - **default**: `3000`
    *  - **env**: `SERVER_PORT` || `PORT`
+   *  - Use `0` for dynamic port assignment (OS assigns available port)
    */
   port: number;
 
@@ -82,7 +83,7 @@ export interface CatbeeServerConfig {
    *    - `SERVER_BODY_PARSER_JSON_LIMIT`
    *    - `SERVER_BODY_PARSER_URLENCODED_LIMIT`
    */
-  bodyParser?: {
+  bodyParser?: ToggleConfig<{
     /** JSON body parser options
      *  - **default**: `{ limit: '1mb' }`
      */
@@ -92,7 +93,7 @@ export interface CatbeeServerConfig {
      *  - **default**: `{ extended: true, limit: '1mb' }`
      */
     urlencoded?: Parameters<typeof urlencoded>[0];
-  };
+  }>;
 
   /** Cookie parser toggle or options
    *  - **default**: `false`
