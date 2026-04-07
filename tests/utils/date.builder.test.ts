@@ -593,4 +593,203 @@ describe('DateBuilder', () => {
       expect(result.getSeconds()).toBe(59);
     });
   });
+
+  describe('Timezone Methods', () => {
+    describe('formatInTimeZone', () => {
+      it('should format date in a specific timezone with default format', () => {
+        const utcDate = DateBuilder.from(new Date('2024-06-15T12:00:00Z'));
+        const formatted = utcDate.formatInTimeZone('Asia/Tokyo');
+        expect(formatted).toBe('2024-06-15 21:00:00');
+      });
+
+      it('should format date in timezone with yyyy-MM-dd format', () => {
+        const utcDate = DateBuilder.from(new Date('2024-06-15T23:30:00Z'));
+        const formatted = utcDate.formatInTimeZone('Asia/Tokyo', 'yyyy-MM-dd');
+        expect(formatted).toBe('2024-06-16');
+      });
+
+      it('should handle date rollover across timezones', () => {
+        const utcLateNight = DateBuilder.from(new Date('2024-06-15T23:59:00Z'));
+        const tokyoFormatted = utcLateNight.formatInTimeZone('Asia/Tokyo', 'yyyy-MM-dd HH:mm:ss');
+        const utcFormatted = utcLateNight.formatInTimeZone('UTC', 'yyyy-MM-dd HH:mm:ss');
+
+        expect(tokyoFormatted).toBe('2024-06-16 08:59:00');
+        expect(utcFormatted).toBe('2024-06-15 23:59:00');
+      });
+
+      it('should format correctly during DST transition', () => {
+        const winterDate = DateBuilder.from(new Date('2024-01-15T12:00:00Z'));
+        const summerDate = DateBuilder.from(new Date('2024-07-15T12:00:00Z'));
+
+        const winterNY = winterDate.formatInTimeZone('America/New_York', 'yyyy-MM-dd HH:mm:ss');
+        const summerNY = summerDate.formatInTimeZone('America/New_York', 'yyyy-MM-dd HH:mm:ss');
+
+        expect(winterNY).toBe('2024-01-15 07:00:00'); // EST (UTC-5)
+        expect(summerNY).toBe('2024-07-15 08:00:00'); // EDT (UTC-4)
+      });
+    });
+
+    describe('toTimeZone', () => {
+      it('should convert UTC date to timezone components', () => {
+        const utcNoon = DateBuilder.from(new Date('2024-06-15T12:00:00Z'));
+        const tokyo = utcNoon.toTimeZone('Asia/Tokyo');
+
+        expect(tokyo.year).toBe(2024);
+        expect(tokyo.month).toBe(6);
+        expect(tokyo.day).toBe(15);
+        expect(tokyo.hour).toBe(21);
+        expect(tokyo.minute).toBe(0);
+        expect(tokyo.second).toBe(0);
+      });
+
+      it('should handle date rollover in timezone conversion', () => {
+        const utcLate = DateBuilder.from(new Date('2024-06-15T23:30:00Z'));
+        const tokyo = utcLate.toTimeZone('Asia/Tokyo');
+
+        expect(tokyo.day).toBe(16);
+        expect(tokyo.hour).toBe(8);
+        expect(tokyo.minute).toBe(30);
+      });
+
+      it('should convert to different timezone correctly', () => {
+        const utcNoon = DateBuilder.from(new Date('2024-06-15T12:00:00Z'));
+        const newYork = utcNoon.toTimeZone('America/New_York');
+
+        expect(newYork.hour).toBe(8); // EDT (UTC-4)
+        expect(newYork.day).toBe(15);
+      });
+
+      it('should preserve milliseconds in timezone conversion', () => {
+        const utcWithMs = DateBuilder.from(new Date('2024-06-15T12:00:00.500Z'));
+        const tokyo = utcWithMs.toTimeZone('Asia/Tokyo');
+
+        expect(tokyo.millisecond).toBe(500);
+      });
+    });
+
+    describe('getTimezoneOffset', () => {
+      it('should return zero offset for UTC', () => {
+        const date = DateBuilder.of(2024, 6, 15);
+        expect(date.getTimezoneOffset('UTC')).toBe(0);
+      });
+
+      it('should return correct offset for Tokyo', () => {
+        const date = DateBuilder.from(new Date('2024-06-15T12:00:00Z'));
+        expect(date.getTimezoneOffset('Asia/Tokyo')).toBe(540); // UTC+9
+      });
+
+      it('should return different offsets for EST vs EDT', () => {
+        const winter = DateBuilder.from(new Date('2024-01-15T12:00:00Z'));
+        const summer = DateBuilder.from(new Date('2024-07-15T12:00:00Z'));
+
+        const winterOffset = winter.getTimezoneOffset('America/New_York');
+        const summerOffset = summer.getTimezoneOffset('America/New_York');
+
+        expect(winterOffset).toBe(-300); // EST (UTC-5)
+        expect(summerOffset).toBe(-240); // EDT (UTC-4)
+      });
+
+      it('should return correct offset for negative timezone', () => {
+        const date = DateBuilder.from(new Date('2024-06-15T12:00:00Z'));
+        expect(date.getTimezoneOffset('America/Los_Angeles')).toBeLessThan(0);
+      });
+
+      it('should return correct offset for positive timezone', () => {
+        const date = DateBuilder.from(new Date('2024-06-15T12:00:00Z'));
+        expect(date.getTimezoneOffset('Europe/Berlin')).toBeGreaterThan(0);
+      });
+    });
+
+    describe('isDST', () => {
+      it('should detect DST in summer for New York', () => {
+        const summerDate = DateBuilder.from(new Date('2024-07-15T12:00:00Z'));
+        expect(summerDate.isDST('America/New_York')).toBe(true);
+      });
+
+      it('should detect no DST in winter for New York', () => {
+        const winterDate = DateBuilder.from(new Date('2024-01-15T12:00:00Z'));
+        expect(winterDate.isDST('America/New_York')).toBe(false);
+      });
+
+      it('should return false for timezone without DST', () => {
+        const summerDate = DateBuilder.from(new Date('2024-07-15T12:00:00Z'));
+        const winterDate = DateBuilder.from(new Date('2024-01-15T12:00:00Z'));
+
+        expect(summerDate.isDST('Asia/Tokyo')).toBe(false);
+        expect(winterDate.isDST('Asia/Tokyo')).toBe(false);
+      });
+
+      it('should detect DST in southern hemisphere (reversed seasons)', () => {
+        const januaryDate = DateBuilder.from(new Date('2024-01-15T12:00:00Z'));
+        const julyDate = DateBuilder.from(new Date('2024-07-15T12:00:00Z'));
+
+        // Australia has DST in January (southern summer)
+        expect(januaryDate.isDST('Australia/Sydney')).toBe(true);
+        expect(julyDate.isDST('Australia/Sydney')).toBe(false);
+      });
+
+      it('should handle DST correctly for Europe', () => {
+        const summerDate = DateBuilder.from(new Date('2024-07-15T12:00:00Z'));
+        const winterDate = DateBuilder.from(new Date('2024-01-15T12:00:00Z'));
+
+        expect(summerDate.isDST('Europe/Paris')).toBe(true);
+        expect(winterDate.isDST('Europe/Paris')).toBe(false);
+      });
+    });
+
+    describe('getTimezoneAbbreviation', () => {
+      it('should return EST for New York in winter', () => {
+        const winterDate = DateBuilder.from(new Date('2024-01-15T12:00:00Z'));
+        const abbr = winterDate.getTimezoneAbbreviation('America/New_York');
+        expect(abbr).toBe('EST');
+      });
+
+      it('should return EDT for New York in summer', () => {
+        const summerDate = DateBuilder.from(new Date('2024-07-15T12:00:00Z'));
+        const abbr = summerDate.getTimezoneAbbreviation('America/New_York');
+        expect(abbr).toBe('EDT');
+      });
+
+      it('should return JST or GMT+9 for Tokyo', () => {
+        const date = DateBuilder.from(new Date('2024-07-15T12:00:00Z'));
+        const abbr = date.getTimezoneAbbreviation('Asia/Tokyo');
+        expect(['JST', 'GMT+9']).toContain(abbr);
+      });
+
+      it('should return UTC for UTC timezone', () => {
+        const date = DateBuilder.from(new Date('2024-07-15T12:00:00Z'));
+        const abbr = date.getTimezoneAbbreviation('UTC');
+        expect(abbr).toBe('UTC');
+      });
+
+      it('should return PST for Los Angeles in winter', () => {
+        const winterDate = DateBuilder.from(new Date('2024-01-15T12:00:00Z'));
+        const abbr = winterDate.getTimezoneAbbreviation('America/Los_Angeles');
+        expect(abbr).toBe('PST');
+      });
+
+      it('should return PDT for Los Angeles in summer', () => {
+        const summerDate = DateBuilder.from(new Date('2024-07-15T12:00:00Z'));
+        const abbr = summerDate.getTimezoneAbbreviation('America/Los_Angeles');
+        expect(abbr).toBe('PDT');
+      });
+    });
+
+    describe('Timezone methods chaining', () => {
+      it('should chain timezone methods with other operations', () => {
+        const date = DateBuilder.from(new Date('2024-06-15T12:00:00Z')).addDays(1).addHours(6);
+
+        const tokyo = date.toTimeZone('Asia/Tokyo');
+        expect(tokyo.day).toBe(17); // June 16 18:00 UTC → June 17 03:00 JST
+        expect(tokyo.hour).toBe(3);
+      });
+
+      it('should format in different timezones after operations', () => {
+        const date = DateBuilder.of(2024, 6, 15, 0, 0, 0).addDays(5);
+
+        const formatted = date.formatInTimeZone('America/New_York', 'yyyy-MM-dd');
+        expect(formatted).toMatch(/2024-06-\d{2}/);
+      });
+    });
+  });
 });

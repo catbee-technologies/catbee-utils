@@ -1,14 +1,89 @@
 /**
+ * Named date format presets
+ *
+ * | Preset        | Equivalent                            | Example (en-US)                                    |
+ * |---------------|---------------------------------------|----------------------------------------------------|
+ * | 'short'       | 'M/d/yy, h:mm a'                      | 6/15/15, 9:03 AM                                   |
+ * | 'medium'      | 'MMM d, y, h:mm:ss a'                 | Jun 15, 2015, 9:03:01 AM                           |
+ * | 'long'        | 'MMMM d, y, h:mm:ss a z'              | June 15, 2015 at 9:03:01 AM GMT+1                  |
+ * | 'full'        | 'EEEE, MMMM d, y, h:mm:ss a zzzz'     | Monday, June 15, 2015 at 9:03:01 AM GMT+01:00      |
+ * | 'shortDate'   | 'M/d/yy'                              | 6/15/15                                            |
+ * | 'mediumDate'  | 'MMM d, y'                            | Jun 15, 2015                                       |
+ * | 'longDate'    | 'MMMM d, y'                           | June 15, 2015                                      |
+ * | 'fullDate'    | 'EEEE, MMMM d, y'                     | Monday, June 15, 2015                              |
+ * | 'shortTime'   | 'h:mm a'                              | 9:03 AM                                            |
+ * | 'mediumTime'  | 'h:mm:ss a'                           | 9:03:01 AM                                         |
+ * | 'longTime'    | 'h:mm:ss a z'                         | 9:03:01 AM GMT+1                                   |
+ * | 'fullTime'    | 'h:mm:ss a zzzz'                      | 9:03:01 AM GMT+01:00                               |
+ */
+export type DateFormatPreset =
+  | 'short'
+  | 'medium'
+  | 'long'
+  | 'full'
+  | 'shortDate'
+  | 'mediumDate'
+  | 'longDate'
+  | 'fullDate'
+  | 'shortTime'
+  | 'mediumTime'
+  | 'longTime'
+  | 'fullTime';
+
+/**
  * Format options for the formatDate function
  */
 export interface DateFormatOptions {
-  /** Date format pattern (default: 'yyyy-MM-dd') */
-  format?: string;
+  /** Date format pattern, named preset, or 'relative' (default: 'yyyy-MM-dd') */
+  format?: DateFormatPreset | string;
   /** Locale to use for formatting (default: system locale) */
   locale?: string | string[];
   /** Time zone to use (default: system time zone) */
   timeZone?: string;
 }
+
+/** @internal Intl options for each named preset */
+const DATE_FORMAT_PRESETS: Record<DateFormatPreset, Intl.DateTimeFormatOptions> = {
+  short: { year: '2-digit', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', hour12: true },
+  medium: {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+    hour12: true
+  },
+  long: {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+    hour12: true,
+    timeZoneName: 'short'
+  },
+  full: {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    weekday: 'long',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+    hour12: true,
+    timeZoneName: 'long'
+  },
+  shortDate: { year: '2-digit', month: 'numeric', day: 'numeric' },
+  mediumDate: { year: 'numeric', month: 'short', day: 'numeric' },
+  longDate: { year: 'numeric', month: 'long', day: 'numeric' },
+  fullDate: { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' },
+  shortTime: { hour: 'numeric', minute: 'numeric', hour12: true },
+  mediumTime: { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true },
+  longTime: { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true, timeZoneName: 'short' },
+  fullTime: { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true, timeZoneName: 'long' }
+};
 
 /**
  * Format a date according to the specified format pattern.
@@ -33,14 +108,17 @@ export function formatDate(date: Date | number, options: DateFormatOptions = {})
   const { format = 'yyyy-MM-dd', locale, timeZone } = options;
   const d = date instanceof Date ? date : new Date(date);
 
-  // Custom formatter for common patterns
-  if (format === 'yyyy-MM-dd') {
+  // Custom formatter for common patterns (use fast path only when no timeZone override)
+  if (format === 'yyyy-MM-dd' && !timeZone) {
     const yyyy = d.getFullYear();
     const mm = String(d.getMonth() + 1).padStart(2, '0');
     const dd = String(d.getDate()).padStart(2, '0');
     return `${yyyy}-${mm}-${dd}`;
   }
-  if (format === 'yyyy-MM-dd HH:mm:ss') {
+  if (format === 'yyyy-MM-dd' && timeZone) {
+    return formatDateInTimeZone(d, timeZone, 'yyyy-MM-dd');
+  }
+  if (format === 'yyyy-MM-dd HH:mm:ss' && !timeZone) {
     const yyyy = d.getFullYear();
     const mm = String(d.getMonth() + 1).padStart(2, '0');
     const dd = String(d.getDate()).padStart(2, '0');
@@ -49,8 +127,19 @@ export function formatDate(date: Date | number, options: DateFormatOptions = {})
     const SS = String(d.getSeconds()).padStart(2, '0');
     return `${yyyy}-${mm}-${dd} ${HH}:${MM}:${SS}`;
   }
+  if (format === 'yyyy-MM-dd HH:mm:ss' && timeZone) {
+    return formatDateInTimeZone(d, timeZone, 'yyyy-MM-dd HH:mm:ss');
+  }
   if (format === 'relative') {
     return formatRelativeTime(date);
+  }
+
+  // Named preset formats
+  if (Object.hasOwn(DATE_FORMAT_PRESETS, format)) {
+    return new Intl.DateTimeFormat(locale, {
+      ...DATE_FORMAT_PRESETS[format as DateFormatPreset],
+      timeZone
+    }).format(d);
   }
 
   // Fallback to Intl.DateTimeFormat for other formats
@@ -103,31 +192,33 @@ export function formatRelativeTime(
 /**
  * Parse a date string or timestamp into a Date object.
  *
+ * **Timezone Behavior:**
+ * - Date-only strings (e.g., '2023-05-15') are parsed as **local midnight**,
+ *   not UTC midnight (differs from `new Date()` native behavior)
+ * - ISO strings with timezone (e.g., '2023-05-15T10:30:00Z') use the specified timezone
+ * - This follows Luxon's "local time first" philosophy
+ *
  * @param input - Date string or timestamp to parse
  * @param fallback - Fallback date if parsing fails
  * @returns Parsed Date object or fallback
  *
  * @example
  * ```typescript
- * parseDate('2023-05-15'); // Date object for May 15, 2023
+ * parseDate('2023-05-15'); // Local midnight on May 15, 2023
+ * parseDate('2023-05-15T10:30:00Z'); // 10:30 AM UTC on May 15, 2023
  * parseDate('invalid', new Date()); // Returns current date as fallback
  * ```
  */
 export function parseDate(input: string | number, fallback?: Date): Date | null {
-  if (typeof input === 'number') {
-    return new Date(input);
+  if (typeof input === 'number') return new Date(input);
+
+  if (!/^\d{4}-\d{2}-\d{2}/.test(input)) {
+    return fallback ?? null;
   }
 
-  try {
-    const date = new Date(input);
-    // Check if date is valid
-    if (Number.isNaN(date.getTime())) {
-      return fallback || null;
-    }
-    return date;
-  } catch {
-    return fallback || null;
-  }
+  const date = new Date(input.includes('T') ? input : input + 'T00:00:00');
+
+  return Number.isNaN(date.getTime()) ? (fallback ?? null) : date;
 }
 
 /**
@@ -166,8 +257,12 @@ export function dateDiff(
       return diffMs / (1000 * 60);
     case 'hours':
       return diffMs / (1000 * 60 * 60);
-    case 'days':
-      return diffMs / (1000 * 60 * 60 * 24);
+    case 'days': {
+      // Use calendar-day counting to avoid DST issues (23h/25h days)
+      const n1 = new Date(d1.getFullYear(), d1.getMonth(), d1.getDate());
+      const n2 = new Date(d2.getFullYear(), d2.getMonth(), d2.getDate());
+      return Math.round((n1.getTime() - n2.getTime()) / (1000 * 60 * 60 * 24));
+    }
     case 'months':
       return (d1.getFullYear() - d2.getFullYear()) * 12 + d1.getMonth() - d2.getMonth();
     case 'years':
@@ -175,6 +270,35 @@ export function dateDiff(
     default:
       throw new Error(`Unsupported unit: ${unit}`);
   }
+}
+
+/**
+ * Calculate the difference in calendar days between two dates as observed in a specific timezone.
+ * Both dates are converted to calendar year/month/day values in the supplied IANA timezone, and
+ * the difference between those calendar dates is returned.
+ *
+ * JavaScript `Date` instances do not retain timezone identity, so this function does not detect
+ * whether the input dates originated from different timezones.
+ *
+ * @param d1 - First date
+ * @param d2 - Second date
+ * @param tz - IANA timezone identifier used to interpret both dates (e.g., 'America/New_York')
+ * @return Number of calendar days difference between the two dates in the specified timezone
+ * @throws {RangeError} If `tz` is not a valid IANA timezone identifier, as thrown by the underlying `Intl` APIs
+ * @example
+ * ```typescript
+ * // Calculate days difference in New York timezone
+ * dateDiffDaysTZ(new Date('2023-05-15T00:00:00'), new Date('2023-05-14T23:00:00'), 'America/New_York'); // 1
+ * ```
+ */
+export function dateDiffDaysTZ(d1: Date, d2: Date, tz: string): number {
+  const p1 = getTimeZoneParts(d1, tz);
+  const p2 = getTimeZoneParts(d2, tz);
+
+  const a = Date.UTC(p1.year, p1.month - 1, p1.day);
+  const b = Date.UTC(p2.year, p2.month - 1, p2.day);
+
+  return Math.round((a - b) / 86400000);
 }
 
 /**
@@ -197,43 +321,131 @@ export function dateDiff(
 export function addToDate(
   date: Date | number,
   amount: number,
-  unit: 'milliseconds' | 'seconds' | 'minutes' | 'hours' | 'days' | 'months' | 'years'
+  unit: 'milliseconds' | 'seconds' | 'minutes' | 'hours' | 'days' | 'months' | 'years',
+  options?: { timeZone?: string }
 ): Date {
-  const d = date instanceof Date ? new Date(date) : new Date(date);
+  const d = new Date(date);
 
-  switch (unit) {
-    case 'milliseconds':
-      d.setMilliseconds(d.getMilliseconds() + amount);
-      break;
-    case 'seconds':
-      d.setSeconds(d.getSeconds() + amount);
-      break;
-    case 'minutes':
-      d.setMinutes(d.getMinutes() + amount);
-      break;
-    case 'hours':
-      d.setHours(d.getHours() + amount);
-      break;
-    case 'days':
-      d.setDate(d.getDate() + amount);
-      break;
-    case 'months': {
-      const origDate = d.getDate();
-      const origMonth = d.getMonth();
-      d.setDate(1); // Prevent overflow
-      d.setMonth(origMonth + amount);
-      const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
-      d.setDate(Math.min(origDate, lastDay));
-      break;
+  // ABSOLUTE units
+  if (unit === 'milliseconds') return new Date(d.getTime() + amount);
+  if (unit === 'seconds') return new Date(d.getTime() + amount * 1000);
+  if (unit === 'minutes') return new Date(d.getTime() + amount * 60_000);
+  if (unit === 'hours') return new Date(d.getTime() + amount * 3_600_000);
+
+  // CALENDAR units
+  const tz = options?.timeZone;
+
+  if (!tz) {
+    // Use local time for calendar operations with clamping
+    if (unit === 'days') return addDays(d, amount);
+
+    if (unit === 'months') {
+      const targetMonth = d.getMonth() + amount;
+      const targetYear = d.getFullYear() + Math.floor(targetMonth / 12);
+      const normalizedMonth = ((targetMonth % 12) + 12) % 12;
+      const day = d.getDate();
+
+      // Get last day of target month
+      const lastDay = new Date(targetYear, normalizedMonth + 1, 0).getDate();
+      const clampedDay = Math.min(day, lastDay);
+
+      return new Date(
+        targetYear,
+        normalizedMonth,
+        clampedDay,
+        d.getHours(),
+        d.getMinutes(),
+        d.getSeconds(),
+        d.getMilliseconds()
+      );
     }
-    case 'years':
-      d.setFullYear(d.getFullYear() + amount);
-      break;
-    default:
-      throw new Error(`Unsupported unit: ${unit}`);
+
+    if (unit === 'years') {
+      const targetYear = d.getFullYear() + amount;
+      const month = d.getMonth();
+      const day = d.getDate();
+
+      // Get last day of target month
+      const lastDay = new Date(targetYear, month + 1, 0).getDate();
+      const clampedDay = Math.min(day, lastDay);
+
+      return new Date(targetYear, month, clampedDay, d.getHours(), d.getMinutes(), d.getSeconds(), d.getMilliseconds());
+    }
+
+    throw new Error(`Unsupported unit: ${unit}`);
   }
 
-  return d;
+  const parts = getTimeZoneParts(d, tz as string);
+  const ms = d.getMilliseconds();
+
+  const result = {
+    ...parts,
+    day: parts.day,
+    month: parts.month,
+    year: parts.year,
+    millisecond: ms
+  };
+
+  if (unit === 'days') result.day += amount;
+  if (unit === 'months') {
+    result.month += amount;
+    // Normalize month to 1-12 range
+    result.year += Math.floor((result.month - 1) / 12);
+    result.month = ((((result.month - 1) % 12) + 12) % 12) + 1;
+    // Clamp day to last day of target month (use UTC to avoid timezone issues)
+    const lastDay = new Date(Date.UTC(result.year, result.month, 0)).getUTCDate();
+    result.day = Math.min(result.day, lastDay);
+  }
+  if (unit === 'years') {
+    result.year += amount;
+    const lastDay = new Date(Date.UTC(result.year, result.month, 0)).getUTCDate();
+    result.day = Math.min(result.day, lastDay);
+  }
+
+  return zonedTimeToUtc(result, tz as string);
+}
+
+/**
+ * Convert wall-clock time components in a specific timezone to a UTC Date.
+ * Uses double-offset technique to handle DST transitions.
+ *
+ * **DST Handling:**
+ * - Spring forward (gap): Returns time after the transition
+ * - Fall back (overlap): Returns the first occurrence (pre-transition)
+ *
+ * @internal
+ */
+function zonedTimeToUtc(
+  parts: {
+    year: number;
+    month: number;
+    day: number;
+    hour?: number;
+    minute?: number;
+    second?: number;
+    millisecond?: number;
+  },
+  timeZone: string
+): Date {
+  const utcGuess = new Date(
+    Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour ?? 0, parts.minute ?? 0, parts.second ?? 0)
+  );
+
+  // First offset
+  const offset1 = getTimezoneOffset(timeZone, utcGuess);
+  const adjusted = new Date(utcGuess.getTime() - offset1 * 60_000);
+
+  // Recalculate offset after adjustment (handles DST transitions)
+  const offset2 = getTimezoneOffset(timeZone, adjusted);
+
+  const result = offset1 !== offset2 ? new Date(utcGuess.getTime() - offset2 * 60_000) : adjusted;
+
+  // Preserve milliseconds if provided
+  if (parts.millisecond !== undefined) {
+    result.setMilliseconds(parts.millisecond);
+  }
+
+  return result;
 }
 
 /**
@@ -256,42 +468,39 @@ export function startOf(
   date: Date | number,
   unit: 'second' | 'minute' | 'hour' | 'day' | 'week' | 'month' | 'quarter' | 'year'
 ): Date {
-  const d = date instanceof Date ? new Date(date) : new Date(date);
+  const d = new Date(date);
 
   switch (unit) {
     case 'second':
-      d.setMilliseconds(0);
-      break;
+      return new Date(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes(), d.getSeconds(), 0);
+
     case 'minute':
-      d.setSeconds(0, 0);
-      break;
+      return new Date(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes(), 0, 0);
+
     case 'hour':
-      d.setMinutes(0, 0, 0);
-      break;
+      return new Date(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), 0, 0, 0);
+
     case 'day':
-      d.setHours(0, 0, 0, 0);
-      break;
-    case 'week':
-      d.setHours(0, 0, 0, 0);
-      d.setDate(d.getDate() - d.getDay());
-      break;
+      return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+
+    case 'week': {
+      const day = d.getDay();
+      const diff = -day; // Go back to Sunday (day 0)
+      return new Date(d.getFullYear(), d.getMonth(), d.getDate() + diff);
+    }
+
     case 'month':
-      d.setDate(1);
-      d.setHours(0, 0, 0, 0);
-      break;
+      return new Date(d.getFullYear(), d.getMonth(), 1);
+
     case 'quarter':
-      d.setMonth(Math.floor(d.getMonth() / 3) * 3, 1);
-      d.setHours(0, 0, 0, 0);
-      break;
+      return new Date(d.getFullYear(), Math.floor(d.getMonth() / 3) * 3, 1);
+
     case 'year':
-      d.setMonth(0, 1);
-      d.setHours(0, 0, 0, 0);
-      break;
+      return new Date(d.getFullYear(), 0, 1);
+
     default:
       throw new Error(`Unsupported unit: ${unit}`);
   }
-
-  return d;
 }
 
 /**
@@ -314,42 +523,39 @@ export function endOf(
   date: Date | number,
   unit: 'second' | 'minute' | 'hour' | 'day' | 'week' | 'month' | 'quarter' | 'year'
 ): Date {
-  const d = date instanceof Date ? new Date(date) : new Date(date);
+  const d = new Date(date);
 
   switch (unit) {
     case 'second':
-      d.setMilliseconds(999);
-      break;
+      return new Date(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes(), d.getSeconds(), 999);
+
     case 'minute':
-      d.setSeconds(59, 999);
-      break;
+      return new Date(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes(), 59, 999);
+
     case 'hour':
-      d.setMinutes(59, 59, 999);
-      break;
+      return new Date(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), 59, 59, 999);
+
     case 'day':
-      d.setHours(23, 59, 59, 999);
-      break;
-    case 'week':
-      d.setDate(d.getDate() - d.getDay() + 6);
-      d.setHours(23, 59, 59, 999);
-      break;
+      return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+
+    case 'week': {
+      const day = d.getDay();
+      const diff = 6 - day; // Goto Saturday (day 6)
+      return new Date(d.getFullYear(), d.getMonth(), d.getDate() + diff, 23, 59, 59, 999);
+    }
+
     case 'month':
-      d.setMonth(d.getMonth() + 1, 0);
-      d.setHours(23, 59, 59, 999);
-      break;
+      return new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
+
     case 'quarter':
-      d.setMonth(Math.floor(d.getMonth() / 3) * 3 + 3, 0);
-      d.setHours(23, 59, 59, 999);
-      break;
+      return new Date(d.getFullYear(), Math.floor(d.getMonth() / 3) * 3 + 3, 0, 23, 59, 59, 999);
+
     case 'year':
-      d.setMonth(11, 31);
-      d.setHours(23, 59, 59, 999);
-      break;
+      return new Date(d.getFullYear(), 11, 31, 23, 59, 59, 999);
+
     default:
       throw new Error(`Unsupported unit: ${unit}`);
   }
-
-  return d;
 }
 
 /**
@@ -589,7 +795,7 @@ export function isPast(date: Date | number): boolean {
  * addDays(new Date('2024-01-15'), 7); // 2024-01-22
  */
 export function addDays(date: Date | number, days: number): Date {
-  const d = new Date(date instanceof Date ? date : new Date(date));
+  const d = new Date(date);
   d.setDate(d.getDate() + days);
   return d;
 }
@@ -605,7 +811,7 @@ export function addDays(date: Date | number, days: number): Date {
  * addMonths(new Date('2024-01-31'), 1); // 2024-02-29 (leap year)
  */
 export function addMonths(date: Date | number, months: number): Date {
-  const d = new Date(date instanceof Date ? date : new Date(date));
+  const d = new Date(date);
   d.setMonth(d.getMonth() + months);
   return d;
 }
@@ -621,7 +827,7 @@ export function addMonths(date: Date | number, months: number): Date {
  * addYears(new Date('2024-01-15'), 5); // 2029-01-15
  */
 export function addYears(date: Date | number, years: number): Date {
-  const d = new Date(date instanceof Date ? date : new Date(date));
+  const d = new Date(date);
   d.setFullYear(d.getFullYear() + years);
   return d;
 }
@@ -651,9 +857,205 @@ export function quarterOf(date: Date | number): 1 | 2 | 3 | 4 {
  * weekOfYear(new Date('2024-01-15')); // 3
  */
 export function weekOfYear(date: Date | number): number {
-  const d = new Date(date instanceof Date ? date : new Date(date));
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() + 4 - (d.getDay() || 7));
-  const yearStart = new Date(d.getFullYear(), 0, 1);
-  return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  const d = date instanceof Date ? date : new Date(date);
+  // Use UTC to avoid DST issues in day counting
+  const target = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  target.setUTCDate(target.getUTCDate() + 4 - (target.getUTCDay() || 7));
+  const yearStart = Date.UTC(target.getUTCFullYear(), 0, 1);
+  return Math.ceil(((target.getTime() - yearStart) / 86400000 + 1) / 7);
+}
+
+// ==================== Timezone Utilities ====================
+
+/**
+ * Get the UTC offset in minutes for a specific IANA timezone at a given instant.
+ * Positive values mean ahead of UTC (e.g., +120 for UTC+2), negative behind.
+ *
+ * @param timeZone - IANA timezone identifier (e.g., 'America/New_York')
+ * @param date - Point in time to evaluate (default: now)
+ * @returns Offset in minutes from UTC
+ *
+ * @example
+ * ```typescript
+ * getTimezoneOffset('America/New_York'); // -300 (EST) or -240 (EDT)
+ * getTimezoneOffset('Europe/Berlin');    // +60 (CET) or +120 (CEST)
+ * ```
+ */
+export function getTimezoneOffset(timeZone: string, date: Date | number = new Date()): number {
+  const d = date instanceof Date ? date : new Date(date);
+
+  // Get parts in the target timezone
+  const parts = getTimeZoneParts(d, timeZone);
+
+  // Build a UTC date from those parts
+  const tzDate = new Date(Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second));
+
+  // The offset is the difference between UTC representation and actual UTC
+  return Math.round((tzDate.getTime() - d.getTime()) / 60_000);
+}
+
+/**
+ * Convert a Date to the wall-clock components in a specific timezone.
+ * Returns an object with year, month (1-12), day, hour, minute, second, millisecond.
+ *
+ * @param date - Date to convert
+ * @param timeZone - IANA timezone identifier
+ * @returns Date components in the target timezone
+ *
+ * @example
+ * ```typescript
+ * const utcNoon = new Date('2024-06-15T12:00:00Z');
+ * toTimeZone(utcNoon, 'America/New_York');
+ * // { year: 2024, month: 6, day: 15, hour: 8, minute: 0, second: 0, millisecond: 0 }
+ * ```
+ */
+export function toTimeZone(
+  date: Date | number,
+  timeZone: string
+): { year: number; month: number; day: number; hour: number; minute: number; second: number; millisecond: number } {
+  const d = date instanceof Date ? date : new Date(date);
+  const parts = getTimeZoneParts(d, timeZone);
+  return {
+    year: parts.year,
+    month: parts.month,
+    day: parts.day,
+    hour: parts.hour,
+    minute: parts.minute,
+    second: parts.second,
+    millisecond: d.getMilliseconds()
+  };
+}
+
+/**
+ * Format a Date in a specific timezone using common format patterns.
+ * Supports 'yyyy-MM-dd', 'yyyy-MM-dd HH:mm:ss', and Intl-based formatting.
+ *
+ * @param date - Date to format
+ * @param timeZone - IANA timezone identifier
+ * @param format - Format pattern (default: 'yyyy-MM-dd HH:mm:ss')
+ * @param locale - Locale for Intl formatting
+ * @returns Formatted date string in the target timezone
+ *
+ * @example
+ * ```typescript
+ * const utcDate = new Date('2024-06-15T18:30:00Z');
+ * formatDateInTimeZone(utcDate, 'America/New_York', 'yyyy-MM-dd HH:mm:ss');
+ * // '2024-06-15 14:30:00'
+ *
+ * formatDateInTimeZone(utcDate, 'Asia/Tokyo', 'yyyy-MM-dd');
+ * // '2024-06-16'
+ * ```
+ */
+export function formatDateInTimeZone(
+  date: Date | number,
+  timeZone: string,
+  format: string = 'yyyy-MM-dd HH:mm:ss',
+  locale?: string | string[]
+): string {
+  const d = date instanceof Date ? date : new Date(date);
+  const parts = getTimeZoneParts(d, timeZone);
+
+  if (format === 'yyyy-MM-dd') {
+    return `${parts.year}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`;
+  }
+  if (format === 'yyyy-MM-dd HH:mm:ss') {
+    return `${parts.year}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')} ${String(parts.hour).padStart(2, '0')}:${String(parts.minute).padStart(2, '0')}:${String(parts.second).padStart(2, '0')}`;
+  }
+
+  // Fall back to Intl for other patterns
+  return new Intl.DateTimeFormat(locale, {
+    timeZone,
+    year: format.includes('yyyy') || format.includes('y') ? 'numeric' : undefined,
+    month: format.includes('MM') || format.includes('M') ? 'numeric' : undefined,
+    day: format.includes('dd') || format.includes('d') ? 'numeric' : undefined,
+    hour: format.includes('HH') || format.includes('H') ? 'numeric' : undefined,
+    minute: format.includes('mm') || format.includes('m') ? 'numeric' : undefined,
+    second: format.includes('ss') || format.includes('s') ? 'numeric' : undefined,
+    hour12: !format.includes('HH') && !format.includes('H')
+  }).format(d);
+}
+
+/**
+ * Check if a given IANA timezone is currently observing DST.
+ *
+ * @param timeZone - IANA timezone identifier
+ * @param date - Point in time to check (default: now)
+ * @returns True if the timezone is in DST at the given moment
+ *
+ * @example
+ * ```typescript
+ * isDST('America/New_York', new Date('2024-07-01')); // true  (EDT)
+ * isDST('America/New_York', new Date('2024-01-01')); // false (EST)
+ * isDST('Asia/Tokyo');                               // false (no DST)
+ * ```
+ */
+export function isDST(timeZone: string, date: Date | number = new Date()): boolean {
+  const d = date instanceof Date ? date : new Date(date);
+
+  // Compare the offset in January and July to find the standard offset
+  // Use noon UTC to avoid edge cases at midnight boundaries
+  const year = d.getUTCFullYear();
+  const jan = getTimezoneOffset(timeZone, new Date(Date.UTC(year, 0, 15, 12, 0, 0)));
+  const jul = getTimezoneOffset(timeZone, new Date(Date.UTC(year, 6, 15, 12, 0, 0)));
+  const standardOffset = Math.min(jan, jul); // Standard time has the smaller offset
+
+  return getTimezoneOffset(timeZone, d) > standardOffset;
+}
+
+/**
+ * Get the IANA timezone abbreviation (e.g., "EST", "EDT", "CET") for a date.
+ *
+ * @param timeZone - IANA timezone identifier
+ * @param date - Point in time (default: now)
+ * @param locale - Locale for formatting (default: 'en-US')
+ * @returns Timezone abbreviation string
+ *
+ * @example
+ * ```typescript
+ * getTimezoneAbbreviation('America/New_York', new Date('2024-01-15')); // 'EST'
+ * getTimezoneAbbreviation('America/New_York', new Date('2024-07-15')); // 'EDT'
+ * ```
+ */
+export function getTimezoneAbbreviation(
+  timeZone: string,
+  date: Date | number = new Date(),
+  locale: string = 'en-US'
+): string {
+  const d = date instanceof Date ? date : new Date(date);
+  const parts = new Intl.DateTimeFormat(locale, { timeZone, timeZoneName: 'short' }).formatToParts(d);
+  return parts.find(p => p.type === 'timeZoneName')?.value ?? '';
+}
+
+/**
+ * Internal helper: extract date/time components in a specific timezone using Intl.
+ */
+function getTimeZoneParts(
+  date: Date,
+  timeZone: string
+): { year: number; month: number; day: number; hour: number; minute: number; second: number } {
+  const fmt = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+    hour12: false
+  });
+
+  const parts = fmt.formatToParts(date);
+  const get = (type: Intl.DateTimeFormatPartTypes): number => {
+    const val = parts.find(p => p.type === type)?.value ?? '0';
+    return parseInt(val, 10);
+  };
+
+  return {
+    year: get('year'),
+    month: get('month'),
+    day: get('day'),
+    hour: get('hour') === 24 ? 0 : get('hour'), // Intl can return 24 for midnight
+    minute: get('minute'),
+    second: get('second')
+  };
 }
