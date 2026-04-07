@@ -360,7 +360,7 @@ function setupLogger(isGlobal: boolean = true): PinoLogger {
 
   if (isGlobal) {
     _global[GLOBAL_LOGGER_KEY] = logger;
-    _global[GLOBAL_LOGGER_KEY]?.debug({ logDir: logDir || 'none' }, 'Global Logger Initialized');
+    _global[GLOBAL_LOGGER_KEY]?.debug({ logDir }, 'Global Logger Initialized');
   }
 
   return logger;
