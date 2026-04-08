@@ -28,4 +28,13 @@ export default {
   testResultsProcessor: 'jest-sonar-reporter',
   detectOpenHandles: true,
   setupFilesAfterEnv: ['<rootDir>/tests/__mocks__/default.mock.ts'],
+  transform: {
+    '^.+\\.ts$': [
+      'ts-jest',
+      {
+        tsconfig: 'tsconfig.test.json',
+        diagnostics: false,
+      },
+    ],
+  }
 };
