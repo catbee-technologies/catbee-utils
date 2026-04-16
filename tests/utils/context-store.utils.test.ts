@@ -106,6 +106,12 @@ describe('ContextStoreUtils', () => {
     });
   });
 
+  it('ContextStore.patch throws outside active context', () => {
+    expect(() => ContextStore.patch({ [StoreKeys.USER_ID]: 'no-context' })).toThrow(
+      /Failed to patch: AsyncLocalStorage store is not initialized/
+    );
+  });
+
   it('ContextStore.withValue temporarily overrides value in context', () => {
     ContextStore.run({ [StoreKeys.REQUEST_ID]: 'orig' }, () => {
       const result = ContextStore.withValue(StoreKeys.REQUEST_ID, 'temp', () => {
@@ -114,6 +120,22 @@ describe('ContextStoreUtils', () => {
       expect(result).toBe('temp');
       expect(ContextStore.get(StoreKeys.REQUEST_ID)).toBe('orig');
     });
+  });
+
+  it('ContextStore.withValue restores by deleting when no original value existed', () => {
+    ContextStore.run({}, () => {
+      const valueInside = ContextStore.withValue(StoreKeys.USER_ID, 'temp-user', () =>
+        ContextStore.get(StoreKeys.USER_ID)
+      );
+      expect(valueInside).toBe('temp-user');
+      expect(ContextStore.get(StoreKeys.USER_ID)).toBeUndefined();
+    });
+  });
+
+  it('ContextStore.withValue throws outside active context', () => {
+    expect(() => ContextStore.withValue(StoreKeys.USER_ID, 'temp', () => 'ok')).toThrow(
+      /Failed to set temporary value: AsyncLocalStorage store is not initialized/
+    );
   });
 
   it('ContextStore.extend creates a new context inheriting from current', () => {
@@ -127,6 +149,13 @@ describe('ContextStoreUtils', () => {
       // Original context not affected
       expect(ContextStore.get(StoreKeys.USER_ID)).toBeUndefined();
     });
+  });
+
+  it('ContextStore.extend works without an existing context', () => {
+    const result = ContextStore.extend({ [StoreKeys.REQUEST_ID]: 'new-root' }, () =>
+      ContextStore.get(StoreKeys.REQUEST_ID)
+    );
+    expect(result).toBe('new-root');
   });
 
   it('TypedContextKey works for get/set/exists/delete', () => {

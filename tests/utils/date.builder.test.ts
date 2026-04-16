@@ -281,6 +281,13 @@ describe('DateBuilder', () => {
       expect(result.getSecond()).toBe(59);
     });
 
+    it('should get end of week', () => {
+      const result = testDate.endOfWeek();
+      expect(result.getDayOfWeek()).toBe(6); // Saturday
+      expect(result.getHour()).toBe(23);
+      expect(result.getMinute()).toBe(59);
+    });
+
     it('should get end of month', () => {
       const result = testDate.endOfMonth();
       expect(result.getDay()).toBe(31); // May has 31 days
@@ -291,6 +298,13 @@ describe('DateBuilder', () => {
       const result = testDate.endOfYear();
       expect(result.getMonth()).toBe(12);
       expect(result.getDay()).toBe(31);
+    });
+
+    it('should get end of quarter', () => {
+      const result = testDate.endOfQuarter();
+      expect(result.getMonth()).toBe(6); // May is in Q2, so quarter end is June
+      expect(result.getDay()).toBe(30);
+      expect(result.getHour()).toBe(23);
     });
 
     it('should handle chaining end of periods', () => {
@@ -333,6 +347,12 @@ describe('DateBuilder', () => {
     it('should check isBetween exclusive', () => {
       expect(baseDate.isBetween(earlierDate, laterDate, false)).toBe(true);
       expect(baseDate.isBetween(baseDate, laterDate, false)).toBe(false);
+    });
+
+    it('should accept Date instances in isBetween', () => {
+      const start = new Date('2024-05-10');
+      const end = new Date('2024-05-20');
+      expect(baseDate.isBetween(start, end)).toBe(true);
     });
 
     it('should check isWeekend', () => {

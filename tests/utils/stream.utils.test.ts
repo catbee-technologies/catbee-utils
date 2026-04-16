@@ -57,6 +57,23 @@ describe('stream.utils', () => {
       expect(result).toBe('abcdefghij');
       expect(elapsed).toBeGreaterThanOrEqual(0); // Should not throw
     });
+
+    it('passes chunks immediately when under target throughput', done => {
+      const nowSpy = jest.spyOn(Date, 'now');
+      nowSpy.mockReturnValueOnce(0).mockReturnValue(5000);
+
+      const throttle = createThrottleStream(2);
+      const chunks: Buffer[] = [];
+
+      throttle.on('data', chunk => chunks.push(chunk));
+      throttle.on('end', () => {
+        expect(chunks.map(c => c.toString())).toEqual(['abcd']);
+        nowSpy.mockRestore();
+        done();
+      });
+
+      throttle.end(Buffer.from('abcd'));
+    });
   });
 
   describe('createBatchStream', () => {
@@ -69,6 +86,20 @@ describe('stream.utils', () => {
         expect(batches).toEqual([['a', 'b'], ['c', 'd'], ['e']]);
         done();
       });
+      input.pipe(batchStream);
+    });
+
+    it('uses object mode by default and flushes remaining objects', done => {
+      const input = Readable.from(['a', 'b'], { objectMode: true });
+      const batchStream = createBatchStream(3);
+      const batches: any[] = [];
+
+      batchStream.on('data', batch => batches.push(batch));
+      batchStream.on('end', () => {
+        expect(batches).toEqual([['a', 'b']]);
+        done();
+      });
+
       input.pipe(batchStream);
     });
 
@@ -142,6 +173,35 @@ describe('stream.utils', () => {
         done();
       });
       input.pipe(batchStream);
+    });
+
+    it('flushes remaining object batch on direct end', done => {
+      const batchStream = createBatchStream(10, { objectMode: true });
+      const batches: any[] = [];
+
+      batchStream.on('data', batch => batches.push(batch));
+      batchStream.on('end', () => {
+        expect(batches).toEqual([['x', 'y']]);
+        done();
+      });
+
+      batchStream.write('x');
+      batchStream.write('y');
+      batchStream.end();
+    });
+
+    it('flushes remaining binary data on direct end', done => {
+      const batchStream = createBatchStream(10, { objectMode: false });
+      const batches: Buffer[] = [];
+
+      batchStream.on('data', batch => batches.push(batch));
+      batchStream.on('end', () => {
+        expect(batches.map(b => b.toString())).toEqual(['abc']);
+        done();
+      });
+
+      batchStream.write(Buffer.from('abc'));
+      batchStream.end();
     });
 
     it('processes multiple full batches then flushes remainder in binary mode', done => {

@@ -1,4 +1,5 @@
 import {
+  getPaginationParams,
   parseNumberParam,
   parseBooleanParam,
   extractPaginationParams,
@@ -38,6 +39,20 @@ describe('parseNumberParam', () => {
       value: null,
       error: 'Invalid number parameter'
     });
+  });
+
+  it('returns missing-parameter error when undefined with no default', () => {
+    expect(parseNumberParam(undefined)).toEqual({
+      isValid: false,
+      value: null,
+      error: 'Missing parameter with no default'
+    });
+  });
+
+  it('throws custom error for invalid number when throwOnError is true', () => {
+    expect(() => parseNumberParam('abc', { throwOnError: true, errorMessage: 'Bad numeric input' })).toThrow(
+      'Bad numeric input'
+    );
   });
 });
 
@@ -80,6 +95,60 @@ describe('parseBooleanParam', () => {
       error: 'Invalid boolean parameter'
     });
   });
+
+  it('returns missing-parameter error when undefined with no default', () => {
+    expect(parseBooleanParam(undefined)).toEqual({
+      isValid: false,
+      value: null,
+      error: 'Missing parameter with no default'
+    });
+  });
+
+  it('throws custom error for invalid boolean when throwOnError is true', () => {
+    expect(() => parseBooleanParam('nope', { throwOnError: true, errorMessage: 'Bad boolean input' })).toThrow(
+      'Bad boolean input'
+    );
+  });
+});
+
+describe('getPaginationParams', () => {
+  it('extracts pagination/sort/search from request query', () => {
+    const req = {
+      query: {
+        page: '2',
+        limit: '15',
+        sort: '-createdAt',
+        search: 'needle',
+        extra: 'x'
+      }
+    } as any;
+
+    expect(getPaginationParams(req)).toEqual(
+      expect.objectContaining({
+        page: 2,
+        limit: 15,
+        sortBy: 'createdAt',
+        sortOrder: 'desc',
+        search: 'needle',
+        extra: 'x'
+      })
+    );
+  });
+
+  it('uses undefined search when query.search is not a string', () => {
+    const req = {
+      query: {
+        search: ['a', 'b'],
+        sortBy: ['name'],
+        sortOrder: 'asc'
+      }
+    } as any;
+
+    const result = getPaginationParams(req);
+    expect(result.search).toBeUndefined();
+    expect(result.sortBy).toBe('name');
+    expect(result.sortOrder).toBe('asc');
+  });
 });
 
 describe('extractPaginationParams', () => {
@@ -105,6 +174,13 @@ describe('extractPaginationParams', () => {
     expect(extractPaginationParams({ limit: '999' }, 1, 20, 100)).toEqual({
       page: 1,
       limit: 100
+    });
+  });
+
+  it('uses defaults when page/limit are arrays', () => {
+    expect(extractPaginationParams({ page: ['3'], limit: ['10'] })).toEqual({
+      page: 1,
+      limit: 20
     });
   });
 });
@@ -143,6 +219,27 @@ describe('extractSortParams', () => {
   it('falls back to default if field not allowed', () => {
     expect(extractSortParams({ sortBy: 'invalid' }, allowedFields)).toEqual({
       sortBy: 'createdAt',
+      sortOrder: 'desc'
+    });
+  });
+
+  it('parses array sortBy and sort values', () => {
+    expect(extractSortParams({ sortBy: ['updatedAt'], sort: ['-name'] }, allowedFields)).toEqual({
+      sortBy: 'updatedAt',
+      sortOrder: 'desc'
+    });
+  });
+
+  it('ignores invalid explicit sortOrder and keeps inferred order', () => {
+    expect(extractSortParams({ sort: '-name', sortOrder: 'INVALID' as any }, allowedFields)).toEqual({
+      sortBy: 'name',
+      sortOrder: 'desc'
+    });
+  });
+
+  it('keeps unknown field when allowedFields is empty', () => {
+    expect(extractSortParams({ sortBy: 'anyField' }, [])).toEqual({
+      sortBy: 'anyField',
       sortOrder: 'desc'
     });
   });

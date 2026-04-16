@@ -162,6 +162,27 @@ describe('ExpressServer', () => {
       await killServer(server);
     });
 
+    it('should return configured port when server address is not an object', async () => {
+      const server = new ExpressServer({ ...baseConfig, port: 4012 });
+      await server.waitUntilReady();
+
+      (server as any).server = {
+        address: () => 'named-pipe',
+        listening: false
+      };
+
+      expect(server.getPort()).toBe(4012);
+      expect(server.isRunning()).toBe(false);
+    });
+
+    it('should treat null https as enabled in isHttps guard', async () => {
+      const server = new ExpressServer({ ...(baseConfig as any), https: null as any });
+      await server.waitUntilReady();
+
+      expect(server.isHttps()).toBe(true);
+      expect(server.getProtocol()).toBe('http');
+    });
+
     it('should handle HTTPS configuration', async () => {
       const httpsConfig = {
         ...baseConfig,
@@ -199,6 +220,13 @@ describe('ExpressServer', () => {
 
       expect(() => server.setPort(-1)).toThrow('Port must be a valid number between 0 and 65535');
       expect(() => server.setPort(70000)).toThrow('Port must be a valid number between 0 and 65535');
+    });
+
+    it('should throw when setting invalid host', async () => {
+      const server = new ExpressServer(baseConfig);
+      await server.waitUntilReady();
+
+      expect(() => server.setHost('not a valid host')).toThrow('Host must be a valid hostname or IP address');
     });
 
     it('should allow setting host before server starts', async () => {
