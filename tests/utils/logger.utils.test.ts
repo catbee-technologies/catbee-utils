@@ -39,7 +39,34 @@ describe('LoggerUtils', () => {
     delete (loggerUtils._globalThis as any)[Symbol.for('logger')];
   });
 
+  it('exports default sensitive fields as a non-empty array', () => {
+    expect(Array.isArray(loggerUtils.defaultSensitiveFields)).toBe(true);
+    expect(loggerUtils.defaultSensitiveFields.length).toBeGreaterThan(0);
+    expect(loggerUtils.defaultSensitiveFields).toContain('password');
+  });
+
+  it('exposes default redact censor and allows replacing/restoring it', () => {
+    const original = loggerUtils.getRedactCensor();
+    const replacement = jest.fn().mockReturnValue('MASKED');
+
+    try {
+      loggerUtils.setRedactCensor(replacement);
+      expect(loggerUtils.getRedactCensor()).toBe(replacement);
+      expect(loggerUtils.redact('value', ['path'])).toBe('MASKED');
+    } finally {
+      loggerUtils.setRedactCensor(original);
+    }
+  });
+
   describe('getLogger', () => {
+    it('returns a fresh non-global logger when newInstance is true', () => {
+      (ContextStore.get as jest.Mock).mockReturnValue(undefined);
+      const logger = loggerUtils.getLogger(true);
+
+      expect(logger).toBe(mockLogger);
+      expect((loggerUtils._globalThis as any)[Symbol.for('logger')]).toBeUndefined();
+    });
+
     it('returns logger from context if available', () => {
       (ContextStore.get as jest.Mock).mockReturnValue(mockLogger);
       const logger = loggerUtils.getLogger();
@@ -160,6 +187,68 @@ describe('LoggerUtils', () => {
       );
       expect(logger).toBe(mockLogger);
     });
+
+    it('uses multistream transport when pretty and file logging are enabled', () => {
+      const transportMock = jest.fn().mockReturnValue('transported');
+      (pino as any).transport = transportMock;
+
+      setCatbeeGlobalConfig({
+        logger: {
+          pretty: true,
+          dir: 'logs',
+          level: 'info',
+          colorize: true,
+          singleLine: true
+        }
+      });
+
+      loggerUtils.getLogger();
+
+      expect(transportMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          targets: expect.arrayContaining([
+            expect.objectContaining({ target: 'pino-pretty' }),
+            expect.objectContaining({ target: 'pino/file' })
+          ])
+        })
+      );
+    });
+
+    it('uses file-only transport when only logger dir is configured', () => {
+      const transportMock = jest.fn().mockReturnValue('transported');
+      (pino as any).transport = transportMock;
+
+      setCatbeeGlobalConfig({
+        logger: {
+          pretty: false,
+          dir: 'logs'
+        }
+      });
+
+      loggerUtils.getLogger();
+
+      expect(transportMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          target: 'pino/file',
+          options: expect.objectContaining({ destination: 'logs/app.log' })
+        })
+      );
+    });
+
+    it('uses plain pino without transport when pretty and file logging are disabled', () => {
+      (pino as any).transport = jest.fn().mockReturnValue('transported');
+      setCatbeeGlobalConfig({
+        logger: {
+          pretty: false,
+          dir: ''
+        }
+      });
+
+      loggerUtils.getLogger();
+
+      expect((pino as any).transport).not.toHaveBeenCalled();
+      expect(pino).toHaveBeenCalledWith(expect.objectContaining({ level: 'info' }));
+    });
   });
 
   describe('redactCensor', () => {
@@ -204,6 +293,18 @@ describe('LoggerUtils', () => {
       expect(loggerUtils.getRedactCensor()(12345 as any, ['number'])).toBe('***');
       expect(loggerUtils.getRedactCensor()(null as any, ['null'])).toBe('***');
       expect(loggerUtils.getRedactCensor()({ key: 'value' } as any, ['object'])).toBe('***');
+    });
+
+    it('should return original value for non-sensitive custom top-level path', () => {
+      expect(loggerUtils.getRedactCensor()('trace-123', ['meta', 'traceId'])).toBe('trace-123');
+    });
+
+    it('should fallback to "***" when authorization value is empty', () => {
+      expect(loggerUtils.getRedactCensor()('', ['req', 'headers', 'authorization'])).toBe('***');
+    });
+
+    it('should ignore non-string path segments while evaluating redaction', () => {
+      expect(loggerUtils.getRedactCensor()('safe', ['meta', 123 as unknown as string] as string[])).toBe('safe');
     });
 
     describe('setRedactCensor and getRedactCensor', () => {

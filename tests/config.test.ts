@@ -134,4 +134,66 @@ describe('config', () => {
 
     expect(actual).toEqual(expected);
   });
+
+  it('should support getConfig/setConfig aliases', () => {
+    const { getConfig, setConfig } = require('../src/config');
+
+    setConfig({ logger: { level: 'error' } });
+    const cfg = getConfig();
+
+    expect(cfg.logger.level).toBe('error');
+  });
+
+  it('should update and read server config using dedicated helpers', () => {
+    const { setCatbeeServerGlobalConfig, getCatbeeServerGlobalConfig } = require('../src/config');
+
+    setCatbeeServerGlobalConfig({ host: '127.0.0.1', metrics: { enable: true } });
+    const serverCfg = getCatbeeServerGlobalConfig();
+
+    expect(serverCfg.host).toBe('127.0.0.1');
+    expect(serverCfg.metrics.enable).toBe(true);
+  });
+
+  it('should evaluate requestLogging.ignorePaths predicate for skipped and non-skipped routes', () => {
+    const { getCatbeeGlobalConfig } = require('../src/config');
+    const cfg = getCatbeeGlobalConfig();
+
+    expect(cfg.server.requestLogging.ignorePaths({ path: '/healthz/ready' }, {})).toBe(true);
+    expect(cfg.server.requestLogging.ignorePaths({ path: '/api/users' }, {})).toBe(false);
+  });
+
+  it('should build enabled server option objects when env flags are true', () => {
+    jest.resetModules();
+    jest.doMock('../src/env', () =>
+      getEnvMockModule({
+        getBoolean: jest.fn((key: string, fallback: boolean) => {
+          const enabledKeys = new Set([
+            'SERVER_CORS_ENABLE',
+            'SERVER_HELMET_ENABLE',
+            'SERVER_COMPRESSION_ENABLE',
+            'SERVER_COOKIE_PARSER_ENABLE'
+          ]);
+          return enabledKeys.has(key) ? true : fallback;
+        }),
+        get: jest.fn((key: string, fallback: string) => {
+          if (key === 'SERVER_HEALTH_CHECK_PATH') return '/hc';
+          return fallback;
+        }),
+        isDev: jest.fn(() => false),
+        isTest: jest.fn(() => false)
+      })
+    );
+
+    const { getCatbeeGlobalConfig } = require('../src/config');
+    const cfg = getCatbeeGlobalConfig();
+
+    expect(cfg.server.cors).toEqual({});
+    expect(cfg.server.helmet).toEqual({});
+    expect(cfg.server.compression).toEqual({});
+    expect(cfg.server.cookieParser).toEqual({});
+    expect(cfg.server.healthCheck.path).toBe('/hc');
+
+    jest.resetModules();
+    jest.doMock('../src/env', () => getEnvMockModule());
+  });
 });

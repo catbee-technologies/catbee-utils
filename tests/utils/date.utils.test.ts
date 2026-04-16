@@ -140,6 +140,27 @@ describe('date.utils', () => {
       const future = new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000);
       expect(formatRelativeTime(future, now)).toContain('day');
     });
+
+    it('uses default now and supports numeric input', () => {
+      const thirtySecondsAgo = Date.now() - 30 * 1000;
+      expect(formatRelativeTime(thirtySecondsAgo)).toContain('second');
+    });
+
+    it('returns minute/hour/month/year buckets', () => {
+      const now = new Date('2024-01-01T00:00:00Z');
+
+      const minutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
+      expect(formatRelativeTime(minutesAgo, now, 'en-US')).toContain('minute');
+
+      const hoursAgo = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+      expect(formatRelativeTime(hoursAgo, now, 'en-US')).toContain('hour');
+
+      const monthsAgo = new Date(now.getTime() - 70 * 24 * 60 * 60 * 1000);
+      expect(formatRelativeTime(monthsAgo, now, 'en-US')).toContain('month');
+
+      const yearsAgo = new Date(now.getTime() - 400 * 24 * 60 * 60 * 1000);
+      expect(formatRelativeTime(yearsAgo, now, 'en-US')).toContain('year');
+    });
   });
 
   describe('parseDate', () => {
@@ -566,6 +587,25 @@ describe('date.utils', () => {
       const end = new Date('2023-05-20');
       expect(isBetween(date, start, end, false)).toBe(false);
     });
+
+    it('supports numeric timestamps and inclusive boundaries', () => {
+      const start = new Date('2023-05-10').getTime();
+      const end = new Date('2023-05-20').getTime();
+      const boundary = start;
+
+      expect(isBetween(boundary, start, end, true)).toBe(true);
+      expect(isBetween(boundary, start, end, false)).toBe(false);
+    });
+
+    it('handles mixed date/number inputs consistently', () => {
+      const dateNumber = new Date('2023-05-15').getTime();
+      const startDate = new Date('2023-05-10');
+      const endDate = new Date('2023-05-20');
+
+      expect(isBetween(dateNumber, startDate, endDate.getTime(), true)).toBe(true);
+      expect(isBetween(dateNumber, startDate.getTime(), endDate, true)).toBe(true);
+      expect(isBetween(new Date('2023-05-15'), startDate.getTime(), endDate.getTime(), true)).toBe(true);
+    });
   });
 
   describe('isLeapYear', () => {
@@ -819,6 +859,12 @@ describe('date.utils', () => {
       const timestamp = new Date('2024-01-15').getTime();
       const result = addYears(timestamp, 5);
       expect(result).toBeInstanceOf(Date);
+    });
+
+    it('handles zero-year addition and preserves date value', () => {
+      const date = new Date('2024-03-01T12:00:00Z');
+      const result = addYears(date, 0);
+      expect(result.getTime()).toBe(date.getTime());
     });
   });
 

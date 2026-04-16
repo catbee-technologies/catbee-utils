@@ -68,6 +68,34 @@ describe('performance.utils', () => {
       const obj = new TestClass();
       await expect(obj.asyncMethod()).resolves.toBe('async');
     });
+
+    it('supports legacy decorator invocation with descriptor', () => {
+      class LegacyClass {
+        syncMethod() {
+          return 456;
+        }
+      }
+
+      const descriptor = Object.getOwnPropertyDescriptor(LegacyClass.prototype, 'syncMethod')!;
+      timed({ label: 'legacy.syncMethod' })(LegacyClass.prototype, 'syncMethod', descriptor);
+      Object.defineProperty(LegacyClass.prototype, 'syncMethod', descriptor);
+
+      const obj = new LegacyClass();
+      expect(obj.syncMethod()).toBe(456);
+    });
+
+    it('supports context-style invocation without descriptor', () => {
+      class ContextClass {
+        value() {
+          return 'ok';
+        }
+      }
+
+      timed({ label: 'context.value' })(ContextClass.prototype, { name: 'value' } as any);
+
+      const obj = new ContextClass();
+      expect(obj.value()).toBe('ok');
+    });
   });
 
   describe('memoize', () => {
@@ -103,6 +131,31 @@ describe('performance.utils', () => {
       expect(memoryUsage.before).toBeDefined();
       expect(memoryUsage.after).toBeDefined();
       expect(memoryUsage.diff).toBeDefined();
+    });
+
+    it('invokes gc when available and logging is enabled', () => {
+      const originalGc = (globalThis as any).gc;
+      const gcMock = jest.fn();
+      (globalThis as any).gc = gcMock;
+
+      const logger = {
+        info: jest.fn(),
+        error: jest.fn(),
+        debug: jest.fn(),
+        warn: jest.fn(),
+        trace: jest.fn(),
+        child: jest.fn()
+      };
+      (getLogger as jest.Mock).mockReturnValue(logger);
+
+      try {
+        const { result } = trackMemoryUsage(() => 'gc-tested', { log: true, label: 'gc-case' });
+        expect(result).toBe('gc-tested');
+        expect(gcMock).toHaveBeenCalled();
+        expect(logger.info).toHaveBeenCalled();
+      } finally {
+        (globalThis as any).gc = originalGc;
+      }
     });
   });
 
