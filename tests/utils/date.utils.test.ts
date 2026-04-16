@@ -26,7 +26,11 @@ import {
   formatDateInTimeZone,
   isDST,
   getTimezoneAbbreviation,
-  dateDiffDaysTZ
+  dateDiffDaysTZ,
+  COUNTRY_CODES,
+  TIMEZONE_NAMES,
+  getCountries,
+  getTimezones
 } from '../../src/date';
 
 describe('date.utils', () => {
@@ -1077,6 +1081,43 @@ describe('date.utils', () => {
     it('returns UTC for UTC timezone', () => {
       const result = getTimezoneAbbreviation('UTC', new Date('2024-07-15T12:00:00Z'));
       expect(result).toBe('UTC');
+    });
+  });
+
+  describe('getCountries', () => {
+    it('returns countries list with code and localized name', () => {
+      const countries = getCountries('en');
+
+      expect(Array.isArray(countries)).toBe(true);
+      expect(countries.length).toBe(COUNTRY_CODES.length);
+      expect(countries).toContainEqual(expect.objectContaining({ code: 'US', name: expect.any(String) }));
+    });
+
+    it('returns localized country names for different locales', () => {
+      const enCountries = getCountries('en');
+      const frCountries = getCountries('fr');
+
+      const usEn = enCountries.find(c => c.code === 'US')?.name;
+      const usFr = frCountries.find(c => c.code === 'US')?.name;
+
+      expect(usEn).toBeDefined();
+      expect(usFr).toBeDefined();
+      expect(usFr).not.toBe(usEn);
+    });
+  });
+
+  describe('getTimezones', () => {
+    it('returns all supported IANA timezone names', () => {
+      const timezones = getTimezones();
+
+      expect(Array.isArray(timezones)).toBe(true);
+      expect(timezones).toBe(TIMEZONE_NAMES);
+      expect(timezones.length).toBeGreaterThan(0);
+    });
+
+    it('includes UTC in supported timezone names', () => {
+      const timezones = getTimezones();
+      expect(timezones).toContain('UTC');
     });
   });
 });

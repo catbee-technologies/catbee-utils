@@ -1059,3 +1059,91 @@ function getTimeZoneParts(
     second: get('second')
   };
 }
+
+/**
+ * List of ISO 3166-1 alpha-2 country codes for use in timezone utilities.
+ * This list is used to generate country names and filter timezones by country.
+ */
+// prettier-ignore
+export const COUNTRY_CODES = [
+  'AD', 'AE', 'AF', 'AG', 'AI', 'AL', 'AM', 'AO', 'AQ', 'AR', 'AS', 'AT', 'AU', 'AW', 'AX', 'AZ',
+  'BA', 'BB', 'BD', 'BE', 'BF', 'BG', 'BH', 'BI', 'BJ', 'BL', 'BM', 'BN', 'BO', 'BQ', 'BR', 'BS', 'BT', 'BV', 'BW', 'BY', 'BZ',
+  'CA', 'CC', 'CD', 'CF', 'CG', 'CH', 'CI', 'CK', 'CL', 'CM', 'CN', 'CO', 'CR', 'CU', 'CV', 'CW', 'CX', 'CY', 'CZ',
+  'DE', 'DJ', 'DK', 'DM', 'DO', 'DZ',
+  'EC', 'EE', 'EG', 'EH', 'ER', 'ES', 'ET',
+  'FI', 'FJ', 'FK', 'FM', 'FO', 'FR',
+  'GA', 'GB', 'GD', 'GE', 'GF', 'GG', 'GH', 'GI', 'GL', 'GM', 'GN', 'GP', 'GQ', 'GR', 'GS', 'GT', 'GU', 'GW', 'GY',
+  'HK', 'HM', 'HN', 'HR', 'HT', 'HU',
+  'ID', 'IE', 'IL', 'IM', 'IN', 'IO', 'IQ', 'IR', 'IS', 'IT',
+  'JE', 'JM', 'JO', 'JP',
+  'KE', 'KG', 'KH', 'KI', 'KM', 'KN', 'KP', 'KR', 'KW', 'KY', 'KZ',
+  'LA', 'LB', 'LC', 'LI', 'LK', 'LR', 'LS', 'LT', 'LU', 'LV', 'LY',
+  'MA', 'MC', 'MD', 'ME', 'MF', 'MG', 'MH', 'MK', 'ML', 'MM', 'MN', 'MO', 'MP', 'MQ', 'MR', 'MS', 'MT', 'MU', 'MV', 'MW', 'MX', 'MY', 'MZ',
+  'NA', 'NC', 'NE', 'NF', 'NG', 'NI', 'NL', 'NO', 'NP', 'NR', 'NU', 'NZ',
+  'OM',
+  'PA', 'PE', 'PF', 'PG', 'PH', 'PK', 'PL', 'PM', 'PN', 'PR', 'PS', 'PT', 'PW', 'PY',
+  'QA',
+  'RE', 'RO', 'RS', 'RU', 'RW',
+  'SA', 'SB', 'SC', 'SD', 'SE', 'SG', 'SH', 'SI', 'SJ', 'SK', 'SL', 'SM', 'SN', 'SO', 'SR', 'SS', 'ST', 'SV', 'SX', 'SY', 'SZ',
+  'TC', 'TD', 'TF', 'TG', 'TH', 'TJ', 'TK', 'TL', 'TM', 'TN', 'TO', 'TR', 'TT', 'TV', 'TW', 'TZ',
+  'UA', 'UG', 'UM', 'US', 'UY', 'UZ',
+  'VA', 'VC', 'VE', 'VG', 'VI', 'VN', 'VU',
+  'WF', 'WS',
+  'YE', 'YT',
+  'ZA', 'ZM', 'ZW'
+];
+
+type Country = {
+  code: string;
+  name: string;
+};
+
+/**
+ * Get a list of countries with their ISO codes and localized names.
+ * Uses Intl.DisplayNames to get the country names based on the provided locale.
+ *
+ * @param locale - Locale code for country names (default: 'en')
+ * @returns Array of country objects with code and name
+ *
+ * @example
+ * ```typescript
+ * getCountries('en');
+ * // [ { code: 'US', name: 'United States' }, { code: 'DE', name: 'Germany' }, ... ]
+ *
+ * getCountries('fr');
+ * // [ { code: 'US', name: 'États-Unis' }, { code: 'DE', name: 'Allemagne' }, ... ]
+ * ```
+ */
+export function getCountries(locale = 'en'): Country[] {
+  const regionNames = new Intl.DisplayNames([locale], { type: 'region' });
+
+  return COUNTRY_CODES.map<Country>(code => ({
+    code,
+    name: regionNames.of(code) as string
+  }));
+}
+
+const SUPPORTED_TIMEZONE_NAMES = Intl.supportedValuesOf('timeZone');
+
+/**
+ * List of all IANA timezone identifiers supported by the environment.
+ * This can be used to populate dropdowns or validate timezone inputs.
+ */
+export const TIMEZONE_NAMES = SUPPORTED_TIMEZONE_NAMES.includes('UTC')
+  ? SUPPORTED_TIMEZONE_NAMES
+  : [...SUPPORTED_TIMEZONE_NAMES, 'UTC'].sort((a, b) => a.localeCompare(b));
+
+/**
+ * Get a list of all IANA timezone identifiers supported by the environment.
+ * This can be used to populate dropdowns or validate timezone inputs.
+ *
+ * @returns Array of timezone identifiers (e.g., 'America/New_York', 'Europe/Berlin')
+ * @example
+ * ```typescript
+ * getTimezones();
+ * // [ 'Africa/Abidjan', 'Africa/Accra', 'Africa/Addis_Ababa', ... ]
+ * ```
+ */
+export function getTimezones(): string[] {
+  return TIMEZONE_NAMES;
+}
