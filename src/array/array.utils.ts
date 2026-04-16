@@ -87,7 +87,6 @@ export function random<T>(array: readonly T[]): T | undefined {
 
 type StrNumSym = string | number | symbol;
 
-/* eslint-disable no-redeclare */
 /**
  * Groups items in an array by a nested key or key function.
  *
@@ -127,7 +126,6 @@ export function groupBy<T>(
 
   return Object.fromEntries(Object.entries(result).map(([k, v]) => [k, v as readonly T[]]));
 }
-/* eslint-enable no-redeclare */
 
 /**
  * Shuffles an array using the Fisher-Yates algorithm. Uses crypto-secure randomness.
@@ -278,7 +276,6 @@ export function zip<T>(...arrays: ReadonlyArray<T>[]): T[][] {
   return result;
 }
 
-/* eslint-disable no-redeclare */
 /**
  * Splits an array into two arrays based on a predicate function.
  * Supports type-guard narrowing via overload.
@@ -316,7 +313,6 @@ export function partition<T>(
 
   return [pass, fail];
 }
-/* eslint-enable no-redeclare */
 
 /**
  * Generates an array of numbers within a specified range.
