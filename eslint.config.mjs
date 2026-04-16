@@ -21,7 +21,8 @@ export default [
   },
   {
     ...pluginJs.configs.recommended,
-    name: 'plugin-js recommended'
+    name: 'plugin-js recommended',
+    files: ['**/*.{js,mjs,cjs}']
   },
   {
     ...nodePlugin.configs['flat/recommended-module'],
