@@ -5,6 +5,13 @@ import {
   sha1,
   sha256,
   md5,
+  generateKeys,
+  sign,
+  verify,
+  importKey,
+  exportKey,
+  fingerprint,
+  getKeyId,
   randomString,
   generateRandomBytes,
   generateRandomBytesAsString,
@@ -93,6 +100,197 @@ describe('CryptoUtils', () => {
   describe('md5', () => {
     it('produces expected MD5 hash as hex', () => {
       expect(md5('batman')).toBe('ec0e2603172c73a8b644bb9456c1ff6e');
+    });
+  });
+
+  describe('asymmetric crypto helpers', () => {
+    it('uses safe defaults when generateKeys is called without options', async () => {
+      const keys = await generateKeys();
+
+      expect(keys.type).toBe('RSA-PSS');
+      expect(keys.privateKey).toBeUndefined();
+      expect(keys.privateKeyBuffer).toBeUndefined();
+      expect(keys.privateKeyCrypto).toBeUndefined();
+      expect(keys.publicKeyCrypto).toBeUndefined();
+      expect(keys.publicKey).toContain('BEGIN PUBLIC KEY');
+    });
+
+    it('signs and verifies data using generated Ed25519 keys', async () => {
+      const keys = await generateKeys({ type: 'Ed25519', includeCryptoKeys: true });
+
+      expect(keys.privateKeyCrypto).toBeDefined();
+      expect(keys.publicKeyCrypto).toBeDefined();
+
+      const signature = await sign('hello asymmetric crypto', keys.privateKeyCrypto!);
+      const isValid = await verify('hello asymmetric crypto', signature, keys.publicKeyCrypto!);
+
+      expect(typeof signature).toBe('string');
+      expect(isValid).toBe(true);
+    });
+
+    it('signs and verifies binary payloads using hex signatures', async () => {
+      const keys = await generateKeys({ type: 'Ed25519', includeCryptoKeys: true });
+      const payload = Buffer.from('binary-payload');
+      const signature = await sign(payload, keys.privateKeyCrypto!, { outputEncoding: 'hex' });
+
+      expect(signature).toMatch(/^[0-9a-f]+$/i);
+
+      const signatureBuffer = Buffer.from(signature, 'hex');
+      await expect(verify(payload, signatureBuffer, keys.publicKeyCrypto!)).resolves.toBe(true);
+    });
+
+    it('exports and imports a public key as JWK', async () => {
+      const keys = await generateKeys({ type: 'Ed25519', includeCryptoKeys: true });
+      const jwk = await exportKey(keys.publicKeyCrypto!, 'jwk');
+      const importedPublicKey = await importKey(jwk, { type: 'Ed25519', usages: ['verify'] });
+      const signature = await sign('jwk-roundtrip', keys.privateKeyCrypto!);
+
+      await expect(verify('jwk-roundtrip', signature, importedPublicKey)).resolves.toBe(true);
+    });
+
+    it('exports and imports a public key as PEM', async () => {
+      const keys = await generateKeys({ type: 'RSA-PSS', includeCryptoKeys: true });
+      const pem = await exportKey(keys.publicKeyCrypto!, 'pem');
+      const importedPublicKey = await importKey(pem, { type: 'RSA-PSS', usages: ['verify'] });
+      const signature = await sign('pem-roundtrip', keys.privateKeyCrypto!);
+
+      await expect(verify('pem-roundtrip', signature, importedPublicKey)).resolves.toBe(true);
+    });
+
+    it('creates a stable fingerprint for the same public key', async () => {
+      const keys = await generateKeys({ type: 'Ed25519', includeCryptoKeys: true });
+      const fingerprintA = await fingerprint(keys.publicKeyCrypto!);
+      const fingerprintB = await fingerprint(keys.publicKeyCrypto!);
+
+      expect(fingerprintA).toBe(fingerprintB);
+      expect(typeof fingerprintA).toBe('string');
+      expect(fingerprintA.length).toBeGreaterThan(10);
+    });
+
+    it('generates key id from a public key', async () => {
+      const keys = await generateKeys({ type: 'Ed25519', includeCryptoKeys: true });
+      const keyId = await getKeyId(keys.publicKeyCrypto!);
+
+      expect(typeof keyId).toBe('string');
+      expect(keyId.length).toBeGreaterThan(10);
+    });
+
+    it('throws if fingerprint is called with a private key', async () => {
+      const keys = await generateKeys({ type: 'Ed25519', includeCryptoKeys: true });
+      await expect(fingerprint(keys.privateKeyCrypto as CryptoKey)).rejects.toThrow(
+        'fingerprint requires a public key'
+      );
+    });
+
+    it('throws for unsupported generateKeys type', async () => {
+      await expect(generateKeys({ type: 'UNKNOWN' as any })).rejects.toThrow('Unsupported key type: UNKNOWN');
+    });
+
+    it('throws for invalid RSA modulus length', async () => {
+      await expect(generateKeys({ type: 'RSA', modulusLength: 1024 })).rejects.toThrow(
+        'RSA modulusLength must be an integer greater than or equal to 2048'
+      );
+      await expect(generateKeys({ type: 'RSA-PSS', modulusLength: 1024 })).rejects.toThrow(
+        'RSA-PSS modulusLength must be an integer greater than or equal to 2048'
+      );
+    });
+
+    it('signs and verifies using ECDSA defaults', async () => {
+      const keys = await generateKeys({ type: 'ECDSA', includeCryptoKeys: true });
+      const signature = await sign('ecdsa-default', keys.privateKeyCrypto!);
+      await expect(verify('ecdsa-default', signature, keys.publicKeyCrypto!)).resolves.toBe(true);
+    });
+
+    it('throws when PEM import is missing explicit type', async () => {
+      const keys = await generateKeys({ type: 'RSA-PSS', includeCryptoKeys: true });
+      const pem = (await exportKey(keys.publicKeyCrypto!, 'pem')) as string;
+
+      await expect(importKey(pem)).rejects.toThrow('Key type is required when importing PEM keys');
+    });
+
+    it('throws for invalid PEM blocks', async () => {
+      await expect(importKey('not-a-pem', { type: 'RSA-PSS' })).rejects.toThrow(
+        'Unsupported PEM format. Expected PUBLIC KEY or PRIVATE KEY PEM block'
+      );
+    });
+
+    it('exports private key PEM without prefix/suffix and re-imports for signing', async () => {
+      const keys = await generateKeys({ type: 'RSA-PSS', extractable: true, includeCryptoKeys: true });
+      const privatePem = (await exportKey(keys.privateKeyCrypto!, 'pem', {
+        formatPemLines: false,
+        addPrefixSuffix: false
+      })) as string;
+
+      expect(privatePem).not.toContain('BEGIN PRIVATE KEY');
+      expect(privatePem).not.toContain('\n');
+
+      const fullPrivatePem = `-----BEGIN PRIVATE KEY-----\n${privatePem}\n-----END PRIVATE KEY-----`;
+      const importedPrivate = await importKey(fullPrivatePem, { type: 'RSA-PSS' });
+      const signature = await sign('private-pem-import', importedPrivate);
+
+      await expect(verify('private-pem-import', signature, keys.publicKeyCrypto!)).resolves.toBe(true);
+    });
+
+    it('imports JWK without explicit type by inferring RSA and verifies signature', async () => {
+      const keys = await generateKeys({ type: 'RSA', includeCryptoKeys: true });
+      const jwk = (await exportKey(keys.publicKeyCrypto!, 'jwk')) as JsonWebKey;
+      const importedPublic = await importKey(jwk);
+      const signature = await sign('infer-rsa-jwk', keys.privateKeyCrypto!);
+
+      await expect(verify('infer-rsa-jwk', signature, importedPublic)).resolves.toBe(true);
+    });
+
+    it('imports JWK without explicit type by inferring ECDSA and verifies signature', async () => {
+      const keys = await generateKeys({ type: 'ECDSA', includeCryptoKeys: true });
+      const jwk = (await exportKey(keys.publicKeyCrypto!, 'jwk')) as JsonWebKey;
+      const importedPublic = await importKey(jwk);
+      const signature = await sign('infer-ec-jwk', keys.privateKeyCrypto!);
+
+      await expect(verify('infer-ec-jwk', signature, importedPublic)).resolves.toBe(true);
+    });
+
+    it('infers RSA-PSS from JWK alg and verifies signature', async () => {
+      const keys = await generateKeys({ type: 'RSA-PSS', includeCryptoKeys: true });
+      const jwk = (await exportKey(keys.publicKeyCrypto!, 'jwk')) as JsonWebKey;
+      jwk.alg = 'PS256';
+      const importedPublic = await importKey(jwk);
+      const signature = await sign('infer-rsa-pss-jwk', keys.privateKeyCrypto!);
+
+      await expect(verify('infer-rsa-pss-jwk', signature, importedPublic)).resolves.toBe(true);
+    });
+
+    it('imports private JWK without usages and defaults to sign', async () => {
+      const keys = await generateKeys({ type: 'Ed25519', extractable: true, includeCryptoKeys: true });
+      const privateJwk = (await exportKey(keys.privateKeyCrypto!, 'jwk')) as JsonWebKey;
+      const importedPrivate = await importKey(privateJwk);
+
+      const signature = await sign('private-jwk-default-sign', importedPrivate);
+      await expect(verify('private-jwk-default-sign', signature, keys.publicKeyCrypto!)).resolves.toBe(true);
+    });
+
+    it('throws when key_ops is present but does not include sign/verify', async () => {
+      const keys = await generateKeys({ type: 'Ed25519', extractable: true, includeCryptoKeys: true });
+      const privateJwk = (await exportKey(keys.privateKeyCrypto!, 'jwk')) as JsonWebKey;
+      privateJwk.key_ops = ['encrypt' as any];
+
+      await expect(importKey(privateJwk)).rejects.toThrow(
+        'JWK key_ops must include at least one of sign or verify when provided'
+      );
+    });
+
+    it('throws when JWK type cannot be inferred', async () => {
+      await expect(importKey({} as JsonWebKey)).rejects.toThrow(
+        'Unable to infer key type from JWK. Provide import options with an explicit type'
+      );
+    });
+
+    it('throws for unsupported signing algorithm object', async () => {
+      const fakeKey = {
+        algorithm: { name: 'FAKE' },
+        type: 'private'
+      } as unknown as CryptoKey;
+
+      await expect(sign('payload', fakeKey)).rejects.toThrow('Unsupported signing key algorithm: FAKE');
     });
   });
 

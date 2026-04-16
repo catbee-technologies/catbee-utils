@@ -7,7 +7,8 @@ import {
   createDecipheriv,
   scrypt,
   timingSafeEqual,
-  pbkdf2
+  pbkdf2,
+  webcrypto as nodeWebcrypto
 } from 'node:crypto';
 import type { CipherGCMTypes } from 'node:crypto';
 import { promisify } from 'node:util';
@@ -98,6 +99,620 @@ export function sha256(input: string, encoding: BinaryToTextEncoding = 'hex'): s
  */
 export function md5(input: string): string {
   return hash('md5', input);
+}
+
+/**
+ * Supported asymmetric key types for generation.
+ *
+ * - `RSA`       → RSASSA-PKCS1-v1_5 (legacy compatibility)
+ * - `RSA-PSS`   → Recommended RSA variant with modern padding
+ * - `ECDSA`     → Elliptic Curve (fast, smaller keys)
+ * - `Ed25519`   → Modern, simple, highly secure (recommended)
+ */
+export type EncKeyType = 'RSA' | 'RSA-PSS' | 'ECDSA' | 'Ed25519';
+
+/**
+ * Options to configure key pair generation.
+ */
+export interface GenerateKeyOptions {
+  /**
+   * Type of key algorithm to generate.
+   * @default 'RSA-PSS'
+   */
+  type?: EncKeyType;
+
+  /**
+   * RSA modulus length in bits.
+   * Recommended: 2048 or 3072 (4096 for high security).
+   * @default 2048
+   */
+  modulusLength?: number;
+
+  /**
+   * Hash algorithm used for signing.
+   *
+   * ⚠️ For ECDSA, hash is used during sign/verify, not key generation.
+   * @default 'SHA-256'
+   */
+  hash?: 'SHA-256' | 'SHA-384' | 'SHA-512';
+
+  /**
+   * Named curve for ECDSA keys.
+   * @default 'P-256'
+   */
+  namedCurve?: 'P-256' | 'P-384' | 'P-521';
+
+  /**
+   * Whether the private key can be exported.
+   *
+   * ⚠️ Set to `false` in production if you don't need to export keys.
+   * @default false
+   */
+  extractable?: boolean;
+
+  /**
+   * Whether to include generated CryptoKey objects in the result.
+   *
+   * Useful when private key export is disabled (`extractable: false`) but
+   * you still want to sign/verify with the in-memory keys.
+   * @default false
+   */
+  includeCryptoKeys?: boolean;
+
+  /**
+   * Whether to format Base64 output into 64-character lines (PEM style).
+   * @default true
+   */
+  formatPemLines?: boolean;
+
+  /**
+   * Whether to include PEM prefix/suffix headers.
+   *
+   * Example:
+   * -----BEGIN PRIVATE KEY-----
+   * -----END PRIVATE KEY-----
+   *
+   * @default true
+   */
+  addPrefixSuffix?: boolean;
+}
+
+/**
+ * Result object returned from {@link generateKeys}
+ */
+export interface GenerateKeyResult {
+  /** Algorithm type used */
+  type: EncKeyType;
+
+  /** PEM or Base64 encoded private key (only when extractable is true) */
+  privateKey?: string;
+
+  /** PEM or Base64 encoded public key */
+  publicKey: string;
+
+  /** Raw PKCS8 private key buffer (only when extractable is true) */
+  privateKeyBuffer?: ArrayBuffer;
+
+  /** Raw SPKI public key buffer */
+  publicKeyBuffer: ArrayBuffer;
+
+  /** Optional generated private CryptoKey */
+  privateKeyCrypto?: CryptoKey;
+
+  /** Optional generated public CryptoKey */
+  publicKeyCrypto?: CryptoKey;
+}
+
+export type SupportedAlgorithm = RsaHashedKeyGenParams | EcKeyGenParams | { name: 'Ed25519' };
+
+export type SignatureEncoding = 'base64' | 'base64url' | 'hex';
+
+export interface SignatureOptions {
+  /**
+   * Hash algorithm used for ECDSA signatures.
+   *
+   * ⚠️ For ECDSA, hash is used during sign/verify, not key generation.
+   * @default 'SHA-256'
+   */
+  hash?: 'SHA-256' | 'SHA-384' | 'SHA-512';
+
+  /**
+   * Salt length for RSA-PSS signatures.
+   * Defaults to the digest length of the configured hash.
+   */
+  saltLength?: number;
+
+  /**
+   * Output encoding for generated signatures.
+   * @default 'base64url'
+   */
+  outputEncoding?: SignatureEncoding;
+
+  /**
+   * Input encoding when the payload is a string.
+   * @default 'utf8'
+   */
+  inputEncoding?: BufferEncoding;
+}
+
+export interface VerifyOptions extends Omit<SignatureOptions, 'outputEncoding'> {
+  /**
+   * Encoding of the provided signature when it is a string.
+   * @default 'base64url'
+   */
+  signatureEncoding?: SignatureEncoding;
+}
+
+export interface ImportKeyOptions {
+  /**
+   * Explicit key type. Required for PEM import when the algorithm cannot be inferred.
+   */
+  type?: EncKeyType;
+
+  /**
+   * Hash algorithm used with RSA and ECDSA operations.
+   *
+   * ⚠️ For ECDSA, hash is used during sign/verify, not key generation.
+   * @default 'SHA-256'
+   */
+  hash?: 'SHA-256' | 'SHA-384' | 'SHA-512';
+
+  /**
+   * Named curve for ECDSA keys.
+   * @default 'P-256'
+   */
+  namedCurve?: 'P-256' | 'P-384' | 'P-521';
+
+  /**
+   * Whether the imported key can be exported.
+   * @default false
+   */
+  extractable?: boolean;
+
+  /**
+   * Allowed operations for the imported key.
+   * Defaults to `['sign']` for private keys and `['verify']` for public keys.
+   */
+  usages?: Array<'sign' | 'verify'>;
+}
+
+export interface ExportKeyOptions {
+  /**
+   * Whether to format Base64 output into 64-character lines (PEM style).
+   * @default true
+   */
+  formatPemLines?: boolean;
+
+  /**
+   * Whether to include PEM prefix/suffix headers.
+   * @default true
+   */
+  addPrefixSuffix?: boolean;
+}
+
+interface ResolveKeyAlgorithmOptions extends ImportKeyOptions {
+  modulusLength?: number;
+}
+
+const DEFAULT_SIGNATURE_ENCODING: SignatureEncoding = 'base64url';
+const subtle: SubtleCrypto = globalThis.crypto?.subtle ?? nodeWebcrypto.subtle;
+
+function getDigestLength(hash: NonNullable<GenerateKeyOptions['hash']>): number {
+  switch (hash) {
+    case 'SHA-256':
+      return 32;
+    case 'SHA-384':
+      return 48;
+    case 'SHA-512':
+      return 64;
+    default:
+      return 32;
+  }
+}
+
+function resolveKeyAlgorithm({
+  type = 'RSA-PSS',
+  modulusLength = 2048,
+  hash = 'SHA-256',
+  namedCurve = 'P-256'
+}: ResolveKeyAlgorithmOptions): SupportedAlgorithm {
+  switch (type) {
+    case 'RSA':
+      if (!Number.isInteger(modulusLength) || modulusLength < 2048) {
+        throw new Error('RSA modulusLength must be an integer greater than or equal to 2048');
+      }
+      return {
+        name: 'RSASSA-PKCS1-v1_5',
+        modulusLength,
+        publicExponent: new Uint8Array([1, 0, 1]),
+        hash
+      };
+
+    case 'RSA-PSS':
+      if (!Number.isInteger(modulusLength) || modulusLength < 2048) {
+        throw new Error('RSA-PSS modulusLength must be an integer greater than or equal to 2048');
+      }
+      return {
+        name: 'RSA-PSS',
+        modulusLength,
+        publicExponent: new Uint8Array([1, 0, 1]),
+        hash
+      };
+
+    case 'ECDSA':
+      return {
+        name: 'ECDSA',
+        namedCurve
+      };
+
+    case 'Ed25519':
+      return {
+        name: 'Ed25519'
+      };
+
+    default:
+      throw new Error(`Unsupported key type: ${type}. Supported types: RSA, RSA-PSS, ECDSA, Ed25519`);
+  }
+}
+
+function toBase64(buffer: ArrayBuffer): string {
+  if (typeof Buffer !== 'undefined') {
+    return Buffer.from(buffer).toString('base64');
+  }
+
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+
+  return btoa(binary);
+}
+
+function toPEM(base64: string, type: string, formatPemLines: boolean, addPrefixSuffix: boolean): string {
+  const formattedBase64 = formatPemLines ? (base64.match(/.{1,64}/g)?.join('\n') ?? base64) : base64;
+
+  if (!addPrefixSuffix) {
+    return formattedBase64;
+  }
+
+  const prefix = `-----BEGIN ${type}-----`;
+  const suffix = `-----END ${type}-----`;
+
+  return `${prefix}\n${formattedBase64}\n${suffix}`;
+}
+
+function fromPEM(pem: string): { format: 'pkcs8' | 'spki'; binary: ArrayBuffer } {
+  const trimmedPem = pem.trim();
+  const format = trimmedPem.includes('BEGIN PRIVATE KEY')
+    ? 'pkcs8'
+    : trimmedPem.includes('BEGIN PUBLIC KEY')
+      ? 'spki'
+      : undefined;
+
+  if (!format) {
+    throw new Error('Unsupported PEM format. Expected PUBLIC KEY or PRIVATE KEY PEM block');
+  }
+
+  const base64 = trimmedPem
+    .replace(/-----BEGIN [A-Z ]+-----/g, '')
+    .replace(/-----END [A-Z ]+-----/g, '')
+    .replace(/\s+/g, '');
+  return {
+    format,
+    binary: toArrayBuffer(Buffer.from(base64, 'base64'))
+  };
+}
+
+function toBinary(data: string | Buffer | Uint8Array, encoding: BufferEncoding = 'utf8'): Uint8Array {
+  if (typeof data === 'string') {
+    return Uint8Array.from(Buffer.from(data, encoding));
+  }
+
+  if (Buffer.isBuffer(data)) {
+    return Uint8Array.from(data);
+  }
+
+  return data;
+}
+
+function toArrayBuffer(data: Uint8Array | Buffer): ArrayBuffer {
+  const byteView = data instanceof Uint8Array ? data : Uint8Array.from(data);
+  const copy = new Uint8Array(byteView.byteLength);
+  copy.set(byteView);
+  return copy.buffer;
+}
+
+function inferKeyTypeFromJwk(jwk: JsonWebKey, fallback?: EncKeyType): EncKeyType {
+  if (fallback) {
+    return fallback;
+  }
+
+  const keyType = typeof jwk.kty === 'string' ? jwk.kty : undefined;
+  const curve = typeof jwk.crv === 'string' ? jwk.crv : undefined;
+  const algorithm = typeof jwk.alg === 'string' ? jwk.alg : undefined;
+
+  if (keyType === 'OKP' && curve === 'Ed25519') {
+    return 'Ed25519';
+  }
+
+  if (keyType === 'EC') {
+    return 'ECDSA';
+  }
+
+  if (keyType === 'RSA') {
+    return algorithm?.startsWith('PS') ? 'RSA-PSS' : 'RSA';
+  }
+
+  throw new Error('Unable to infer key type from JWK. Provide import options with an explicit type');
+}
+
+function resolveDefaultUsages(format: 'pkcs8' | 'spki', usages?: Array<'sign' | 'verify'>): Array<'sign' | 'verify'> {
+  return usages ?? (format === 'pkcs8' ? ['sign'] : ['verify']);
+}
+
+function inferJwkUsages(jwk: JsonWebKey, usages?: Array<'sign' | 'verify'>): Array<'sign' | 'verify'> {
+  if (usages) {
+    return usages;
+  }
+
+  if (Array.isArray(jwk.key_ops)) {
+    const inferredFromKeyOps = jwk.key_ops.filter(
+      (usage): usage is 'sign' | 'verify' => usage === 'sign' || usage === 'verify'
+    );
+
+    if (inferredFromKeyOps.length === 0) {
+      throw new Error('JWK key_ops must include at least one of sign or verify when provided');
+    }
+
+    return inferredFromKeyOps;
+  }
+
+  // Private JWKs include `d`; public-only JWKs do not.
+  if (typeof jwk.d === 'string' && jwk.d.length > 0) {
+    return ['sign'];
+  }
+
+  return ['verify'];
+}
+
+function resolveSignAlgorithm(
+  key: CryptoKey,
+  options: SignatureOptions = {}
+): AlgorithmIdentifier | RsaPssParams | EcdsaParams {
+  const hash = options.hash ?? 'SHA-256';
+
+  switch (key.algorithm.name) {
+    case 'RSASSA-PKCS1-v1_5':
+      return 'RSASSA-PKCS1-v1_5';
+    case 'RSA-PSS': {
+      const keyAlgorithm = key.algorithm as RsaHashedKeyAlgorithm;
+      const pssHash = (options.hash ?? keyAlgorithm.hash.name) as NonNullable<GenerateKeyOptions['hash']>;
+      return {
+        name: 'RSA-PSS',
+        saltLength: options.saltLength ?? getDigestLength(pssHash)
+      };
+    }
+    case 'ECDSA':
+      return {
+        name: 'ECDSA',
+        hash
+      };
+    case 'Ed25519':
+      return 'Ed25519';
+    default:
+      throw new Error(`Unsupported signing key algorithm: ${key.algorithm.name}`);
+  }
+}
+
+function arrayBufferToBuffer(buffer: ArrayBuffer): Buffer {
+  return Buffer.from(buffer);
+}
+
+/**
+ * Generates an asymmetric cryptographic key pair using Web Crypto API.
+ *
+ * Supports RSA, RSA-PSS, ECDSA, and Ed25519.
+ *
+ * @param options - Configuration for key generation
+ *
+ * @returns Promise resolving to generated key pair (PEM + raw buffers)
+ *
+ * @example
+ * ```ts
+ * const keys = await generateKeys({
+ *   type: 'RSA-PSS',
+ *   modulusLength: 2048
+ * });
+ *
+ * console.log(keys.publicKey);
+ * ```
+ *
+ * @example
+ * ```ts
+ * const keys = await generateKeys({
+ *   type: 'Ed25519',
+ *   extractable: false
+ * });
+ * ```
+ *
+ * @remarks
+ * - Uses `crypto.subtle.generateKey`
+ * - Private key is exported in PKCS#8 format
+ * - Public key is exported in SPKI format
+ * - Ed25519 requires modern runtime support (Node 18+, modern browsers)
+ *
+ * ⚠️ Security Notes:
+ * - Avoid logging private keys in production
+ * - Prefer `extractable: false` when possible
+ * - Store keys securely (e.g., KMS, HSM)
+ */
+export async function generateKeys(options: GenerateKeyOptions = {}): Promise<GenerateKeyResult> {
+  const {
+    type = 'RSA-PSS',
+    modulusLength = 2048,
+    hash = 'SHA-256',
+    namedCurve = 'P-256',
+    extractable = false,
+    includeCryptoKeys = false,
+    formatPemLines = true,
+    addPrefixSuffix = true
+  } = options;
+
+  const algorithm = resolveKeyAlgorithm({ type, modulusLength, hash, namedCurve });
+  const usages: KeyUsage[] = ['sign', 'verify'];
+
+  /**
+   * Generate key pair using Web Crypto API.
+   */
+  const keyPair = (await subtle.generateKey(algorithm, extractable, usages)) as CryptoKeyPair;
+
+  /**
+   * Export keys:
+   * - Private → PKCS#8
+   * - Public  → SPKI
+   */
+  const [publicKeyBuf, privateKeyBuf] = await Promise.all([
+    subtle.exportKey('spki', keyPair.publicKey),
+    extractable ? subtle.exportKey('pkcs8', keyPair.privateKey) : Promise.resolve(undefined)
+  ]);
+
+  const publicKeyBase64 = toBase64(publicKeyBuf);
+  const privateKeyBase64 = privateKeyBuf ? toBase64(privateKeyBuf) : undefined;
+
+  const result: GenerateKeyResult = {
+    type,
+    publicKey: toPEM(publicKeyBase64, 'PUBLIC KEY', formatPemLines, addPrefixSuffix),
+    publicKeyBuffer: publicKeyBuf
+  };
+
+  if (privateKeyBase64 && privateKeyBuf) {
+    result.privateKey = toPEM(privateKeyBase64, 'PRIVATE KEY', formatPemLines, addPrefixSuffix);
+    result.privateKeyBuffer = privateKeyBuf;
+  }
+
+  if (includeCryptoKeys) {
+    result.privateKeyCrypto = keyPair.privateKey;
+    result.publicKeyCrypto = keyPair.publicKey;
+  }
+
+  return result;
+}
+
+/**
+ * Signs data with a private key generated or imported through Web Crypto.
+ * ⚠️ ECDSA signatures are DER-encoded.
+ * Some systems (e.g., JWT ES256, blockchain) require raw (r || s) format.
+ * Conversion may be required depending on the consumer.
+ */
+export async function sign(
+  data: string | Buffer | Uint8Array,
+  privateKeyCrypto: CryptoKey,
+  options: SignatureOptions = {}
+): Promise<string> {
+  const algorithm = resolveSignAlgorithm(privateKeyCrypto, options);
+  const signature = await subtle.sign(
+    algorithm,
+    privateKeyCrypto,
+    toArrayBuffer(toBinary(data, options.inputEncoding))
+  );
+  return arrayBufferToBuffer(signature).toString(options.outputEncoding ?? DEFAULT_SIGNATURE_ENCODING);
+}
+
+/**
+ * Verifies a signature with a public key generated or imported through Web Crypto.
+ */
+export async function verify(
+  data: string | Buffer | Uint8Array,
+  signature: string | Buffer | Uint8Array,
+  publicKeyCrypto: CryptoKey,
+  options: VerifyOptions = {}
+): Promise<boolean> {
+  const algorithm = resolveSignAlgorithm(publicKeyCrypto, options);
+  const signatureBytes =
+    typeof signature === 'string'
+      ? Uint8Array.from(Buffer.from(signature, options.signatureEncoding ?? DEFAULT_SIGNATURE_ENCODING))
+      : toBinary(signature);
+
+  return subtle.verify(
+    algorithm,
+    publicKeyCrypto,
+    toArrayBuffer(signatureBytes),
+    toArrayBuffer(toBinary(data, options.inputEncoding))
+  );
+}
+
+/**
+ * Imports a PEM or JWK asymmetric key into Web Crypto.
+ */
+export async function importKey(key: string | JsonWebKey, options: ImportKeyOptions = {}): Promise<CryptoKey> {
+  const extractable = options.extractable ?? false;
+
+  if (typeof key === 'string') {
+    if (!options.type) {
+      throw new Error('Key type is required when importing PEM keys');
+    }
+
+    const { format, binary } = fromPEM(key);
+    const algorithm = resolveKeyAlgorithm({
+      type: options.type,
+      hash: options.hash,
+      namedCurve: options.namedCurve
+    });
+
+    return subtle.importKey(format, binary, algorithm, extractable, resolveDefaultUsages(format, options.usages));
+  }
+
+  const keyType = inferKeyTypeFromJwk(key, options.type);
+  const algorithm = resolveKeyAlgorithm({
+    type: keyType,
+    hash: options.hash,
+    namedCurve: options.namedCurve
+  });
+  return subtle.importKey('jwk', key, algorithm, extractable, inferJwkUsages(key, options.usages));
+}
+
+/**
+ * Exports an asymmetric CryptoKey as JWK or PEM.
+ */
+export async function exportKey(
+  key: CryptoKey,
+  format: 'jwk' | 'pem' = 'jwk',
+  options: ExportKeyOptions = {}
+): Promise<JsonWebKey | string> {
+  if (format === 'jwk') {
+    return subtle.exportKey('jwk', key);
+  }
+
+  const binary = key.type === 'private' ? await subtle.exportKey('pkcs8', key) : await subtle.exportKey('spki', key);
+
+  return toPEM(
+    toBase64(binary),
+    key.type === 'private' ? 'PRIVATE KEY' : 'PUBLIC KEY',
+    options.formatPemLines ?? true,
+    options.addPrefixSuffix ?? true
+  );
+}
+
+/**
+ * Produces a stable SHA-256 fingerprint for a public key.
+ */
+export async function fingerprint(publicKey: CryptoKey, encoding: SignatureEncoding = 'base64url'): Promise<string> {
+  if (publicKey.type !== 'public') {
+    throw new Error('fingerprint requires a public key');
+  }
+
+  const spki = await subtle.exportKey('spki', publicKey);
+  return createHash('sha256').update(arrayBufferToBuffer(spki)).digest(encoding);
+}
+
+/**
+ * Generates a unique identifier for a public key by computing its fingerprint.
+ */
+export async function getKeyId(publicKey: CryptoKey): Promise<string> {
+  return fingerprint(publicKey, 'base64url');
 }
 
 /**
