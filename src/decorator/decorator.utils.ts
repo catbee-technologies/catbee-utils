@@ -28,7 +28,7 @@ const LOG_KEY = Symbol('log');
 /**
  * Supported HTTP methods for route decorators
  */
-export type HttpMethod = 'get' | 'post' | 'put' | 'patch' | 'delete' | 'options' | 'head' | 'trace' | 'connect';
+export type HttpMethods = 'get' | 'post' | 'put' | 'patch' | 'delete' | 'options' | 'head' | 'trace' | 'connect';
 
 /**
  * Represents a route definition for controller methods
@@ -37,7 +37,7 @@ export interface RouteDefinition {
   /** The URL path for this route */
   path: string;
   /** HTTP method for this route */
-  method: HttpMethod;
+  method: HttpMethods;
   /** Name of the handler method in the controller class */
   handlerName: string;
 }
@@ -316,7 +316,7 @@ export function inject<T>(targetClass: new (...args: any[]) => T): T {
  * @param method - HTTP method to create decorator for
  * @returns A method decorator function
  */
-function createRouteDecorator(method: HttpMethod) {
+function createRouteDecorator(method: HttpMethods) {
   return (path: string): MethodDecorator => {
     return (target, propertyKey, _descriptor) => {
       const routes: RouteDefinition[] = Reflect.getMetadata(ROUTES_KEY, (target as object).constructor) || [];

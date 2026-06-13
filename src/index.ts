@@ -14,6 +14,7 @@ export * from './directory';
 export * from './env';
 export * from './exception';
 export * from './fs';
+export * from './http';
 export * from './http-status-codes';
 export * from './id';
 export * from './logger';
