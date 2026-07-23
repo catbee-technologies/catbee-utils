@@ -1031,8 +1031,20 @@ export function generateNonce(byteLength: number = 16, encoding: BinaryToTextEnc
  * const random = secureRandomInt(1, 100); // Random number 1-100
  */
 export function secureRandomInt(min: number, max: number): number {
-  if (min > max) throw new Error('min must be less than or equal to max');
+  if (!Number.isSafeInteger(min) || !Number.isSafeInteger(max)) {
+    throw new TypeError('min and max must be safe integers');
+  }
+
+  if (min > max) {
+    throw new RangeError('min must be less than or equal to max');
+  }
+
   const range = max - min + 1;
+
+  if (!Number.isSafeInteger(range) || range <= 0) {
+    throw new RangeError('Range is too large');
+  }
+
   const bytesNeeded = Math.ceil(Math.log2(range) / 8);
   const maxValid = Math.floor(256 ** bytesNeeded / range) * range;
 
