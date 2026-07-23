@@ -12,6 +12,7 @@ export * from './date';
 export * from './decorator';
 export * from './directory';
 export * from './env';
+export * from './error';
 export * from './exception';
 export * from './fs';
 export * from './http-status-codes';
