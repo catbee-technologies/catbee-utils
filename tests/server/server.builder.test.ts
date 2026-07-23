@@ -129,20 +129,6 @@ describe('ServerConfigBuilder', () => {
     expect(disabled.requestLogging?.enable).toBe(false);
   });
 
-  it('should configure metrics', () => {
-    const config = new ServerConfigBuilder().withMetrics({ path: '/metrics' }).disableOpenApi().build();
-    expect(config.metrics?.path).toBe('/metrics');
-  });
-
-  it('should enable and disable metrics', () => {
-    const enabled = new ServerConfigBuilder().enableMetrics({ path: '/m' }).disableOpenApi().build();
-    expect(enabled.metrics?.enable).toBe(true);
-    expect(enabled.metrics?.path).toBe('/m');
-
-    const disabled = new ServerConfigBuilder().disableMetrics().disableOpenApi().build();
-    expect(disabled.metrics?.enable).toBe(false);
-  });
-
   it('should configure health check', () => {
     const config = new ServerConfigBuilder()
       .withHealthCheck({ path: '/health', detailed: true })

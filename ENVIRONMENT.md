@@ -45,9 +45,6 @@
 | `SERVER_RESPONSE_TIME_LOG_ON_COMPLETE`         | `boolean`  | `false`                                      | Log response time on complete                                      |
 | `SERVER_REQUEST_ID_HEADER_NAME`                | `string`   | `x-request-id`                               | Request ID header name                                             |
 | `SERVER_REQUEST_ID_EXPOSE_HEADER`              | `boolean`  | `true`                                       | Expose request ID header                                           |
-| `SERVER_METRICS_ENABLE`                        | `boolean`  | `false`                                      | Enable Prometheus metrics                                          |
-| `SERVER_METRICS_PATH`                          | `string`   | `/metrics`                                   | Metrics endpoint path                                              |
-| `SERVER_METRICS_WITH_GLOBAL_PREFIX`            | `boolean`  | `false`                                      | Prefix metrics route                                               |
 | `SERVER_SERVICE_VERSION_ENABLE`                | `boolean`  | `false`                                      | Enable service version header                                      |
 | `SERVER_SERVICE_VERSION_HEADER_NAME`           | `string`   | `x-service-version`                          | Service version header name                                        |
 | `SERVER_SERVICE_VERSION`                       | `string`   | `${npm_package_version}` or `0.0.0`          | Service version value                                              |

@@ -114,11 +114,6 @@ describe('config', () => {
           headerName: 'x-request-id',
           exposeHeader: false
         },
-        metrics: {
-          enable: false,
-          path: '/metrics',
-          withGlobalPrefix: false
-        },
         serviceVersion: {
           enable: false,
           headerName: 'x-service-version',
@@ -151,7 +146,6 @@ describe('config', () => {
     const serverCfg = getCatbeeServerGlobalConfig();
 
     expect(serverCfg.host).toBe('127.0.0.1');
-    expect(serverCfg.metrics.enable).toBe(true);
   });
 
   it('should evaluate requestLogging.ignorePaths predicate for skipped and non-skipped routes', () => {

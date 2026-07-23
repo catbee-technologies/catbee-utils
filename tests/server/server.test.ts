@@ -6,42 +6,6 @@ import { HttpStatusCodes } from '../../src/http-status-codes';
 import { readFileSync } from '../../src/fs';
 import * as envUtils from '../../src/env';
 
-const counterInc = jest.fn();
-const histogramObserve = jest.fn();
-
-jest.mock('prom-client', () => {
-  return {
-    Counter: class {
-      constructor(_opts: any) {}
-      inc = counterInc;
-    },
-    Histogram: class {
-      constructor(_opts: any) {}
-      observe = histogramObserve;
-    },
-    Registry: class {
-      contentType = 'text/plain';
-      metrics = jest.fn().mockResolvedValue('# mock metrics');
-    },
-    collectDefaultMetrics: jest.fn(),
-    default: {
-      Counter: class {
-        constructor(_opts: any) {}
-        inc = counterInc;
-      },
-      Histogram: class {
-        constructor(_opts: any) {}
-        observe = histogramObserve;
-      },
-      Registry: class {
-        contentType = 'text/plain';
-        metrics = jest.fn().mockResolvedValue('# mock metrics');
-      },
-      collectDefaultMetrics: jest.fn()
-    }
-  };
-});
-
 jest.mock('../../src/fs', () => ({
   ...jest.requireActual('../../src/fs'),
   readFileSync: jest.fn().mockImplementation(filePath => {
@@ -83,7 +47,6 @@ describe('ExpressServer', () => {
     port: 4000,
     host: 'localhost',
     requestLogging: { enable: false }, // Disable for cleaner test output
-    metrics: { enable: false, path: '/metrics' },
     healthCheck: { path: '/healthz', detailed: true }
   };
 
@@ -389,19 +352,6 @@ describe('ExpressServer', () => {
       expect(res.body.message).toBe('OK');
       expect(res.body.error).toBe(false);
       expect(res.body.data).toBeNull();
-
-      await killServer(server);
-    });
-
-    it('should provide metrics endpoint', async () => {
-      const server = new ExpressServer({ ...baseConfig, metrics: { enable: true } });
-      await server.start();
-
-      const res = await request(server.getApp()).get('/metrics');
-
-      expect(res.status).toBe(HttpStatusCodes.OK);
-      expect(res.text).toBe('# mock metrics');
-      expect(res.header['content-type']).toBe('text/plain; charset=utf-8');
 
       await killServer(server);
     });

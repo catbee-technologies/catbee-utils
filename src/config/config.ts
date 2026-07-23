@@ -75,11 +75,6 @@ export const defaultServerConfig: CatbeeGlobalServerConfig = {
     exposeHeader: Env.getBoolean('SERVER_REQUEST_ID_EXPOSE_HEADER', true),
     generator: () => uuid()
   },
-  metrics: {
-    enable: Env.getBoolean('SERVER_METRICS_ENABLE', false),
-    path: Env.get('SERVER_METRICS_PATH', '/metrics'),
-    withGlobalPrefix: Env.getBoolean('SERVER_METRICS_WITH_GLOBAL_PREFIX', false)
-  },
   serviceVersion: {
     enable: Env.getBoolean('SERVER_SERVICE_VERSION_ENABLE', false),
     headerName: Env.get('SERVER_SERVICE_VERSION_HEADER_NAME', 'x-service-version'),

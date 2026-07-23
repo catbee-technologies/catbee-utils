@@ -296,45 +296,6 @@ export class ServerConfigBuilder {
   }
 
   /**
-   * Configures server metrics collection and endpoints.
-   *
-   * @param opts - Metrics configuration options
-   * @returns The builder instance for chaining
-   * @default - { enable: false, path: '/metrics', withGlobalPrefix: false }
-   *
-   * @example
-   * ```typescript
-   * builder.withMetrics({
-   *   enable: true,
-   *   path: '/metrics'
-   * })
-   * ```
-   */
-  withMetrics(opts: Partial<NonNullable<CatbeeServerConfig['metrics']>>): this {
-    this.mergeConfig('metrics', opts as NonNullable<CatbeeServerConfig['metrics']>);
-    return this;
-  }
-
-  /**
-   * Enables Prometheus metrics collection and endpoint
-   *
-   * @param opts - Optional metrics configuration
-   * @returns The builder instance for chaining
-   */
-  enableMetrics(opts: Omit<Partial<NonNullable<CatbeeServerConfig['metrics']>>, 'enable'> = {}): this {
-    return this.setEnabled('metrics', true, opts);
-  }
-
-  /**
-   * Disables Prometheus metrics
-   *
-   * @returns The builder instance for chaining
-   */
-  disableMetrics(): this {
-    return this.setEnabled('metrics', false);
-  }
-
-  /**
    * Configures server health check endpoint.
    *
    * @param opts - Health check configuration options
@@ -355,6 +316,20 @@ export class ServerConfigBuilder {
   }
 
   /**
+   * Enables health check endpoint with default or custom settings
+   * @param opts - Optional health check configuration
+   * @returns The builder instance for chaining
+   *
+   * @example
+   * ```typescript
+   * builder.disableHealthCheck()
+   * ```
+   */
+  disableHealthCheck(): this {
+    return this.setEnabled('healthCheck', false);
+  }
+
+  /**
    * Configures OpenAPI/Swagger documentation for the API.
    *
    * @param opts - OpenAPI configuration options
@@ -365,7 +340,7 @@ export class ServerConfigBuilder {
    * ```typescript
    * builder.withOpenApi({
    *   enable: true,
-   *   path: '/api-docs',
+   *   mountPath: '/api-docs',
    *   filePath: './openapi.yaml'
    * })
    * ```

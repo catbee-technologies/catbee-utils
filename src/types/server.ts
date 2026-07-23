@@ -377,31 +377,6 @@ export interface CatbeeServerConfig {
     withGlobalPrefix?: boolean;
   };
 
-  /** Prometheus metrics config
-   * - **enable**: `false` - **env**: `SERVER_METRICS_ENABLE`
-   * - **path**: `'/metrics'` - **env**: `SERVER_METRICS_PATH`
-   * - **withGlobalPrefix**: `false` - **env**: `SERVER_METRICS_WITH_GLOBAL_PREFIX`
-   */
-  metrics?: {
-    /** Enable metrics endpoint
-     *  - **default**: `false`
-     *  - **env**: `SERVER_METRICS_ENABLE`
-     */
-    enable: boolean;
-
-    /** Metrics endpoint path
-     *  - **default**: `'/metrics'`
-     *  - **env**: `SERVER_METRICS_PATH`
-     */
-    path?: string;
-
-    /** Apply global prefix
-     *  - **default**: `false`
-     *  - **env**: `SERVER_METRICS_WITH_GLOBAL_PREFIX`
-     */
-    withGlobalPrefix?: boolean;
-  };
-
   /** Service version header config
    * - **enable**: `false` - **env**: `SERVER_SERVICE_VERSION_ENABLE`
    * - **headerName**: `'x-service-version'` - **env**: `SERVER_SERVICE_VERSION_HEADER_NAME`

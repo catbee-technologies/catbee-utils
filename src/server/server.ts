@@ -36,8 +36,7 @@ export const DependencyErrors = {
   compression: getDependencyErrorMessage('compression'),
   'express-rate-limit': getDependencyErrorMessage('express-rate-limit'),
   'cookie-parser': getDependencyErrorMessage('cookie-parser'),
-  '@scalar/express-api-reference': getDependencyErrorMessage('@scalar/express-api-reference'),
-  'prom-client': getDependencyErrorMessage('prom-client')
+  '@scalar/express-api-reference': getDependencyErrorMessage('@scalar/express-api-reference')
 };
 
 /**
@@ -45,7 +44,7 @@ export const DependencyErrors = {
  *
  * Core Features:
  * - Security: Helmet, CORS, rate limiting, timeouts
- * - Monitoring: Request logs, metrics, health checks
+ * - Monitoring: Request logs, health checks
  * - Performance: Compression, caching, static files
  * - Reliability: Graceful shutdown, error handling
  * - Developer UX: OpenAPI docs, debugging tools
@@ -55,8 +54,6 @@ export const DependencyErrors = {
  * Includes K8s readiness probes and zero-downtime support.
  */
 export class ExpressServer {
-  /** Prometheus client registry for metrics collection */
-  private readonly register: any = null;
   /** HTTP server instance (null when not running) */
   protected server: http.Server | https.Server | null = null;
   /** Merged configuration with defaults applied */
@@ -81,12 +78,6 @@ export class ExpressServer {
    */
   private readonly healthChecks: Array<{ name: string; check: () => Promise<boolean> | boolean }> = [];
 
-  /** Prometheus metrics for monitoring */
-  private readonly requestCounter?: any;
-  private readonly routeTimings?: any;
-  private readonly requestSizes?: any;
-  private readonly clientIPs?: any;
-
   /** Promise that resolves when initialization (middleware + routes) is complete */
   private readonly initPromise: Promise<void>;
 
@@ -103,7 +94,6 @@ export class ExpressServer {
    *
    * Default Monitoring:
    * - Request/Response logging
-   * - Prometheus metrics
    * - Health checks
    * - Request tracing
    */
@@ -124,49 +114,6 @@ export class ExpressServer {
       const msg = `Port must be a valid number between 0 and 65535, got: ${this.config.port}`;
       getLogger().error(msg);
       throw new Error(msg);
-    }
-
-    // Sanitize app name for metrics (replace invalid characters with underscore)
-    const safeAppName = (this.config.appName || 'express_app').toLowerCase().replace(/[^a-z0-9_]/g, '_');
-
-    if (this.config.metrics?.enable) {
-      const client = optionalRequire('prom-client');
-      if (!client) {
-        this.throwDependancyError('prom-client');
-      }
-      this.register = new client.Registry();
-      // Initialize Prometheus metrics with sanitized names
-      this.requestCounter = new client.Counter({
-        name: `${safeAppName}_http_requests_total`,
-        help: 'Total HTTP requests',
-        labelNames: ['method', 'route', 'status'],
-        registers: [this.register]
-      });
-      this.routeTimings = new client.Histogram({
-        name: `${safeAppName}_http_request_duration_seconds`,
-        help: 'Duration of HTTP requests by route',
-        labelNames: ['method', 'route', 'status'],
-        buckets: [0.1, 0.3, 0.5, 0.7, 1, 3, 5, 7, 10],
-        registers: [this.register]
-      });
-      this.requestSizes = new client.Histogram({
-        name: `${safeAppName}_http_request_size_bytes`,
-        help: 'Size of HTTP request bodies',
-        labelNames: ['method', 'route'],
-        buckets: [100, 1000, 10000, 100000, 1000000],
-        registers: [this.register]
-      });
-      this.clientIPs = new client.Counter({
-        name: `${safeAppName}_http_client_ip_total`,
-        help: 'Client IP request counter',
-        labelNames: ['ip', 'method'],
-        registers: [this.register]
-      });
-      // Default system metrics (CPU, memory, event loop lag, etc.)
-      client.collectDefaultMetrics({
-        register: this.register,
-        prefix: `${safeAppName}_`
-      });
     }
 
     // Health checks
@@ -255,7 +202,6 @@ export class ExpressServer {
     this.setupBodyParsingMiddleware();
     this.setupCookieParsingMiddleware();
     await this.setupOpenApiMiddleware();
-    this.setupMetricsMiddleware();
   }
 
   /**
@@ -575,54 +521,10 @@ export class ExpressServer {
   }
 
   /**
-   * Set up metrics tracking middleware.
-   */
-  private setupMetricsMiddleware(): void {
-    if (this.config.metrics?.enable) {
-      // Add metrics tracking middleware
-      this.app.use((req, res, next) => {
-        const start = process.hrtime();
-        // Track client IPs
-        this.clientIPs?.inc({ ip: req.ip, method: req.method });
-
-        // Track request sizes (parse safely)
-        const cl = req.headers['content-length'];
-        if (cl) {
-          const size = Number(cl);
-          if (!Number.isNaN(size) && size >= 0) {
-            const route = this.normalizeRouteForMetrics(req, res);
-            this.requestSizes?.observe({ method: req.method, route }, size);
-          }
-        }
-
-        res.once('finish', () => {
-          const [seconds, nanoseconds] = process.hrtime(start);
-          const finalRoute = this.normalizeRouteForMetrics(req, res);
-          this.requestCounter?.inc({
-            method: req.method,
-            route: finalRoute,
-            status: res.statusCode.toString()
-          });
-          this.routeTimings?.observe(
-            {
-              method: req.method,
-              route: finalRoute,
-              status: res.statusCode.toString()
-            },
-            seconds + nanoseconds / 1e9
-          );
-        });
-
-        next();
-      });
-    }
-  }
-
-  /**
    * Configure server routes and error handling.
    * Sets up in following order:
    *
-   * 1. Built-in routes (health, metrics)
+   * 1. Built-in routes (health)
    * 2. Application routes
    * 3. 404 handler
    * 4. Error handler
@@ -637,18 +539,6 @@ export class ExpressServer {
     this.app.get(healthCheckPath, async (_req: Request, res: Response) => {
       return this.handleHealthCheckRequest(res);
     });
-
-    // Metrics endpoint
-    if (this.config.metrics?.enable) {
-      const metricsPath = this.normalizePath(
-        this.config.metrics.path ?? '/metrics',
-        this.config.metrics?.withGlobalPrefix
-      );
-      this.app.get(metricsPath, async (_req, res) => {
-        res.set('Content-Type', this.register.contentType);
-        res.end(await this.register.metrics());
-      });
-    }
 
     // Application routes
     const routerToUse = this.externalRouter || this.rootRouter;
@@ -883,14 +773,9 @@ export class ExpressServer {
     const url = `${protocol}://${host}:${port}`;
     getLogger().info(`Server running on ${url}`);
 
-    if (this.config.healthCheck?.path) {
+    if (this.config.healthCheck && this.config.healthCheck?.path) {
       getLogger().info(
         `Health check available at ${url}${this.normalizePath(this.config.healthCheck.path, this.config.healthCheck.withGlobalPrefix)}`
-      );
-    }
-    if (this.config.metrics?.enable && this.config.metrics.path) {
-      getLogger().info(
-        `Metrics available at ${url}${this.normalizePath(this.config.metrics.path, this.config.metrics.withGlobalPrefix)}`
       );
     }
     if (this.config.openApi?.enable) {
@@ -1106,20 +991,6 @@ export class ExpressServer {
   }
 
   /**
-   * Get Prometheus registry (to add custom counters/histograms)
-   *
-   * @return {*}  {client.Registry}
-   */
-  public getMetricsRegistry() {
-    if (!this.config.metrics?.enable) {
-      getLogger().warn(
-        'Metrics are not enabled in the server configuration \nPlease enable metrics to use this feature.'
-      );
-    }
-    return this.register as typeof import('prom-client').Registry;
-  }
-
-  /**
    * Get server configuration
    *
    * @return {*}  {CatbeeServerConfig}
@@ -1295,21 +1166,6 @@ export class ExpressServer {
     }
 
     return sanitize(prefix + '/' + path);
-  }
-
-  private normalizeRouteForMetrics(req: Request, res: Response): string {
-    // Prevent high cardinality metrics by normalizing routes
-    if ((req as any)?.route?.path) {
-      // Use Express route pattern instead of actual URL
-      return (req as any).route.path;
-    }
-    // Group common patterns
-    if (res.statusCode === 404) return '/404';
-    const path = (req.path || 'unknown').split('?')[0];
-    // Replace IDs and UUIDs with placeholders
-    return path
-      .replace(/\/[0-9]+/g, '/:id')
-      .replace(/\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, '/:uuid');
   }
 
   /**
