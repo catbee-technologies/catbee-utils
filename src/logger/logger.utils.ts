@@ -273,10 +273,11 @@ const _global = _globalThis as unknown as { [GLOBAL_LOGGER_KEY]: PinoLogger };
  */
 function setupLogger(isGlobal: boolean = true): PinoLogger {
   const sensitiveFields = getExpandedSensitiveFields();
+  const { logger: loggerConfig } = getCatbeeGlobalConfig();
   const paths = new Set([...defaultRedactPaths, ...sensitiveFields.flatMap(field => generateDeepPaths(field, 2))]);
   const logParams: LoggerOptions = {
-    name: getCatbeeGlobalConfig().logger?.name || '@catbee/utils',
-    level: getCatbeeGlobalConfig().logger?.level || 'info',
+    name: loggerConfig?.name ?? '@catbee/utils',
+    level: loggerConfig?.level ?? 'info',
     redact: {
       paths: Array.from(paths),
       censor: (value, path) => redact(value, path)
@@ -295,10 +296,10 @@ function setupLogger(isGlobal: boolean = true): PinoLogger {
   let logger: PinoLogger;
 
   // Determine if we need file logging
-  const logDir = getCatbeeGlobalConfig().logger?.dir?.trim();
+  const logDir = loggerConfig?.dir?.trim();
   const hasFileLogging = Boolean(logDir);
 
-  if (hasFileLogging && getCatbeeGlobalConfig().logger?.pretty) {
+  if (hasFileLogging && loggerConfig?.pretty) {
     // Both file and pretty logging enabled - use multistream
     logger = pino(
       logParams,
@@ -306,18 +307,18 @@ function setupLogger(isGlobal: boolean = true): PinoLogger {
         targets: [
           {
             target: 'pino-pretty',
-            level: getCatbeeGlobalConfig().logger?.level ?? 'info',
+            level: loggerConfig?.level ?? 'info',
             options: {
-              colorize: getCatbeeGlobalConfig().logger?.colorize,
+              colorize: loggerConfig?.colorize,
               translateTime: 'SYS:standard',
               ignore: 'pid,hostname',
-              singleLine: getCatbeeGlobalConfig().logger?.singleLine,
+              singleLine: loggerConfig?.singleLine,
               levelFirst: true
             }
           },
           {
             target: 'pino/file',
-            level: getCatbeeGlobalConfig().logger?.level ?? 'info',
+            level: loggerConfig?.level ?? 'info',
             options: {
               destination: `${logDir}/app.log`,
               mkdir: true
@@ -338,17 +339,17 @@ function setupLogger(isGlobal: boolean = true): PinoLogger {
         }
       })
     );
-  } else if (getCatbeeGlobalConfig().logger?.pretty) {
+  } else if (loggerConfig?.pretty) {
     // Only pretty logging enabled
     logger = pino(
       logParams,
       pino.transport({
         target: 'pino-pretty',
         options: {
-          colorize: getCatbeeGlobalConfig().logger?.colorize,
+          colorize: loggerConfig?.colorize,
           translateTime: 'SYS:standard',
           ignore: 'pid,hostname',
-          singleLine: getCatbeeGlobalConfig().logger?.singleLine,
+          singleLine: loggerConfig?.singleLine,
           levelFirst: true
         }
       })
@@ -398,8 +399,8 @@ export function getLogger(newInstance: boolean = false): PinoLogger {
  * @param {Logger} [parentLogger] - Parent logger (defaults to current context logger or global)
  * @returns {Logger} Child logger with merged context
  */
-export function createChildLogger(bindings: Record<string, any>, parentLogger?: PinoLogger): PinoLogger {
-  const logger = parentLogger || getLogger();
+export function createChildLogger(bindings: Record<string, unknown>, parentLogger?: PinoLogger): PinoLogger {
+  const logger = parentLogger ?? getLogger();
   return logger.child(bindings);
 }
 
@@ -407,10 +408,10 @@ export function createChildLogger(bindings: Record<string, any>, parentLogger?: 
  * Creates a request-scoped logger with request ID and stores it in context
  *
  * @param {string} requestId - Unique request identifier
- * @param {object} [additionalContext] - Additional context to include in logs
+ * @param {Record<string, unknown>} [additionalContext] - Additional context to include in logs
  * @returns {Logger} Request-scoped logger instance
  */
-export function createRequestLogger(requestId: string, additionalContext: Record<string, any> = {}): PinoLogger {
+export function createRequestLogger(requestId: string, additionalContext: Record<string, unknown> = {}): PinoLogger {
   const logger = createChildLogger({
     requestId,
     ...additionalContext
@@ -431,9 +432,9 @@ export function createRequestLogger(requestId: string, additionalContext: Record
  *
  * @param {Error|unknown} error - Error object to log
  * @param {string} [message] - Optional message to include
- * @param {Record<string, any>} [context] - Additional context properties
+ * @param {Record<string, unknown>} [context] - Additional context properties
  */
-export function logError(error: Error | string, message?: string, context?: Record<string, any>): void {
+export function logError(error: Error | string, message?: string, context?: Record<string, unknown>): void {
   const logger = getLogger();
 
   const errObj = error instanceof Error ? error : new Error(String(error));
