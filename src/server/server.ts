@@ -72,6 +72,8 @@ export class ExpressServer {
   private readonly connections = new Set<Socket>();
   /** Flag indicating if the server is shutting down */
   private isShuttingDown = false;
+  /** Flag indicating if graceful shutdown handlers are registered */
+  private gracefulShutdownRegistered = false;
   /**
    * Collection of registered health check functions.
    * These are executed when the health check endpoint is accessed.
@@ -238,6 +240,7 @@ export class ExpressServer {
         res
           .status(HttpStatusCodes.SERVICE_UNAVAILABLE)
           .json(new ServiceUnavailableException('Server is shutting down'));
+        return;
       }
       next();
     });
@@ -251,7 +254,7 @@ export class ExpressServer {
     if (this.config.helmet) {
       const helmet = optionalRequire('helmet');
       if (!helmet) {
-        this.throwDependancyError('helmet');
+        this.throwDependencyError('helmet');
       }
 
       if (typeof this.config.helmet === 'object') {
@@ -265,7 +268,7 @@ export class ExpressServer {
     if (this.config.cors) {
       const cors = optionalRequire('cors');
       if (!cors) {
-        this.throwDependancyError('cors');
+        this.throwDependencyError('cors');
       }
       this.app.use(cors(this.config.cors === true ? {} : this.config.cors));
     }
@@ -327,7 +330,7 @@ export class ExpressServer {
     if (this.config.rateLimit?.enable) {
       const rateLimit = optionalRequire('express-rate-limit');
       if (!rateLimit) {
-        this.throwDependancyError('express-rate-limit');
+        this.throwDependencyError('express-rate-limit');
       }
 
       this.app.use(
@@ -388,7 +391,7 @@ export class ExpressServer {
     if (this.config.compression) {
       const compression = optionalRequire('compression');
       if (!compression) {
-        this.throwDependancyError('compression');
+        this.throwDependencyError('compression');
       }
 
       if (typeof this.config.compression === 'object') {
@@ -451,7 +454,7 @@ export class ExpressServer {
     if (this.config.cookieParser) {
       const cookieParser = optionalRequire('cookie-parser');
       if (!cookieParser) {
-        this.throwDependancyError('cookie-parser');
+        this.throwDependencyError('cookie-parser');
       }
 
       if (typeof this.config.cookieParser === 'object') {
@@ -492,7 +495,7 @@ export class ExpressServer {
 
         const apiReference = optionalRequire('@scalar/express-api-reference')?.apiReference;
         if (!apiReference) {
-          this.throwDependancyError(
+          this.throwDependencyError(
             '@scalar/express-api-reference',
             getDependencyErrorMessage('@scalar/express-api-reference', 'OpenAPI docs')
           );
@@ -693,6 +696,10 @@ export class ExpressServer {
    * @throws Error if server fails to start or port is already in use
    */
   public async start(): Promise<http.Server | https.Server> {
+    if (this.server) {
+      getLogger().warn('Server is already running, returning existing instance');
+      return this.server;
+    }
     // Ensure initialization (middleware + routes) completed before starting
     await this.initPromise;
     await this.runHook('beforeStart', this.app);
@@ -807,7 +814,7 @@ export class ExpressServer {
       return;
     }
     if (this.isShuttingDown) {
-      getLogger().warn('Stop called while shutdown is already in progress');
+      getLogger().warn('Shutdown already in progress');
       return;
     }
 
@@ -815,45 +822,68 @@ export class ExpressServer {
     await this.runHook('beforeStop', this.server);
 
     try {
-      await this.gracefulShutdown();
-    } catch (err) {
-      getLogger().error({ err }, 'Graceful shutdown timed out');
-      if (force) {
-        getLogger().warn('Forcing connection destroy due to shutdown timeout');
-      }
+      await this.gracefulShutdown(force);
     } finally {
-      // Always clean up connections
-      await this.destroyConnections();
+      this.isShuttingDown = false;
     }
   }
 
   /**
    * Perform graceful server shutdown with timeout.
    */
-  private async gracefulShutdown(): Promise<void> {
+  private async gracefulShutdown(force = false): Promise<void> {
     const shutdownTimeout = 10_000; // 10s max wait
 
+    const server = this.server!;
+    let timer: NodeJS.Timeout | undefined;
+    let afterStopCalled = false;
+
+    const runAfterStop = async () => {
+      if (afterStopCalled) return;
+      afterStopCalled = true;
+      await this.runHook('afterStop');
+    };
+
     const serverClosePromise = new Promise<void>((resolve, reject) => {
-      this.server!.close(async err => {
+      server.close(async err => {
+        if (timer) clearTimeout(timer);
         if (err) {
-          getLogger().error({ err }, 'Error while closing server');
+          getLogger().error({ err }, 'Error during server shutdown');
           reject(err);
           return;
         }
-        this.server = null;
-        this.isShuttingDown = false;
+        this.server = null; // Clear the server reference after it has been closed
 
         getLogger().info('Server stopped gracefully');
-        await this.runHook('afterStop');
+        await runAfterStop();
         resolve();
       });
     });
 
-    const timeoutPromise = new Promise<void>((_, reject) =>
-      setTimeout(() => reject(new Error('Shutdown timeout')), shutdownTimeout)
-    );
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('Shutdown timeout')), shutdownTimeout);
+    });
 
-    await Promise.race([serverClosePromise, timeoutPromise]);
+    try {
+      await Promise.race([serverClosePromise, timeoutPromise]);
+    } catch (err) {
+      if (timer) clearTimeout(timer);
+      getLogger().warn({ err }, 'Graceful shutdown timed out');
+
+      if (!force) {
+        throw err;
+      }
+
+      getLogger().warn('Escalating to forced shutdown');
+
+      server.closeIdleConnections?.();
+      server.closeAllConnections?.();
+
+      await this.destroyConnections();
+      this.server = null;
+      getLogger().info('Forced shutdown completed');
+      await runAfterStop();
+    }
   }
 
   /**
@@ -868,25 +898,76 @@ export class ExpressServer {
    * @param signals Array of process signals to listen for (default: SIGINT, SIGTERM)
    */
   public enableGracefulShutdown(signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM']): this {
+    if (this.gracefulShutdownRegistered) {
+      getLogger().warn('Graceful shutdown handlers are already registered');
+      return this;
+    }
+
+    let signalHandled = false;
+
     signals.forEach(signal => {
       process.on(signal, async () => {
+        if (signalHandled) {
+          getLogger().warn(`Ignoring duplicate ${signal}`);
+          return;
+        }
+
+        signalHandled = true;
+
         getLogger().info(`Received ${signal}, initiating graceful shutdown...`);
+
         try {
-          await this.stop();
+          await this.stop(true);
           process.exit(0);
         } catch (err) {
-          getLogger().error({ err }, 'Error during graceful shutdown, forcing stop...');
-          try {
-            await this.stop(true); // fallback to forced shutdown
-            process.exit(1);
-          } catch (forceError) {
-            getLogger().fatal({ forceError }, 'Forced shutdown failed, exiting hard');
-            process.exit(1);
-          }
+          getLogger().fatal({ err }, 'Shutdown failed');
+          process.exit(1);
         }
       });
     });
+
+    this.gracefulShutdownRegistered = true;
     return this;
+  }
+
+  /**
+   * Destroy all active connections (gracefully if possible).
+   * If a connection does not close cleanly, it will be force-destroyed.
+   */
+  private async destroyConnections(): Promise<void> {
+    if (!this.connections.size) {
+      return;
+    }
+
+    const sockets = [...this.connections];
+
+    await Promise.allSettled(
+      sockets.map(
+        socket =>
+          new Promise<void>(resolve => {
+            socket.end();
+
+            const timer = setTimeout(() => {
+              socket.destroy();
+              resolve();
+            }, 1000);
+
+            socket.once('close', () => {
+              clearTimeout(timer);
+              resolve();
+            });
+
+            socket.once('error', () => {
+              clearTimeout(timer);
+              socket.destroy();
+              resolve();
+            });
+          })
+      )
+    );
+
+    this.connections.clear();
+    getLogger().info(`Closed ${sockets.length} active connection(s)`);
   }
 
   /**
@@ -923,19 +1004,20 @@ export class ExpressServer {
     ...handlers: Array<express.RequestHandler>
   ): this {
     const fullPath = this.normalizePath(path, true);
+    const routerToUse = this.externalRouter || this.rootRouter;
     const methodMap: {
       [K in keyof Pick<
         Express,
         'get' | 'post' | 'put' | 'delete' | 'patch' | 'options' | 'head'
-      >]: (typeof this.app)[K];
+      >]: (typeof routerToUse)[K];
     } = {
-      get: this.app.get.bind(this.app),
-      post: this.app.post.bind(this.app),
-      put: this.app.put.bind(this.app),
-      delete: this.app.delete.bind(this.app),
-      patch: this.app.patch.bind(this.app),
-      options: this.app.options.bind(this.app),
-      head: this.app.head.bind(this.app)
+      get: routerToUse.get.bind(routerToUse),
+      post: routerToUse.post.bind(routerToUse),
+      put: routerToUse.put.bind(routerToUse),
+      delete: routerToUse.delete.bind(routerToUse),
+      patch: routerToUse.patch.bind(routerToUse),
+      options: routerToUse.options.bind(routerToUse),
+      head: routerToUse.head.bind(routerToUse)
     };
     methods.forEach(m => {
       const fn = methodMap[m];
@@ -962,15 +1044,16 @@ export class ExpressServer {
    * @returns This instance for method chaining
    */
   public registerMiddleware(path: string | express.RequestHandler, middleware?: express.RequestHandler): this {
+    const routerToUse = this.externalRouter || this.rootRouter;
     if (typeof path === 'string') {
       const normalizedPath = this.normalizePath(path);
       if (normalizedPath) {
-        this.app.use(normalizedPath, middleware as express.RequestHandler);
+        routerToUse.use(normalizedPath, middleware as express.RequestHandler);
       } else {
-        this.app.use(middleware as express.RequestHandler);
+        routerToUse.use(middleware as express.RequestHandler);
       }
     } else {
-      this.app.use(path);
+      routerToUse.use(path);
     }
     return this;
   }
@@ -985,7 +1068,7 @@ export class ExpressServer {
    */
   public useMiddleware(...middlewares: express.RequestHandler[]): this {
     middlewares.forEach(middleware => {
-      this.app.use(middleware);
+      (this.externalRouter || this.rootRouter).use(middleware);
     });
     return this;
   }
@@ -1168,41 +1251,6 @@ export class ExpressServer {
     return sanitize(prefix + '/' + path);
   }
 
-  /**
-   * Destroy all active connections (gracefully if possible).
-   * If a connection does not close cleanly, it will be force-destroyed.
-   */
-  private async destroyConnections(): Promise<void> {
-    const total = this.connections.size;
-    if (total === 0) {
-      getLogger().debug('No active connections to close');
-      return;
-    }
-
-    const timeoutMs = 5000;
-    await Promise.race([
-      Promise.all(
-        Array.from(this.connections).map(
-          conn =>
-            new Promise<void>(resolve => {
-              conn.end(() => {
-                if (!conn.destroyed) conn.destroy();
-                resolve();
-              });
-              conn.on('error', () => {
-                conn.destroy();
-                resolve();
-              });
-            })
-        )
-      ),
-      new Promise<void>(resolve => setTimeout(resolve, timeoutMs))
-    ]);
-
-    this.connections.clear();
-    getLogger().info(`Closed ${total} active connections`);
-  }
-
   private async validateHttpsFiles() {
     if (!(await fileExists(this.config.https!.key))) {
       const msg = `HTTPS key file not found: ${this.config.https!.key}`;
@@ -1228,7 +1276,7 @@ export class ExpressServer {
     return false;
   }
 
-  private throwDependancyError(packageName: keyof typeof DependencyErrors, msg?: string): never {
+  private throwDependencyError(packageName: keyof typeof DependencyErrors, msg?: string): never {
     getLogger().error({ command: `npm install ${packageName}` }, msg || DependencyErrors[packageName]);
     throw new Error(msg || DependencyErrors[packageName]);
   }
