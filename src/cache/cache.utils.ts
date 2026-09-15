@@ -6,7 +6,7 @@ import { getCatbeeGlobalConfig } from '@catbee/utils/config';
 type CacheEntry<T> = {
   value: T;
   expiresAt: number;
-  lastAccessed?: number; // Track last access time for LRU functionality
+  lastAccessed: number;
 };
 
 /**
@@ -29,11 +29,12 @@ export interface TTLCacheOptions {
  *
  * @example
  * const cache = new TTLCache<string, number>({ ttlMs: 1000 });
- * cache.set("x", 123);
- * const value = cache.get("x"); // 123
+ * cache.set('x', 123);
+ * const value = cache.get('x'); // 123
  */
 export class TTLCache<K, V> {
   private readonly cache = new Map<K, CacheEntry<V>>();
+  private readonly pending = new Map<K, Promise<V>>();
   private readonly ttlMs: number;
   private readonly maxSize?: number;
   private cleanupInterval?: NodeJS.Timeout;
@@ -97,7 +98,7 @@ export class TTLCache<K, V> {
     if (!entry) return undefined;
 
     const now = Date.now();
-    if (now > entry.expiresAt) {
+    if (now >= entry.expiresAt) {
       this.cache.delete(key);
       return undefined;
     }
@@ -114,18 +115,40 @@ export class TTLCache<K, V> {
   /**
    * Retrieves or computes a value if it's not in the cache or has expired.
    *
+   * Concurrent calls for the same key share the same producer promise,
+   * preventing duplicate computations while the value is being generated.
+   *
    * @param key - The key to retrieve
    * @param producer - Function to generate the value if not cached
    * @param ttlMs - Optional custom TTL for the computed value
    * @returns The cached or computed value
    */
   async getOrCompute(key: K, producer: () => Promise<V>, ttlMs?: number): Promise<V> {
-    const value = this.get(key);
-    if (value !== undefined) return value;
+    const cached = this.get(key);
 
-    const newValue = await producer();
-    this.setWithTTL(key, newValue, ttlMs ?? this.ttlMs);
-    return newValue;
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    const pending = this.pending.get(key);
+
+    if (pending) {
+      return pending;
+    }
+
+    const promise = Promise.resolve()
+      .then(producer)
+      .then(value => {
+        this.setWithTTL(key, value, ttlMs ?? this.ttlMs);
+        return value;
+      })
+      .finally(() => {
+        this.pending.delete(key);
+      });
+
+    this.pending.set(key, promise);
+
+    return promise;
   }
 
   /**
@@ -194,7 +217,7 @@ export class TTLCache<K, V> {
     let removed = 0;
     const now = Date.now();
     for (const [key, entry] of this.cache.entries()) {
-      if (now > entry.expiresAt) {
+      if (now >= entry.expiresAt) {
         this.cache.delete(key);
         removed++;
       }
@@ -209,7 +232,7 @@ export class TTLCache<K, V> {
    */
   *entries(): IterableIterator<[K, V]> {
     for (const [key, entry] of this.cache.entries()) {
-      if (Date.now() <= entry.expiresAt) {
+      if (Date.now() < entry.expiresAt) {
         yield [key, entry.value];
       }
     }
@@ -222,7 +245,7 @@ export class TTLCache<K, V> {
    */
   *keys(): IterableIterator<K> {
     for (const [key, entry] of this.cache.entries()) {
-      if (Date.now() <= entry.expiresAt) {
+      if (Date.now() < entry.expiresAt) {
         yield key;
       }
     }
@@ -235,7 +258,7 @@ export class TTLCache<K, V> {
    */
   *values(): IterableIterator<V> {
     for (const entry of this.cache.values()) {
-      if (Date.now() <= entry.expiresAt) {
+      if (Date.now() < entry.expiresAt) {
         yield entry.value;
       }
     }
@@ -253,13 +276,18 @@ export class TTLCache<K, V> {
     if (!entry) return false;
 
     const now = Date.now();
-    if (now > entry.expiresAt) {
+    if (now >= entry.expiresAt) {
       this.cache.delete(key);
       return false;
     }
 
     entry.expiresAt = now + (ttlMs ?? this.ttlMs);
     entry.lastAccessed = now;
+
+    // Move to most recently used.
+    this.cache.delete(key);
+    this.cache.set(key, entry);
+
     return true;
   }
 
@@ -274,7 +302,7 @@ export class TTLCache<K, V> {
     let valid = 0;
 
     for (const entry of this.cache.values()) {
-      if (now > entry.expiresAt) {
+      if (now >= entry.expiresAt) {
         expired++;
       } else {
         valid++;
@@ -292,7 +320,7 @@ export class TTLCache<K, V> {
   /**
    * Stop the auto-cleanup interval if it's running.
    */
-  destroy() {
+  destroy(): void {
     if (this.cleanupInterval) {
       clearInterval(this.cleanupInterval);
       this.cleanupInterval = undefined;
@@ -307,16 +335,19 @@ export class TTLCache<K, V> {
     const now = Date.now();
 
     // Remove all expired items first
-    for (const [key, entry] of Array.from(this.cache.entries())) {
-      if (now > entry.expiresAt) {
+    for (const [key, entry] of this.cache.entries()) {
+      if (now >= entry.expiresAt) {
         this.cache.delete(key);
       }
     }
 
     // Evict oldest entries until within max size
     while (this.maxSize && this.cache.size > this.maxSize) {
-      const oldestKey = this.cache.keys().next().value;
-      this.cache.delete(oldestKey as K);
+      const next = this.cache.keys().next();
+      if (next.done) {
+        break;
+      }
+      this.cache.delete(next.value);
     }
   }
 }

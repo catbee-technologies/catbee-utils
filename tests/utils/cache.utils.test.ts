@@ -278,6 +278,121 @@ describe('TTLCache', () => {
       expect(result3).toBe(42);
       expect(producer).toHaveBeenCalledTimes(2);
     });
+
+    it('should deduplicate concurrent calls for the same key', async () => {
+      const cache = new TTLCache<string, number>({ ttlMs: 1000 });
+      let resolveProducer!: (value: number) => void;
+      const producer = jest.fn(
+        () =>
+          new Promise<number>(resolve => {
+            resolveProducer = resolve;
+          })
+      );
+
+      const promise1 = cache.getOrCompute('key', producer);
+      const promise2 = cache.getOrCompute('key', producer);
+
+      // Flush microtask for Promise.resolve().then(producer)
+      await Promise.resolve();
+
+      // Both calls are in flight, producer should only be called once
+      expect(producer).toHaveBeenCalledTimes(1);
+
+      resolveProducer(100);
+
+      const [res1, res2] = await Promise.all([promise1, promise2]);
+      expect(res1).toBe(100);
+      expect(res2).toBe(100);
+      expect(producer).toHaveBeenCalledTimes(1);
+    });
+
+    it('should remove key from pending if producer rejects allowing subsequent retry', async () => {
+      const cache = new TTLCache<string, number>({ ttlMs: 1000 });
+      let rejectProducer!: (reason: unknown) => void;
+      const failingProducer = jest.fn(
+        () =>
+          new Promise<number>((_, reject) => {
+            rejectProducer = reject;
+          })
+      );
+
+      const promise1 = cache.getOrCompute('key', failingProducer);
+      const promise2 = cache.getOrCompute('key', failingProducer);
+
+      // Flush microtask for Promise.resolve().then(failingProducer)
+      await Promise.resolve();
+
+      expect(failingProducer).toHaveBeenCalledTimes(1);
+
+      rejectProducer(new Error('computation failed'));
+
+      await expect(promise1).rejects.toThrow('computation failed');
+      await expect(promise2).rejects.toThrow('computation failed');
+
+      // After failure, subsequent call should retry with a new producer
+      const successProducer = jest.fn().mockResolvedValue(200);
+      const result = await cache.getOrCompute('key', successProducer);
+      expect(result).toBe(200);
+      expect(successProducer).toHaveBeenCalledTimes(1);
+    });
+
+    it('should handle concurrent calls for different keys independently', async () => {
+      const cache = new TTLCache<string, number>({ ttlMs: 1000 });
+      const producer1 = jest.fn().mockResolvedValue(1);
+      const producer2 = jest.fn().mockResolvedValue(2);
+
+      const [res1, res2] = await Promise.all([
+        cache.getOrCompute('k1', producer1),
+        cache.getOrCompute('k2', producer2)
+      ]);
+
+      expect(res1).toBe(1);
+      expect(res2).toBe(2);
+      expect(producer1).toHaveBeenCalledTimes(1);
+      expect(producer2).toHaveBeenCalledTimes(1);
+    });
+
+    it('should respect custom ttl in getOrCompute', async () => {
+      const cache = new TTLCache<string, number>({ ttlMs: 5000 });
+      const producer = jest.fn().mockResolvedValue(42);
+
+      await cache.getOrCompute('key', producer, 1000);
+      expect(producer).toHaveBeenCalledTimes(1);
+
+      // Advance past custom TTL
+      jest.advanceTimersByTime(1001);
+
+      await cache.getOrCompute('key', producer, 1000);
+      expect(producer).toHaveBeenCalledTimes(2);
+    });
+
+    it('should handle synchronous producer return values and errors gracefully', async () => {
+      const cache = new TTLCache<string, number>({ ttlMs: 1000 });
+      const syncProducer = () => 99 as unknown as Promise<number>;
+
+      const result = await cache.getOrCompute('syncKey', syncProducer);
+      expect(result).toBe(99);
+
+      const throwingProducer = () => {
+        throw new Error('sync error');
+      };
+
+      await expect(
+        cache.getOrCompute('throwKey', throwingProducer as unknown as () => Promise<number>)
+      ).rejects.toThrow('sync error');
+    });
+
+    it('should cache the computed value for subsequent calls', async () => {
+      const cache = new TTLCache<string, number>({ ttlMs: 1000 });
+      const producer = jest.fn().mockResolvedValue(42);
+
+      const result1 = await cache.getOrCompute('key', producer);
+      const result2 = await cache.getOrCompute('key', producer);
+
+      expect(result1).toBe(42);
+      expect(result2).toBe(42);
+      expect(producer).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('should set and get multiple entries with setMany and getMany', () => {
@@ -350,5 +465,40 @@ describe('TTLCache', () => {
 
     const entries = [...cache.entries()];
     expect(entries).toEqual([['a', 1]]);
+  });
+
+  it('should consistently treat entries as expired at exact expiration time', () => {
+    const ttl = 1000;
+    const cache = new TTLCache<string, number>({ ttlMs: ttl });
+    cache.set('key', 42);
+
+    // Advance time to exact expiration moment
+    jest.advanceTimersByTime(ttl);
+
+    // Check stats before get() lazily removes it from the map
+    expect(cache.stats().validEntries).toBe(0);
+    expect(cache.stats().expiredEntries).toBe(1);
+
+    expect(cache.get('key')).toBeUndefined();
+    expect(cache.has('key')).toBe(false);
+    expect([...cache.keys()]).toEqual([]);
+    expect([...cache.values()]).toEqual([]);
+    expect([...cache.entries()]).toEqual([]);
+  });
+
+  it('should update LRU order when refreshing an entry', () => {
+    const cache = new TTLCache<string, number>({ maxSize: 2, ttlMs: 5000 });
+    cache.set('first', 1);
+    cache.set('second', 2);
+
+    // Refresh 'first' to make it most recently used
+    expect(cache.refresh('first')).toBe(true);
+
+    // Adding 'third' should evict 'second' (which is now least recently used), not 'first'
+    cache.set('third', 3);
+
+    expect(cache.has('first')).toBe(true);
+    expect(cache.has('second')).toBe(false);
+    expect(cache.has('third')).toBe(true);
   });
 });
