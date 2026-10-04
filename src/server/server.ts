@@ -1006,10 +1006,9 @@ export class ExpressServer {
     const fullPath = this.normalizePath(path, true);
     const routerToUse = this.externalRouter || this.rootRouter;
     const methodMap: {
-      [K in keyof Pick<
-        Express,
-        'get' | 'post' | 'put' | 'delete' | 'patch' | 'options' | 'head'
-      >]: (typeof routerToUse)[K];
+      [
+        K in keyof Pick<Express, 'get' | 'post' | 'put' | 'delete' | 'patch' | 'options' | 'head'>
+      ]: (typeof routerToUse)[K];
     } = {
       get: routerToUse.get.bind(routerToUse),
       post: routerToUse.post.bind(routerToUse),

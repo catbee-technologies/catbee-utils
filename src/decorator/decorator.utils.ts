@@ -1306,8 +1306,8 @@ function getRouteMetadata(
     handlerName
   );
   const methodVersion:
-    | { version: string; options: { addPrefix: boolean; addHeader: boolean; headerName: string } }
-    | undefined = Reflect.getMetadata(VERSION_KEY, instance as object, handlerName);
+    { version: string; options: { addPrefix: boolean; addHeader: boolean; headerName: string } } | undefined =
+    Reflect.getMetadata(VERSION_KEY, instance as object, handlerName);
 
   // Merge controller and method metadata
   const headers = { ...controllerMetadata.headers, ...methodHeaders };
@@ -1320,8 +1320,8 @@ function getRouteMetadata(
   const cache: { ttlSeconds: number } | undefined =
     Reflect.getMetadata(CACHE_KEY, instance as object, handlerName) || controllerMetadata.cache;
   const rateLimitOptions:
-    | { max: number; windowMs: number; standardHeaders: boolean; legacyHeaders: boolean }
-    | undefined = Reflect.getMetadata(RATE_LIMIT_KEY, instance as object, handlerName) || controllerMetadata.rateLimit;
+    { max: number; windowMs: number; standardHeaders: boolean; legacyHeaders: boolean } | undefined =
+    Reflect.getMetadata(RATE_LIMIT_KEY, instance as object, handlerName) || controllerMetadata.rateLimit;
   const version = methodVersion || controllerMetadata.version;
   const timeout: { ms: number } | undefined =
     Reflect.getMetadata(TIMEOUT_KEY, instance as object, handlerName) || controllerMetadata.timeout;
