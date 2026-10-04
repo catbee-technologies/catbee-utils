@@ -39,6 +39,8 @@ export const DependencyErrors = {
   '@scalar/express-api-reference': getDependencyErrorMessage('@scalar/express-api-reference')
 };
 
+const SUPPORTED_HTTP_METHODS = new Set(['get', 'post', 'put', 'delete', 'patch', 'options', 'head'] as const);
+
 /**
  * Production-ready Express server with enterprise features.
  *
@@ -62,11 +64,11 @@ export class ExpressServer {
   protected hooks: CatbeeServerHooks;
   /** Global API prefix (from config) */
   protected globalPrefix: string;
-  /** Internal fallback router */
+  /** Primary root router mounted to the application */
   private readonly rootRouter: Router;
-  /** User-supplied router */
-  private externalRouter?: Router;
-  /** Internal Express app instance */
+  /** Set of registered sub-routers to prevent duplicate mounting */
+  private readonly mountedRouters = new Set<Router>();
+  /** Express app instance */
   private readonly app: Express;
   /** Set of active WebSocket connections */
   private readonly connections = new Set<Socket>();
@@ -74,6 +76,8 @@ export class ExpressServer {
   private isShuttingDown = false;
   /** Flag indicating if graceful shutdown handlers are registered */
   private gracefulShutdownRegistered = false;
+  /** Map of registered signal listeners for clean teardown */
+  private readonly signalListeners = new Map<NodeJS.Signals, () => Promise<void>>();
   /**
    * Collection of registered health check functions.
    * These are executed when the health check endpoint is accessed.
@@ -82,6 +86,8 @@ export class ExpressServer {
 
   /** Promise that resolves when initialization (middleware + routes) is complete */
   private readonly initPromise: Promise<void>;
+  /** In-flight start promise to protect against concurrent start() calls */
+  private startPromise?: Promise<http.Server | https.Server>;
 
   /**
    * Initializes server with intelligent defaults and security best practices.
@@ -204,6 +210,7 @@ export class ExpressServer {
     this.setupBodyParsingMiddleware();
     this.setupCookieParsingMiddleware();
     await this.setupOpenApiMiddleware();
+    this.setupResponseHook();
   }
 
   /**
@@ -278,10 +285,17 @@ export class ExpressServer {
    * Set up global headers middleware.
    */
   private setupGlobalHeaders(): void {
+    const hasCustomHeaders = Boolean(this.config.globalHeaders && Object.keys(this.config.globalHeaders).length > 0);
+    const isMicroservice = Boolean(this.config.isMicroservice);
+    const hasServiceVersion = Boolean(this.config.serviceVersion?.enable);
+
+    if (!hasCustomHeaders && !isMicroservice && !hasServiceVersion) {
+      return;
+    }
+
     this.app.use((_req, res, next) => {
       if (this.config.globalHeaders) {
-        for (const key in this.config.globalHeaders) {
-          const value = this.config.globalHeaders[key];
+        for (const [key, value] of Object.entries(this.config.globalHeaders)) {
           res.setHeader(key, typeof value === 'function' ? value() : value);
         }
       }
@@ -516,8 +530,12 @@ export class ExpressServer {
         getLogger().error({ err }, 'Failed to mount OpenAPI docs');
       }
     }
+  }
 
-    // Custom response preprocessing hook (apply global prefix if set)
+  /**
+   * Set up response preprocessing hook (applies global prefix if set).
+   */
+  private setupResponseHook(): void {
     if (this.hooks.onResponse) {
       this.app.use(this.globalPrefix, this.hooks.onResponse);
     }
@@ -544,8 +562,7 @@ export class ExpressServer {
     });
 
     // Application routes
-    const routerToUse = this.externalRouter || this.rootRouter;
-    this.app.use(this.globalPrefix, routerToUse);
+    this.app.use(this.globalPrefix, this.rootRouter);
 
     // Allow users to run custom logic after routes are registered but before error handling is set up
     await this.runHook('afterRoutes', this.app);
@@ -686,11 +703,15 @@ export class ExpressServer {
    * Start the HTTP server and begin listening for requests.
    *
    * This method:
+   * - Protects against concurrent start() invocations
+   * - Awaits server initialization (middleware + routes)
    * - Executes beforeStart hooks
+   * - Creates the HTTP/HTTPS server instance
+   * - Sets up error handling and connection tracking BEFORE listening
+   * - Executes onServerCreated hook BEFORE listening
    * - Binds to the configured host/port
-   * - Sets up error handling for startup failures
-   * - Executes afterStart hooks on success
-   * - Logs startup information
+   * - Executes afterStart hooks on successful listen
+   * - Cleans up server reference and listeners on startup failure
    *
    * @returns Promise resolving to the running HTTP server instance
    * @throws Error if server fails to start or port is already in use
@@ -700,38 +721,86 @@ export class ExpressServer {
       getLogger().warn('Server is already running, returning existing instance');
       return this.server;
     }
+
+    if (this.startPromise) {
+      return this.startPromise;
+    }
+
+    this.startPromise = this.doStart();
+
+    try {
+      return await this.startPromise;
+    } finally {
+      this.startPromise = undefined;
+    }
+  }
+
+  /**
+   * Internal implementation of server startup.
+   */
+  private async doStart(): Promise<http.Server | https.Server> {
     // Ensure initialization (middleware + routes) completed before starting
     await this.initPromise;
     await this.runHook('beforeStart', this.app);
 
-    return new Promise<http.Server | https.Server>((resolve, reject) => {
-      try {
-        const onListening = async () => {
-          this.logServerStartInfo();
-          if (this.server) await this.runHook('afterStart', this.server);
-          resolve(this.server as http.Server | https.Server);
-        };
+    const server = this.createServerInstance();
+    this.server = server;
 
-        this.server = this.createServerInstance(onListening);
-        this.runHook('onServerCreated', this.server);
-        this.setupConnectionTracking();
-        this.setupServerErrorHandling(reject);
-      } catch (error) {
-        reject(error);
-      }
+    return new Promise<http.Server | https.Server>((resolve, reject) => {
+      let isListening = false;
+
+      // Unified error listener handling both startup failure and runtime errors
+      server.on('error', (err: Error) => {
+        if (!isListening) {
+          getLogger().error({ err }, 'Server failed to start');
+
+          try {
+            server.removeAllListeners();
+            server.close();
+          } catch {
+            // Ignore errors during failure cleanup
+          }
+
+          this.server = null;
+          this.connections.clear();
+          reject(err);
+        } else {
+          getLogger().error({ err }, 'Server runtime error');
+        }
+      });
+
+      // 1. Set up connection tracking BEFORE listening
+      this.setupConnectionTracking();
+
+      // 2. Run onServerCreated hook BEFORE listening
+      Promise.resolve(this.runHook('onServerCreated', server))
+        .then(() => {
+          // 3. Start listening ONLY after hooks and handlers are attached
+          const onListening = async () => {
+            isListening = true;
+            this.logServerStartInfo();
+            await this.runHook('afterStart', server);
+            resolve(server);
+          };
+
+          const listenArgs: [number, (string | undefined)?, (() => void)?] = [
+            this.config.port,
+            this.config.host,
+            onListening
+          ];
+
+          server.listen(...(listenArgs as any));
+        })
+        .catch(err => {
+          server.emit('error', err instanceof Error ? err : new Error(String(err)));
+        });
     });
   }
 
   /**
-   * Create HTTP or HTTPS server instance.
+   * Create HTTP or HTTPS server instance (without listening).
    */
-  private createServerInstance(onListening: () => void): http.Server | https.Server {
-    const listenArgs: [number, (string | undefined)?, (() => void)?] = [
-      this.config.port,
-      this.config.host,
-      onListening
-    ];
-
+  private createServerInstance(): http.Server | https.Server {
     if (this.config.https) {
       const httpsOptions: https.ServerOptions = {
         ...this.config.https,
@@ -744,10 +813,10 @@ export class ExpressServer {
       if (this.config.https.passphrase) {
         httpsOptions.passphrase = this.config.https.passphrase;
       }
-      return https.createServer(httpsOptions, this.app).listen(...(listenArgs as any));
+      return https.createServer(httpsOptions, this.app);
     }
 
-    return this.app.listen(...(listenArgs as any));
+    return http.createServer(this.app);
   }
 
   /**
@@ -757,16 +826,6 @@ export class ExpressServer {
     this.server!.on('connection', (conn: Socket) => {
       this.connections.add(conn);
       conn.on('close', () => this.connections.delete(conn));
-    });
-  }
-
-  /**
-   * Set up error handling for server startup.
-   */
-  private setupServerErrorHandling(reject: (err: Error) => void): void {
-    this.server!.on('error', err => {
-      getLogger().error({ err }, 'Server failed to start');
-      reject(err);
     });
   }
 
@@ -844,6 +903,9 @@ export class ExpressServer {
       await this.runHook('afterStop');
     };
 
+    // Close idle connections immediately so keep-alive sockets don't stall shutdown
+    server.closeIdleConnections?.();
+
     const serverClosePromise = new Promise<void>((resolve, reject) => {
       server.close(async err => {
         if (timer) clearTimeout(timer);
@@ -906,7 +968,7 @@ export class ExpressServer {
     let signalHandled = false;
 
     signals.forEach(signal => {
-      process.on(signal, async () => {
+      const handler = async () => {
         if (signalHandled) {
           getLogger().warn(`Ignoring duplicate ${signal}`);
           return;
@@ -917,16 +979,38 @@ export class ExpressServer {
         getLogger().info(`Received ${signal}, initiating graceful shutdown...`);
 
         try {
+          this.disableGracefulShutdown();
           await this.stop(true);
           process.exit(0);
         } catch (err) {
           getLogger().fatal({ err }, 'Shutdown failed');
           process.exit(1);
         }
-      });
+      };
+
+      this.signalListeners.set(signal, handler);
+      process.on(signal, handler);
     });
 
     this.gracefulShutdownRegistered = true;
+    return this;
+  }
+
+  /**
+   * Unregister graceful shutdown signal listeners.
+   * Useful for testing and dynamic server lifecycles to prevent memory and listener leaks.
+   */
+  public disableGracefulShutdown(): this {
+    if (!this.gracefulShutdownRegistered) {
+      return this;
+    }
+
+    for (const [signal, handler] of this.signalListeners.entries()) {
+      process.removeListener(signal, handler);
+    }
+
+    this.signalListeners.clear();
+    this.gracefulShutdownRegistered = false;
     return this;
   }
 
@@ -947,21 +1031,28 @@ export class ExpressServer {
           new Promise<void>(resolve => {
             socket.end();
 
-            const timer = setTimeout(() => {
-              socket.destroy();
+            let timer: NodeJS.Timeout | undefined;
+
+            const cleanup = () => {
+              if (timer) clearTimeout(timer);
+              socket.removeListener('close', onClose);
+              socket.removeListener('error', onError);
               resolve();
+            };
+
+            const onClose = () => cleanup();
+            const onError = () => {
+              socket.destroy();
+              cleanup();
+            };
+
+            timer = setTimeout(() => {
+              socket.destroy();
+              cleanup();
             }, 1000);
 
-            socket.once('close', () => {
-              clearTimeout(timer);
-              resolve();
-            });
-
-            socket.once('error', () => {
-              clearTimeout(timer);
-              socket.destroy();
-              resolve();
-            });
+            socket.once('close', onClose);
+            socket.once('error', onError);
           })
       )
     );
@@ -971,12 +1062,32 @@ export class ExpressServer {
   }
 
   /**
-   * Set an externally created base router.
-   * This will override the internal rootRouter.
+   * Mount a base router onto the server's root router.
+   *
+   * Note: This attaches the supplied router to the root router pipeline.
+   * Duplicate mounting of the same router instance is ignored.
+   *
+   * @param router The Express router instance to mount
+   * @returns This instance for method chaining
+   */
+  public addBaseRouter(router: Router): this {
+    if (this.mountedRouters.has(router)) {
+      return this;
+    }
+    this.mountedRouters.add(router);
+    this.rootRouter.use(router);
+    return this;
+  }
+
+  /**
+   * Alias for `addBaseRouter` (maintained for backward compatibility).
+   * Mounts the supplied router onto the server's root router.
+   *
+   * @param router The Express router instance to mount
+   * @returns This instance for method chaining
    */
   public setBaseRouter(router: Router): this {
-    this.externalRouter = router;
-    return this;
+    return this.addBaseRouter(router);
   }
 
   /**
@@ -1004,29 +1115,65 @@ export class ExpressServer {
     ...handlers: Array<express.RequestHandler>
   ): this {
     const fullPath = this.normalizePath(path, true);
-    const routerToUse = this.externalRouter || this.rootRouter;
-    const methodMap: {
-      [
-        K in keyof Pick<Express, 'get' | 'post' | 'put' | 'delete' | 'patch' | 'options' | 'head'>
-      ]: (typeof routerToUse)[K];
-    } = {
-      get: routerToUse.get.bind(routerToUse),
-      post: routerToUse.post.bind(routerToUse),
-      put: routerToUse.put.bind(routerToUse),
-      delete: routerToUse.delete.bind(routerToUse),
-      patch: routerToUse.patch.bind(routerToUse),
-      options: routerToUse.options.bind(routerToUse),
-      head: routerToUse.head.bind(routerToUse)
-    };
+    const routerToUse = this.rootRouter;
+
     methods.forEach(m => {
-      const fn = methodMap[m];
-      if (fn) {
-        fn(fullPath, ...handlers);
-      } else {
+      const method = m.toLowerCase() as typeof m;
+      if (!SUPPORTED_HTTP_METHODS.has(method) || typeof routerToUse[method] !== 'function') {
         throw new Error(`Unsupported HTTP method: ${m}`);
       }
+      (routerToUse[method] as Function)(fullPath, ...handlers);
     });
     return this;
+  }
+
+  /**
+   * Register a GET route handler.
+   */
+  public get(path: string, ...handlers: express.RequestHandler[]): this {
+    return this.registerRoute(['get'], path, ...handlers);
+  }
+
+  /**
+   * Register a POST route handler.
+   */
+  public post(path: string, ...handlers: express.RequestHandler[]): this {
+    return this.registerRoute(['post'], path, ...handlers);
+  }
+
+  /**
+   * Register a PUT route handler.
+   */
+  public put(path: string, ...handlers: express.RequestHandler[]): this {
+    return this.registerRoute(['put'], path, ...handlers);
+  }
+
+  /**
+   * Register a DELETE route handler.
+   */
+  public delete(path: string, ...handlers: express.RequestHandler[]): this {
+    return this.registerRoute(['delete'], path, ...handlers);
+  }
+
+  /**
+   * Register a PATCH route handler.
+   */
+  public patch(path: string, ...handlers: express.RequestHandler[]): this {
+    return this.registerRoute(['patch'], path, ...handlers);
+  }
+
+  /**
+   * Register an OPTIONS route handler.
+   */
+  public options(path: string, ...handlers: express.RequestHandler[]): this {
+    return this.registerRoute(['options'], path, ...handlers);
+  }
+
+  /**
+   * Register a HEAD route handler.
+   */
+  public head(path: string, ...handlers: express.RequestHandler[]): this {
+    return this.registerRoute(['head'], path, ...handlers);
   }
 
   /**
@@ -1043,7 +1190,7 @@ export class ExpressServer {
    * @returns This instance for method chaining
    */
   public registerMiddleware(path: string | express.RequestHandler, middleware?: express.RequestHandler): this {
-    const routerToUse = this.externalRouter || this.rootRouter;
+    const routerToUse = this.rootRouter;
     if (typeof path === 'string') {
       const normalizedPath = this.normalizePath(path);
       if (normalizedPath) {
@@ -1067,7 +1214,7 @@ export class ExpressServer {
    */
   public useMiddleware(...middlewares: express.RequestHandler[]): this {
     middlewares.forEach(middleware => {
-      (this.externalRouter || this.rootRouter).use(middleware);
+      this.rootRouter.use(middleware);
     });
     return this;
   }

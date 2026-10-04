@@ -68,7 +68,7 @@ describe('ExpressServer', () => {
       const server = new ExpressServer(baseConfig);
       await server.waitUntilReady();
       expect(server.getConfig()).toBeDefined();
-      expect(server.getApp()).toBeDefined();
+      expect(server.app).toBeDefined();
     });
 
     it('should return configured port when server is not started', async () => {
@@ -246,14 +246,14 @@ describe('ExpressServer', () => {
       await server.start();
 
       // Test that health check has the prefix
-      const res = await request(server.getApp()).get('/api/v1/healthz');
+      const res = await request(server.app).get('/api/v1/healthz');
       expect(res.status).toBe(HttpStatusCodes.OK);
       expect(res.body?.message).toBe('OK');
       expect(res.body?.error).toBe(false);
       expect(res.body?.data).toBeNull();
 
       // Regular health path should 404
-      const res2 = await request(server.getApp()).get('/healthz');
+      const res2 = await request(server.app).get('/healthz');
       expect(res2.status).toBe(HttpStatusCodes.NOT_FOUND);
 
       await killServer(server);
@@ -340,13 +340,55 @@ describe('ExpressServer', () => {
 
       await killServer(server);
     });
+
+    it('should handle concurrent start() calls safely without duplicates', async () => {
+      const server = new ExpressServer({ ...baseConfig, port: 0 });
+      const [server1, server2] = await Promise.all([server.start(), server.start()]);
+      expect(server1).toBe(server2);
+      expect(server.isRunning()).toBe(true);
+      await killServer(server);
+    });
+
+    it('should reset this.server to null when startup fails', async () => {
+      const server1 = new ExpressServer({ ...baseConfig, port: 0 });
+      await server1.start();
+      const port = server1.getPort();
+
+      const server2 = new ExpressServer({ ...baseConfig, port });
+      await expect(server2.start()).rejects.toThrow();
+      expect(server2.getServer()).toBeNull();
+      expect(server2.isRunning()).toBe(false);
+
+      await killServer(server1);
+    });
+
+    it('should execute onServerCreated before listening and afterStart', async () => {
+      const lifecycleOrder: string[] = [];
+      const hooks = {
+        onServerCreated: jest.fn(() => {
+          lifecycleOrder.push('onServerCreated');
+        }),
+        afterStart: jest.fn(() => {
+          lifecycleOrder.push('afterStart');
+        })
+      };
+
+      const server = new ExpressServer({ ...baseConfig, port: 0 }, hooks);
+      await server.start();
+
+      expect(lifecycleOrder).toEqual(['onServerCreated', 'afterStart']);
+      expect(hooks.onServerCreated).toHaveBeenCalledTimes(1);
+      expect(hooks.afterStart).toHaveBeenCalledTimes(1);
+
+      await killServer(server);
+    });
   });
 
   describe('Routes & Middleware', () => {
     it('should respond to health checks', async () => {
       const server = new ExpressServer(baseConfig);
       await server.start();
-      const res = await request(server.getApp()).get('/healthz');
+      const res = await request(server.app).get('/healthz');
 
       expect(res.status).toBe(HttpStatusCodes.OK);
       expect(res.body.message).toBe('OK');
@@ -364,7 +406,7 @@ describe('ExpressServer', () => {
 
       await server.start();
 
-      const res = await request(server.getApp()).get('/test-route');
+      const res = await request(server.app).get('/test-route');
 
       expect(res.status).toBe(HttpStatusCodes.OK);
       expect(res.body.success).toBe(true);
@@ -377,7 +419,7 @@ describe('ExpressServer', () => {
       const server = new ExpressServer(baseConfig);
       await server.start();
 
-      const res = await request(server.getApp()).get('/non-existent-route');
+      const res = await request(server.app).get('/non-existent-route');
 
       expect(res.status).toBe(HttpStatusCodes.NOT_FOUND);
       expect(res.body.error).toBe(true);
@@ -391,7 +433,7 @@ describe('ExpressServer', () => {
       const middleware = jest.fn((_req, _res, next) => next());
       server.registerMiddleware('/middleware-test', middleware);
       await server.start();
-      const res = await request(server.getApp()).get('/middleware-test/something');
+      const res = await request(server.app).get('/middleware-test/something');
 
       expect(res.status).toBe(HttpStatusCodes.NOT_FOUND);
       expect(middleware).toHaveBeenCalled();
@@ -405,7 +447,7 @@ describe('ExpressServer', () => {
       server.useMiddleware(middleware);
       await server.start();
 
-      const res = await request(server.getApp()).get('/random-path');
+      const res = await request(server.app).get('/random-path');
 
       expect(res.status).toBe(HttpStatusCodes.NOT_FOUND);
       expect(middleware).toHaveBeenCalled();
@@ -426,7 +468,7 @@ describe('ExpressServer', () => {
 
       await server.start();
 
-      const res = await request(server.getApp()).get('/healthz');
+      const res = await request(server.app).get('/healthz');
 
       expect(res.status).toBe(HttpStatusCodes.SERVICE_UNAVAILABLE);
       expect(successCheck).toHaveBeenCalled();
@@ -449,7 +491,7 @@ describe('ExpressServer', () => {
 
       await server.start();
 
-      const res = await request(server.getApp()).get('/healthz');
+      const res = await request(server.app).get('/healthz');
 
       expect(res.status).toBe(HttpStatusCodes.OK);
       expect(asyncCheck).toHaveBeenCalled();
@@ -471,7 +513,7 @@ describe('ExpressServer', () => {
 
       await server.start();
 
-      const res = await request(server.getApp()).get('/healthz');
+      const res = await request(server.app).get('/healthz');
 
       expect(res.status).toBe(HttpStatusCodes.SERVICE_UNAVAILABLE);
       expect(errorCheck).toHaveBeenCalled();
@@ -571,7 +613,7 @@ describe('ExpressServer', () => {
       server.setBaseRouter(router);
       await server.start();
 
-      const res = await request(server.getApp()).get('/custom-route');
+      const res = await request(server.app).get('/custom-route');
 
       expect(res.status).toBe(HttpStatusCodes.OK);
       expect(res.body.success).toBe(true);
@@ -588,10 +630,103 @@ describe('ExpressServer', () => {
       });
       await server.start();
 
-      const res = await request(server.getApp()).get('/api/nested');
+      const res = await request(server.app).get('/api/nested');
       expect(res.status).toBe(HttpStatusCodes.OK);
       expect(res.body.success).toBe(true);
       expect(res.body.message).toBe('Nested route');
+
+      await killServer(server);
+    });
+
+    it('should support both createRouter and setBaseRouter together without dropping routes', async () => {
+      const server = new ExpressServer(baseConfig);
+      const subRouter = server.createRouter('/api');
+      subRouter.get('/users', (_req, res) => {
+        res.status(HttpStatusCodes.OK).json({ success: true, count: 5 });
+      });
+
+      const customBase = express.Router();
+      customBase.get('/custom', (_req, res) => {
+        res.status(HttpStatusCodes.OK).json({ success: true, custom: true });
+      });
+      server.setBaseRouter(customBase);
+
+      await server.start();
+
+      const resSub = await request(server.getApp()).get('/api/users');
+      expect(resSub.status).toBe(HttpStatusCodes.OK);
+      expect(resSub.body.count).toBe(5);
+
+      const resCustom = await request(server.getApp()).get('/custom');
+      expect(resCustom.status).toBe(HttpStatusCodes.OK);
+      expect(resCustom.body.custom).toBe(true);
+
+      await killServer(server);
+    });
+
+    it('should ignore duplicate setBaseRouter calls for the same router instance', async () => {
+      const server = new ExpressServer(baseConfig);
+      const customBase = express.Router();
+      let callCount = 0;
+      customBase.use((_req, _res, next) => {
+        callCount++;
+        next();
+      });
+      customBase.get('/dedup', (_req, res) => {
+        res.status(HttpStatusCodes.OK).json({ success: true });
+      });
+
+      server.setBaseRouter(customBase);
+      server.setBaseRouter(customBase); // duplicate call
+
+      await server.start();
+
+      const res = await request(server.getApp()).get('/dedup');
+      expect(res.status).toBe(HttpStatusCodes.OK);
+      expect(callCount).toBe(1);
+
+      await killServer(server);
+    });
+
+    it('should support addBaseRouter', async () => {
+      const server = new ExpressServer(baseConfig);
+      const router = express.Router();
+      router.get('/added', (_req, res) => res.json({ added: true }));
+      server.addBaseRouter(router);
+      await server.start();
+
+      const res = await request(server.getApp()).get('/added');
+      expect(res.status).toBe(HttpStatusCodes.OK);
+      expect(res.body.added).toBe(true);
+
+      await killServer(server);
+    });
+
+    it('should provide shorthand routing methods (get, post, put, delete, patch)', async () => {
+      const server = new ExpressServer(baseConfig);
+      server
+        .get('/shorthand-get', (_req, res) => res.json({ method: 'GET' }))
+        .post('/shorthand-post', (_req, res) => res.json({ method: 'POST' }))
+        .put('/shorthand-put', (_req, res) => res.json({ method: 'PUT' }))
+        .delete('/shorthand-delete', (_req, res) => res.json({ method: 'DELETE' }))
+        .patch('/shorthand-patch', (_req, res) => res.json({ method: 'PATCH' }));
+
+      await server.start();
+
+      const resGet = await request(server.getApp()).get('/shorthand-get');
+      expect(resGet.body.method).toBe('GET');
+
+      const resPost = await request(server.getApp()).post('/shorthand-post');
+      expect(resPost.body.method).toBe('POST');
+
+      const resPut = await request(server.getApp()).put('/shorthand-put');
+      expect(resPut.body.method).toBe('PUT');
+
+      const resDelete = await request(server.getApp()).delete('/shorthand-delete');
+      expect(resDelete.body.method).toBe('DELETE');
+
+      const resPatch = await request(server.getApp()).patch('/shorthand-patch');
+      expect(resPatch.body.method).toBe('PATCH');
 
       await killServer(server);
     });
@@ -622,7 +757,21 @@ describe('ExpressServer', () => {
       expect(processOnSpy).toHaveBeenCalledWith('SIGTERM', expect.any(Function));
 
       // Clean up
+      server.disableGracefulShutdown();
       processOnSpy.mockRestore();
+    });
+
+    it('should unregister signal handlers when disableGracefulShutdown is called', () => {
+      const processRemoveListenerSpy = jest.spyOn(process, 'removeListener');
+
+      const server = new ExpressServer(baseConfig);
+      server.enableGracefulShutdown(['SIGTERM', 'SIGINT']);
+      server.disableGracefulShutdown();
+
+      expect(processRemoveListenerSpy).toHaveBeenCalledWith('SIGTERM', expect.any(Function));
+      expect(processRemoveListenerSpy).toHaveBeenCalledWith('SIGINT', expect.any(Function));
+
+      processRemoveListenerSpy.mockRestore();
     });
   });
 
@@ -652,7 +801,7 @@ describe('ExpressServer', () => {
       expect(config.requestLogging?.enable).toBe(true);
 
       // Dev mode should include more details in errors
-      const res = await request(server.getApp()).get('/non-existent-path');
+      const res = await request(server.app).get('/non-existent-path');
 
       expect(res.status).toBe(HttpStatusCodes.NOT_FOUND);
       expect(res.body).toHaveProperty('message');
@@ -672,7 +821,7 @@ describe('ExpressServer', () => {
       await server.start();
 
       // Production mode should be more secure/restrictive
-      const res = await request(server.getApp()).get('/non-existent-path');
+      const res = await request(server.app).get('/non-existent-path');
 
       expect(res.status).toBe(HttpStatusCodes.NOT_FOUND);
       expect(res.body).toHaveProperty('message');
