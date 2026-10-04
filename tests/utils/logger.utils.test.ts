@@ -413,6 +413,7 @@ describe('LoggerUtils', () => {
           return JSON.stringify(sensitiveFields);
         });
 
+        const originalFields = [...loggerUtils.defaultSensitiveFields];
         try {
           loggerUtils.setRedactCensor(mockCensor);
           loggerUtils.addRedactFields(['custom1', 'custom2']);
@@ -424,6 +425,7 @@ describe('LoggerUtils', () => {
           expect(sensitiveFields).toContain('custom1');
           expect(sensitiveFields).toContain('custom2');
         } finally {
+          loggerUtils.setSensitiveFields(originalFields);
           loggerUtils.setRedactCensor(originalCensor);
         }
       });
@@ -574,6 +576,13 @@ describe('LoggerUtils', () => {
       expect(paths).toContain('key');
       expect(paths).toContain('*.*.*.*.*.key');
     });
+
+    it('should use default depth of 5 when depth is not specified', () => {
+      const paths = loggerUtils.generateDeepPaths('password');
+      expect(paths).toHaveLength(6); // depth 0-5
+      expect(paths).toContain('password');
+      expect(paths).toContain('*.*.*.*.*.password');
+    });
   });
 
   describe('getExpandedSensitiveFields', () => {
@@ -593,6 +602,80 @@ describe('LoggerUtils', () => {
       expect(expanded).toContain('PASSWORD');
       expect(expanded).toContain('apiKey');
       expect(expanded).toContain('api_key');
+    });
+  });
+
+  describe('enhanced redaction and edge cases', () => {
+    it('should redact cookie and set-cookie headers', () => {
+      expect(loggerUtils.getRedactCensor()('session_id=secret123', ['req', 'headers', 'cookie'])).toBe('***');
+      expect(loggerUtils.getRedactCensor()('session_id=secret123', ['headers', 'cookie'])).toBe('***');
+      expect(loggerUtils.getRedactCensor()('session_id=secret123', ['res', 'headers', 'set-cookie'])).toBe('***');
+    });
+
+    it('should redact sensitive query parameters in nested URLs', () => {
+      const url = '/api/v1/resource?token=secret123&page=1';
+      expect(loggerUtils.getRedactCensor()(url, ['req', 'url'])).toBe('/api/v1/resource?token=***&page=1');
+      expect(loggerUtils.getRedactCensor()(url, ['req', 'originalUrl'])).toBe('/api/v1/resource?token=***&page=1');
+      expect(loggerUtils.getRedactCensor()(url, ['request', 'url'])).toBe('/api/v1/resource?token=***&page=1');
+    });
+
+    it('should escape metacharacters in sensitive fields when building URL regex', () => {
+      const originalFields = [...loggerUtils.defaultSensitiveFields];
+      try {
+        loggerUtils.addSensitiveFields(['user.token']);
+        const url = '/api?user.token=secret&userXtoken=safe';
+        const redacted = loggerUtils.getRedactCensor()(url, ['url']);
+        expect(redacted).toBe('/api?user.token=***&userXtoken=safe');
+      } finally {
+        loggerUtils.setSensitiveFields(originalFields);
+      }
+    });
+
+    it('should redact auth fields with token boundaries (custom_auth, auth_code, userAuth)', () => {
+      expect(loggerUtils.getRedactCensor()('secret123', ['custom_auth'])).toBe('***');
+      expect(loggerUtils.getRedactCensor()('secret456', ['auth_code'])).toBe('***');
+      expect(loggerUtils.getRedactCensor()('secret789', ['userAuth'])).toBe('***');
+    });
+
+    it('should not redact fields that merely contain auth or pin as substrings without word boundaries', () => {
+      expect(loggerUtils.getRedactCensor()('Stephen King', ['author'])).toBe('Stephen King');
+      expect(loggerUtils.getRedactCensor()('Google', ['oauth'])).toBe('Google');
+      expect(loggerUtils.getRedactCensor()('Govt', ['authority'])).toBe('Govt');
+      expect(loggerUtils.getRedactCensor()('Public', ['opinion'])).toBe('Public');
+      expect(loggerUtils.getRedactCensor()('FedEx', ['shipping'])).toBe('FedEx');
+    });
+
+    it('should redact multi-word fields across snake_case and camelCase boundaries', () => {
+      expect(loggerUtils.getRedactCensor()('key123', ['custom_api_key'])).toBe('***');
+      expect(loggerUtils.getRedactCensor()('key456', ['customApiKey'])).toBe('***');
+      expect(loggerUtils.getRedactCensor()('pin123', ['userPin'])).toBe('***');
+      expect(loggerUtils.getRedactCensor()('pin456', ['pin_code'])).toBe('***');
+    });
+
+    it('should safely handle empty and whitespace strings without throwing in expandSensitiveField', () => {
+      expect(loggerUtils.expandSensitiveField('')).toEqual([]);
+      expect(loggerUtils.expandSensitiveField('   ')).toEqual(['   ']);
+      expect(loggerUtils.expandSensitiveField('---')).toEqual(['---']);
+    });
+
+    it('should split camelCase fields into snake_case and kebab-case variants in expandSensitiveField', () => {
+      const variants = loggerUtils.expandSensitiveField('creditCard');
+      expect(variants).toContain('creditCard');
+      expect(variants).toContain('credit_card');
+      expect(variants).toContain('credit-card');
+      expect(variants).toContain('CREDIT_CARD');
+    });
+  });
+
+  describe('resetLogger', () => {
+    it('clears the global logger singleton', () => {
+      (ContextStore.get as jest.Mock).mockReturnValue(undefined);
+      const logger1 = loggerUtils.getLogger();
+      expect(logger1).toBe(mockLogger);
+      expect((loggerUtils._globalThis as any)[Symbol.for('logger')]).toBe(mockLogger);
+
+      loggerUtils.resetLogger();
+      expect((loggerUtils._globalThis as any)[Symbol.for('logger')]).toBeUndefined();
     });
   });
 });

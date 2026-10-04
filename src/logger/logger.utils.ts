@@ -14,9 +14,16 @@ const GLOBAL_LOGGER_KEY = Symbol.for('logger');
 export type Logger = PinoLogger;
 
 /**
- * Logger levels for application-wide logging.
+ * Logger level for application-wide logging.
  */
-export type LoggerLevels = pino.Level;
+export type LoggerLevel = pino.Level;
+
+/**
+ * Logger levels for application-wide logging.
+ *
+ * @deprecated Use `LoggerLevel` instead.
+ */
+export type LoggerLevels = LoggerLevel;
 
 // Default sensitive fields
 export const defaultSensitiveFields = [
@@ -41,31 +48,54 @@ export const defaultSensitiveFields = [
   'passphrase',
   'otp',
   'api_secret',
-  'token_secret'
+  'token_secret',
+  'cookie',
+  'cookies',
+  'set-cookie',
+  'session_id',
+  'credit_card',
+  'card_number',
+  'cvv',
+  'cvc',
+  'ssn',
+  'pin'
 ];
 
-const defaultRedactPaths = [
-  'req.authorization',
-  'req.headers.authorization',
-  'req.headers.cookie',
-  'req.headers["x-api-key"]',
-  'req.headers["x-auth-token"]',
-  'req.headers["x-access-token"]',
-  'req.body.password',
-  'req.body.token',
-  'req.body.secret',
-  'req.query.token',
-  'req.query.api_key',
-  'req.query.apiKey',
-  'res.authorization',
-  'res.headers.authorization',
-  'res.headers["set-cookie"]',
+const requestSubPaths = [
+  'authorization',
   'headers.authorization',
+  'headers.cookie',
   'headers.cookies',
   'headers["set-cookie"]',
   'headers["x-api-key"]',
   'headers["x-auth-token"]',
   'headers["x-access-token"]',
+  'body.password',
+  'body.token',
+  'body.secret',
+  'query.token',
+  'query.api_key',
+  'query.apiKey',
+  'url',
+  'originalUrl'
+];
+
+const responseSubPaths = ['authorization', 'headers.authorization', 'headers["set-cookie"]'];
+
+const commonHeaderPaths = [
+  'headers.authorization',
+  'headers.cookie',
+  'headers.cookies',
+  'headers["set-cookie"]',
+  'headers["x-api-key"]',
+  'headers["x-auth-token"]',
+  'headers["x-access-token"]'
+];
+
+const defaultRedactPaths = [
+  ...['req', 'request'].flatMap(p => requestSubPaths.map(sp => `${p}.${sp}`)),
+  ...['res', 'response'].flatMap(p => responseSubPaths.map(sp => `${p}.${sp}`)),
+  ...commonHeaderPaths,
   'url',
   'uri',
   'href',
@@ -73,41 +103,116 @@ const defaultRedactPaths = [
   'redirectUri'
 ];
 
+const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+function buildUrlRedactRegex(lowerSensitiveFields: string[]): RegExp | null {
+  if (lowerSensitiveFields.length === 0) return null;
+  const pattern = lowerSensitiveFields.map(escapeRegExp).join('|');
+  return new RegExp(`([?&](${pattern})=)[^&#]*`, 'gi');
+}
+
+const URL_PATH_KEYS = new Set(['url', 'uri', 'href', 'originalurl', 'redirect_uri', 'redirecturi']);
+
+let cachedExpandedFields: string[] | null = null;
+let cachedLowerSensitiveFields: string[] | null = null;
+let cachedLowerSensitiveSet: Set<string> | null = null;
+let cachedNormalizedMultiWordFields: string[] | null = null;
+let cachedUrlRegex: RegExp | null = null;
+
+function invalidateSensitiveFieldsCache(): void {
+  cachedExpandedFields = null;
+  cachedLowerSensitiveFields = null;
+  cachedLowerSensitiveSet = null;
+  cachedNormalizedMultiWordFields = null;
+  cachedUrlRegex = null;
+}
+
+function extractNormalizedMultiWordFields(fields: string[]): string[] {
+  return Array.from(
+    new Set(
+      fields
+        .map(f => f.replace(/[-]/g, '_'))
+        .filter(f => f.includes('_'))
+        .map(f => `_${f}_`)
+    )
+  );
+}
+
+function isSensitivePathSegment(
+  segment: string,
+  lowerFieldsSet: Set<string>,
+  multiWordNormalizedList: string[]
+): boolean {
+  if (!segment || typeof segment !== 'string') return false;
+
+  const lower = segment.toLowerCase();
+  // 1. Exact match (O(1))
+  if (lowerFieldsSet.has(lower)) return true;
+
+  // 2. Token boundary check (splits on underscores, hyphens, and camelCase boundaries)
+  const tokens = segment.split(/[_-]+|(?<=[a-z0-9])(?=[A-Z])/g).filter(Boolean);
+  if (tokens.some(t => lowerFieldsSet.has(t.toLowerCase()))) return true;
+
+  // 3. Multi-word fields check with delimiter boundaries (e.g. custom_api_key containing api_key)
+  if (multiWordNormalizedList.length === 0) return false;
+  const normalized = `_${segment
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .toLowerCase()
+    .replace(/[-]/g, '_')}_`;
+  return multiWordNormalizedList.some(fNorm => normalized.includes(fNorm));
+}
+
+/**
+ * Retrieves the expanded list of sensitive fields.
+ *
+ * This function expands the default sensitive fields into their various naming
+ * conventions (e.g., camelCase, snake_case) and caches the result for efficiency.
+ *
+ * @returns Array of expanded sensitive field names
+ */
+export function getExpandedSensitiveFields(): string[] {
+  if (!cachedExpandedFields) {
+    cachedExpandedFields = expandSensitiveFields(defaultSensitiveFields);
+    cachedLowerSensitiveFields = cachedExpandedFields.map(f => f.toLowerCase());
+    cachedLowerSensitiveSet = new Set(cachedLowerSensitiveFields);
+    cachedNormalizedMultiWordFields = extractNormalizedMultiWordFields(cachedLowerSensitiveFields);
+    cachedUrlRegex = buildUrlRedactRegex(cachedLowerSensitiveFields);
+  }
+  return cachedExpandedFields;
+}
+
 /**
  * The global censor function used by the logger.
  */
-let globalRedactCensor = (value: unknown, path: string[], sensitiveFields = getExpandedSensitiveFields()) => {
+let globalRedactCensor = (value: unknown, path: string[], sensitiveFields?: string[]): unknown => {
   if (typeof value !== 'string') return '***';
 
-  const lowerPath: string[] = path.filter(p => typeof p === 'string').map(p => p.toLowerCase());
+  const stringPath: string[] = path.filter((p): p is string => typeof p === 'string');
+  const lowerPath: string[] = stringPath.map(p => p.toLowerCase());
 
-  const lowerSensitiveFields = sensitiveFields.map(f => f.toLowerCase());
+  const isCustomFields = sensitiveFields !== undefined;
+  if (!isCustomFields) {
+    getExpandedSensitiveFields();
+  }
+  const lowerFieldsList = isCustomFields ? sensitiveFields.map(f => f.toLowerCase()) : cachedLowerSensitiveFields!;
+  const lowerFieldsSet = isCustomFields ? new Set(lowerFieldsList) : cachedLowerSensitiveSet!;
+  const multiWordList = isCustomFields
+    ? extractNormalizedMultiWordFields(lowerFieldsList)
+    : cachedNormalizedMultiWordFields!;
 
-  if (lowerPath.some(p => lowerSensitiveFields.includes(p))) return '***';
+  // 1. Exact match against sensitive fields
+  if (lowerPath.some(p => lowerFieldsSet.has(p))) return '***';
 
-  // Redact URLs
-  if (
-    lowerPath[0] === 'url' ||
-    lowerPath[0] === 'uri' ||
-    lowerPath[0] === 'href' ||
-    lowerPath.includes('redirect_uri') ||
-    lowerPath.includes('redirecturi')
-  ) {
-    return value.replace(new RegExp(`([?&](${lowerSensitiveFields.join('|')})=)[^&#]*`, 'gi'), '$1***');
+  // 2. Redact URLs (supports both root 'url', 'uri', 'href' and nested 'req.url', 'request.originalUrl', etc.)
+  if (lowerPath.some(p => URL_PATH_KEYS.has(p) || p.includes('redirect_uri') || p.includes('redirecturi'))) {
+    if (lowerFieldsList.length === 0) return value;
+    const urlRegex = isCustomFields ? buildUrlRedactRegex(lowerFieldsList) : cachedUrlRegex;
+    return urlRegex ? value.replace(urlRegex, '$1***') : value;
   }
 
-  // Authorization headers
-  if (lowerPath.some(p => p.includes('authorization') || p.includes('auth'))) {
-    return value.replace(/^(\S+)\s+.+$/, '$1 ***') || '***';
-  }
-
-  // Redact sensitive fields - check each path segment against each sensitive field
-  if (lowerPath.some(p => lowerSensitiveFields.some(f => p.includes(f)))) {
+  // 3. Delimiter and token-aware check against sensitive fields (e.g., custom_auth, userAuth, custom_api_key)
+  if (stringPath.some(p => isSensitivePathSegment(p, lowerFieldsSet, multiWordList))) {
     return '***';
-  }
-
-  if (path.length > 0 && !['req', 'res', 'headers'].includes(lowerPath[0])) {
-    return value;
   }
 
   return value;
@@ -200,24 +305,10 @@ export function redact(value: unknown, path: string[], sensitiveFields?: string[
  * @param fields - Array of additional field names to redact
  */
 export function addRedactFields(fields: string[]) {
+  addSensitiveFields(fields);
   const prev = globalRedactCensor;
   globalRedactCensor = (value, path, sensitiveFields = getExpandedSensitiveFields()) =>
     prev(value, path, [...(sensitiveFields || []), ...fields]);
-  cachedExpandedFields = null;
-}
-
-let cachedExpandedFields: string[] | null = null;
-/**
- * Retrieves the expanded list of sensitive fields.
- *
- * This function expands the default sensitive fields into their various naming
- * conventions (e.g., camelCase, snake_case) and caches the result for efficiency.
- *
- * @returns Array of expanded sensitive field names
- */
-export function getExpandedSensitiveFields() {
-  cachedExpandedFields ??= expandSensitiveFields(defaultSensitiveFields);
-  return cachedExpandedFields;
 }
 
 /**
@@ -236,7 +327,7 @@ export function getExpandedSensitiveFields() {
  */
 export function setSensitiveFields(fields: string[]) {
   defaultSensitiveFields.splice(0, defaultSensitiveFields.length, ...fields);
-  cachedExpandedFields = null;
+  invalidateSensitiveFieldsCache();
 }
 
 /**
@@ -255,14 +346,29 @@ export function setSensitiveFields(fields: string[]) {
  */
 export function addSensitiveFields(fields: string[]) {
   defaultSensitiveFields.push(...fields);
-  cachedExpandedFields = null;
+  invalidateSensitiveFieldsCache();
 }
+
+/**
+ * Global store interface containing the root logger singleton.
+ */
+type GlobalLoggerStore = {
+  [GLOBAL_LOGGER_KEY]?: PinoLogger;
+};
 
 /**
  * Use an object compatible with either modern or legacy global scopes.
  */
 export const _globalThis = typeof globalThis === 'object' ? globalThis : global;
-const _global = _globalThis as unknown as { [GLOBAL_LOGGER_KEY]: PinoLogger };
+const _global = _globalThis as typeof _globalThis & GlobalLoggerStore;
+
+/**
+ * Resets the cached root logger instance.
+ * Useful for tests or dynamic reconfiguration.
+ */
+export function resetLogger(): void {
+  delete _global[GLOBAL_LOGGER_KEY];
+}
 
 /**
  * Initializes the global root logger according to app configuration.
@@ -274,13 +380,13 @@ const _global = _globalThis as unknown as { [GLOBAL_LOGGER_KEY]: PinoLogger };
 function setupLogger(isGlobal: boolean = true): PinoLogger {
   const sensitiveFields = getExpandedSensitiveFields();
   const { logger: loggerConfig } = getCatbeeGlobalConfig();
-  const paths = new Set([...defaultRedactPaths, ...sensitiveFields.flatMap(field => generateDeepPaths(field, 2))]);
+  const paths = new Set([...defaultRedactPaths, ...sensitiveFields.flatMap(field => generateDeepPaths(field, 5))]);
   const logParams: LoggerOptions = {
     name: loggerConfig?.name ?? '@catbee/utils',
     level: loggerConfig?.level ?? 'info',
     redact: {
       paths: Array.from(paths),
-      censor: (value, path) => redact(value, path)
+      censor: (value, path) => redact(value, path) as string
     },
     serializers: {
       req: pino.stdSerializers.req,
@@ -298,6 +404,20 @@ function setupLogger(isGlobal: boolean = true): PinoLogger {
   // Determine if we need file logging
   const logDir = loggerConfig?.dir?.trim();
   const hasFileLogging = Boolean(logDir);
+  const destination = logDir ? `${logDir.replace(/[/\\]+$/, '')}/app.log` : 'app.log';
+
+  const prettyOptions: Record<string, unknown> = {
+    colorize: loggerConfig?.colorize,
+    translateTime: 'SYS:standard',
+    ignore: 'pid,hostname',
+    singleLine: loggerConfig?.singleLine,
+    levelFirst: true
+  };
+
+  const fileOptions: Record<string, unknown> = {
+    destination,
+    mkdir: true
+  };
 
   if (hasFileLogging && loggerConfig?.pretty) {
     // Both file and pretty logging enabled - use multistream
@@ -308,21 +428,12 @@ function setupLogger(isGlobal: boolean = true): PinoLogger {
           {
             target: 'pino-pretty',
             level: loggerConfig?.level ?? 'info',
-            options: {
-              colorize: loggerConfig?.colorize,
-              translateTime: 'SYS:standard',
-              ignore: 'pid,hostname',
-              singleLine: loggerConfig?.singleLine,
-              levelFirst: true
-            }
+            options: prettyOptions
           },
           {
             target: 'pino/file',
             level: loggerConfig?.level ?? 'info',
-            options: {
-              destination: `${logDir}/app.log`,
-              mkdir: true
-            }
+            options: fileOptions
           }
         ]
       })
@@ -333,10 +444,7 @@ function setupLogger(isGlobal: boolean = true): PinoLogger {
       logParams,
       pino.transport({
         target: 'pino/file',
-        options: {
-          destination: `${logDir}/app.log`,
-          mkdir: true
-        }
+        options: fileOptions
       })
     );
   } else if (loggerConfig?.pretty) {
@@ -345,13 +453,7 @@ function setupLogger(isGlobal: boolean = true): PinoLogger {
       logParams,
       pino.transport({
         target: 'pino-pretty',
-        options: {
-          colorize: loggerConfig?.colorize,
-          translateTime: 'SYS:standard',
-          ignore: 'pid,hostname',
-          singleLine: loggerConfig?.singleLine,
-          levelFirst: true
-        }
+        options: prettyOptions
       })
     );
   } else {
@@ -361,7 +463,7 @@ function setupLogger(isGlobal: boolean = true): PinoLogger {
 
   if (isGlobal) {
     _global[GLOBAL_LOGGER_KEY] = logger;
-    _global[GLOBAL_LOGGER_KEY]?.debug({ logDir }, 'Global Logger Initialized');
+    logger.debug({ logDir: logDir || 'none' }, 'Global Logger Initialized');
   }
 
   return logger;
@@ -389,13 +491,13 @@ export function getLogger(newInstance: boolean = false): PinoLogger {
     setupLogger();
   }
 
-  return _global[GLOBAL_LOGGER_KEY];
+  return _global[GLOBAL_LOGGER_KEY]!;
 }
 
 /**
  * Creates a child logger with additional context.
  *
- * @param {Record<string, any>} bindings - Properties to attach to all log records
+ * @param {Record<string, unknown>} bindings - Properties to attach to all log records
  * @param {Logger} [parentLogger] - Parent logger (defaults to current context logger or global)
  * @returns {Logger} Child logger with merged context
  */
@@ -417,10 +519,17 @@ export function createRequestLogger(requestId: string, additionalContext: Record
     ...additionalContext
   });
 
+  let stored = false;
   try {
-    ContextStore.set(StoreKeys.LOGGER, logger);
+    if (typeof ContextStore.getAll !== 'function' || ContextStore.getAll() !== undefined) {
+      ContextStore.set(StoreKeys.LOGGER, logger);
+      stored = true;
+    }
   } catch {
     // Context not initialized, can't store logger
+  }
+
+  if (!stored) {
     logger.debug('Failed to store logger in context - AsyncLocalStorage not initialized');
   }
 
@@ -430,11 +539,11 @@ export function createRequestLogger(requestId: string, additionalContext: Record
 /**
  * Utility to safely log errors with proper stack trace extraction
  *
- * @param {Error|unknown} error - Error object to log
+ * @param {unknown} error - Error object to log
  * @param {string} [message] - Optional message to include
  * @param {Record<string, unknown>} [context] - Additional context properties
  */
-export function logError(error: Error | string, message?: string, context?: Record<string, unknown>): void {
+export function logError(error: unknown, message?: string, context?: Record<string, unknown>): void {
   const logger = getLogger();
 
   const errObj = error instanceof Error ? error : new Error(String(error));
@@ -467,21 +576,36 @@ export function expandSensitiveFields(fields: string[]): string[] {
  * Useful to match fields like `api_key`, `apiKey`, `apikey`, `APIKEY`, etc.
  */
 export function expandSensitiveField(field: string): string[] {
-  const parts = field.split(/[_-]/g).filter(Boolean);
+  if (!field || typeof field !== 'string') {
+    return [];
+  }
+
+  const trimmed = field.trim();
+  if (!trimmed) {
+    return [field];
+  }
+
+  const parts = trimmed.split(/[_-]+|(?<=[a-z0-9])(?=[A-Z])/g).filter(Boolean);
+  if (parts.length === 0) {
+    return [field];
+  }
+
+  const lowerParts = parts.map(p => p.toLowerCase());
+  const upperParts = parts.map(p => p.toUpperCase());
 
   const camel =
-    parts[0].toLowerCase() +
-    parts
+    lowerParts[0] +
+    lowerParts
       .slice(1)
-      .map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase())
+      .map(p => p.charAt(0).toUpperCase() + p.slice(1))
       .join('');
 
-  const mergedLower = parts.join('').toLowerCase();
-  const mergedUpper = parts.join('').toUpperCase();
+  const mergedLower = lowerParts.join('');
+  const mergedUpper = upperParts.join('');
 
-  const kebab = parts.map(p => p.toLowerCase()).join('-');
-  const snakeLower = parts.map(p => p.toLowerCase()).join('_');
-  const snakeUpper = parts.map(p => p.toUpperCase()).join('_');
+  const kebab = lowerParts.join('-');
+  const snakeLower = lowerParts.join('_');
+  const snakeUpper = upperParts.join('_');
 
   return Array.from(new Set([field, camel, mergedLower, mergedUpper, kebab, snakeLower, snakeUpper]));
 }
@@ -494,7 +618,7 @@ export function expandSensitiveField(field: string): string[] {
  *  *.password
  *  *.*.password
  */
-export function generateDeepPaths(field: string, depth: number): string[] {
+export function generateDeepPaths(field: string, depth: number = 5): string[] {
   const set = new Set<string>([field]);
 
   let prefix = '';
