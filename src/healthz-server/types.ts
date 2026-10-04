@@ -2,9 +2,16 @@
  * A health check function that can be synchronous or asynchronous.
  * Receives an AbortSignal that is triggered when `checkTimeoutMs` is exceeded.
  *
- * > **Cancellation Note**: Cancellation is cooperative. The check function must listen to
- * > `signal.aborted` or pass `signal` to underlying asynchronous APIs (e.g. database drivers, `fetch`).
- * > Synchronous CPU-bound loops or operations that ignore `signal` cannot be forcibly stopped by JavaScript.
+ * > **Cancellation & Timeout Semantics**:
+ * > When `checkTimeoutMs` expires, the HTTP probe response immediately fast-fails with 503
+ * > and aborts the supplied `AbortSignal`.
+ * >
+ * > However, runtime cancellation in JavaScript is **strictly cooperative**. The probe server cannot
+ * > preemptively interrupt executing JavaScript or force-cancel asynchronous work that does not listen
+ * > to the signal. If a check executes asynchronous tasks without passing `signal`
+ * > (e.g., `await db.query(...)` without `{ signal }`), that task will continue running in the background.
+ * > To prevent background resource leaks, always pass `signal` to underlying drivers/clients
+ * > (e.g. `fetch(url, { signal })`, database clients, HTTP clients) or check `signal?.aborted`.
  *
  * - Return `true` (or resolve to true) to signal healthy.
  * - Return `false` (or resolve to false) to signal unhealthy.
@@ -16,9 +23,16 @@ export type HealthCheckFn = (signal?: AbortSignal) => boolean | Promise<boolean>
  * A readiness check function.
  * Receives an AbortSignal that is triggered when `checkTimeoutMs` is exceeded.
  *
- * > **Cancellation Note**: Cancellation is cooperative. The check function must listen to
- * > `signal.aborted` or pass `signal` to underlying asynchronous APIs (e.g. database drivers, `fetch`).
- * > Synchronous CPU-bound loops or operations that ignore `signal` cannot be forcibly stopped by JavaScript.
+ * > **Cancellation & Timeout Semantics**:
+ * > When `checkTimeoutMs` expires, the HTTP probe response immediately fast-fails with 503
+ * > and aborts the supplied `AbortSignal`.
+ * >
+ * > However, runtime cancellation in JavaScript is **strictly cooperative**. The probe server cannot
+ * > preemptively interrupt executing JavaScript or force-cancel asynchronous work that does not listen
+ * > to the signal. If a check executes asynchronous tasks without passing `signal`
+ * > (e.g., `await db.query(...)` without `{ signal }`), that task will continue running in the background.
+ * > To prevent background resource leaks, always pass `signal` to underlying drivers/clients
+ * > (e.g. `fetch(url, { signal })`, database clients, HTTP clients) or check `signal?.aborted`.
  *
  * - Return `true` (or resolve to true) to signal ready.
  * - Return `false` (or resolve to false) to signal not ready.
@@ -35,7 +49,7 @@ export interface NamedCheck {
   /**
    * Check function — return false or throw to indicate failure.
    * Receives an AbortSignal that is triggered when the check times out.
-   * Cancellation via the signal is cooperative.
+   * Cancellation via the signal is cooperative; pass `signal` to underlying operations.
    */
   check: (signal?: AbortSignal) => boolean | Promise<boolean>;
 }
@@ -138,8 +152,16 @@ export interface CatbeeHealthzServerConfig {
   /**
    * Custom liveness check function. Runs *in addition to* `checks`.
    * Return `false` or throw to indicate unhealthy.
+   * Can also be provided via `onLivenessCheck`.
    */
   onHealthCheck?: HealthCheckFn;
+
+  /**
+   * Symmetrical alias for `onHealthCheck` — custom liveness check function.
+   * Runs *in addition to* `checks` on `/healthz`.
+   * Return `false` or throw to indicate unhealthy.
+   */
+  onLivenessCheck?: HealthCheckFn;
 
   /**
    * Custom readiness check function. Runs *in addition to* `readinessChecks`.
@@ -147,7 +169,13 @@ export interface CatbeeHealthzServerConfig {
    */
   onReadinessCheck?: ReadinessCheckFn;
 
-  /** Timeout (ms) per individual check before it's considered failed
+  /**
+   * Timeout (ms) per individual check before it's considered failed.
+   *
+   * When exceeded, the probe immediately fast-fails with status 503 and triggers
+   * `abort()` on the check's `AbortSignal`. Note that cancellation is cooperative;
+   * checks should forward `signal` to downstream clients (e.g. database drivers, fetch)
+   * to avoid orphaned background execution.
    *  - **default**: `5000`
    *  - **env**: `HEALTHZ_CHECK_TIMEOUT_MS`
    */

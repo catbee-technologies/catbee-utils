@@ -470,6 +470,113 @@ describe('HealthzServer', () => {
       expect(res.statusCode).toBe(405);
       res.resume();
     });
+
+    it('does not duplicate check when registered with type "both" and readinessChecks is undefined', async () => {
+      let callCount = 0;
+      const check = {
+        name: 'shared-check',
+        check: () => {
+          callCount++;
+          return true;
+        }
+      };
+
+      const addr = (await HealthzServer.start({ port: 0 }))!;
+      HealthzServer.registerCheck(check, 'both');
+      HealthzServer.setReady(true);
+
+      const res = await get(addr.port, '/readyz');
+      expect(res.status).toBe(200);
+      expect(res.body.checks).toHaveLength(1);
+      expect(callCount).toBe(1);
+    });
+
+    it('matches endpoints with query strings and trailing slashes', async () => {
+      const addr = (await HealthzServer.start({ port: 0 }))!;
+      HealthzServer.markStartupComplete();
+      HealthzServer.setReady(true);
+
+      // Trailing slash
+      const liveSlash = await get(addr.port, '/healthz/');
+      expect(liveSlash.status).toBe(200);
+
+      // Query parameter
+      const readyQuery = await get(addr.port, '/readyz?cache=bust&t=123');
+      expect(readyQuery.status).toBe(200);
+
+      // Both trailing slash and query param
+      const startupBoth = await get(addr.port, '/startupz/?param=test');
+      expect(startupBoth.status).toBe(200);
+    });
+
+    it('handles concurrent stop() calls safely without error', async () => {
+      await HealthzServer.start({ port: 0 });
+      expect(HealthzServer.isRunning()).toBe(true);
+
+      // Concurrent stop() calls
+      await expect(Promise.all([HealthzServer.stop(), HealthzServer.stop()])).resolves.not.toThrow();
+      expect(HealthzServer.isRunning()).toBe(false);
+    });
+
+    it('copies check arrays defensively to prevent external mutation', async () => {
+      const myChecks = [{ name: 'initial', check: () => true }];
+      await HealthzServer.start({ port: 0, checks: myChecks });
+
+      HealthzServer.registerCheck({ name: 'registered', check: () => true }, 'liveness');
+      expect(myChecks).toHaveLength(1);
+    });
+
+    it('isolates liveness check from readiness when readinessChecks was undefined', async () => {
+      const addr = (await HealthzServer.start({
+        port: 0,
+        checks: [{ name: 'common', check: () => true }]
+      }))!;
+      HealthzServer.setReady(true);
+
+      HealthzServer.registerCheck({ name: 'live-only', check: () => true }, 'liveness');
+
+      const liveRes = await get(addr.port, '/healthz');
+      expect(liveRes.body.checks).toHaveLength(2);
+      expect(liveRes.body.checks.map((c: any) => c.name)).toEqual(['common', 'live-only']);
+
+      const readyRes = await get(addr.port, '/readyz');
+      expect(readyRes.body.checks).toHaveLength(1);
+      expect(readyRes.body.checks[0].name).toBe('common');
+    });
+
+    it('supports onLivenessCheck as a symmetrical alias for onHealthCheck', async () => {
+      const addr = (await HealthzServer.start({
+        port: 0,
+        onLivenessCheck: () => true
+      }))!;
+
+      const liveRes = await get(addr.port, '/healthz');
+      expect(liveRes.status).toBe(200);
+      expect(liveRes.body.checks[0].name).toBe('custom');
+      expect(liveRes.body.checks[0].ok).toBe(true);
+    });
+
+    it('ensures check registration is completely order-independent', async () => {
+      const addr = (await HealthzServer.start({
+        port: 0,
+        checks: [{ name: 'base', check: () => true }]
+      }))!;
+      HealthzServer.setReady(true);
+
+      // Register in mixed order
+      HealthzServer.registerCheck({ name: 'both-1', check: () => true }, 'both');
+      HealthzServer.registerCheck({ name: 'live-only', check: () => true }, 'liveness');
+      HealthzServer.registerCheck({ name: 'ready-only', check: () => true }, 'readiness');
+      HealthzServer.registerCheck({ name: 'both-2', check: () => true }, 'both');
+
+      const liveRes = await get(addr.port, '/healthz');
+      const liveNames = liveRes.body.checks.map((c: any) => c.name);
+      expect(liveNames).toEqual(['base', 'both-1', 'live-only', 'both-2']);
+
+      const readyRes = await get(addr.port, '/readyz');
+      const readyNames = readyRes.body.checks.map((c: any) => c.name);
+      expect(readyNames).toEqual(['base', 'both-1', 'ready-only', 'both-2']);
+    });
   });
 
   describe('environment variable controls', () => {

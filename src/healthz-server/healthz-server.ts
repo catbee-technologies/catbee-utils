@@ -72,12 +72,18 @@ export class HealthzServer {
   /** Whether the service is ready to receive traffic (for `/readyz`) */
   private ready = false;
   private shuttingDown = false;
+  private readonly livenessChecks: NamedCheck[];
+  private readonly readinessChecks: NamedCheck[];
+
+  private stoppingPromise?: Promise<void>;
 
   private readonly onSigterm = () => this.initiateShutdown();
   private readonly onSigint = () => this.initiateShutdown();
 
   private constructor(config: ResolvedHealthzConfig) {
     this.config = config;
+    this.livenessChecks = [...config.checks];
+    this.readinessChecks = config.readinessChecks !== undefined ? [...config.readinessChecks] : [...config.checks];
     this.server = createServer((req, res) => this.handleRequest(req, res));
 
     if (this.config.handleSignals !== false) {
@@ -107,6 +113,8 @@ export class HealthzServer {
     return new Promise<HealthzAddressInfo>((resolve, reject) => {
       const onError = (err: Error) => {
         instance.cleanup();
+        instance.running = false;
+        instance.shuttingDown = false;
         delete _global[SINGLETON_KEY];
         reject(err);
       };
@@ -121,6 +129,8 @@ export class HealthzServer {
 
         if (!addr || typeof addr === 'string') {
           instance.cleanup();
+          instance.running = false;
+          instance.shuttingDown = false;
           delete _global[SINGLETON_KEY];
           reject(new Error('Failed to resolve health server address'));
           return;
@@ -171,19 +181,33 @@ export class HealthzServer {
     const instance = _global[SINGLETON_KEY];
     if (!instance) return;
 
+    if (instance.stoppingPromise) {
+      return instance.stoppingPromise;
+    }
+
+    instance.shuttingDown = true;
+    instance.ready = false;
     instance.cleanup();
 
-    return new Promise<void>(resolve => {
+    instance.stoppingPromise = new Promise<void>((resolve, reject) => {
       // Close idle keep-alive connections so the server can terminate cleanly
       if (typeof instance.server.closeIdleConnections === 'function') {
         instance.server.closeIdleConnections();
       }
 
-      instance.server.close(() => {
+      instance.server.close(err => {
+        instance.running = false;
+        instance.shuttingDown = false;
         delete _global[SINGLETON_KEY];
-        resolve();
+        if (err && (err as NodeJS.ErrnoException).code !== 'ERR_SERVER_NOT_RUNNING') {
+          reject(err);
+        } else {
+          resolve();
+        }
       });
     });
+
+    return instance.stoppingPromise;
   }
 
   static getInstance(): HealthzServer | undefined {
@@ -199,11 +223,10 @@ export class HealthzServer {
    */
   public registerCheck(check: NamedCheck, type: 'liveness' | 'readiness' | 'both' = 'readiness'): this {
     if (type === 'liveness' || type === 'both') {
-      this.config.checks.push(check);
+      this.livenessChecks.push(check);
     }
     if (type === 'readiness' || type === 'both') {
-      this.config.readinessChecks ??= [...this.config.checks];
-      this.config.readinessChecks.push(check);
+      this.readinessChecks.push(check);
     }
     return this;
   }
@@ -225,33 +248,35 @@ export class HealthzServer {
       return;
     }
 
-    const url = req.url ?? '/';
+    const rawUrl = req.url ?? '/';
+    const pathname = rawUrl.split('?')[0].replace(/\/+$/, '') || '/';
+    const matchPath = (configured: string) => pathname === (configured.replace(/\/+$/, '') || '/');
 
     try {
-      if (url === this.config.healthzPath) {
+      if (matchPath(this.config.healthzPath)) {
         await this.handleLiveness(res, isHead);
-      } else if (url === this.config.readyzPath) {
+      } else if (matchPath(this.config.readyzPath)) {
         await this.handleReadiness(res, isHead);
-      } else if (url === this.config.startupzPath) {
+      } else if (matchPath(this.config.startupzPath)) {
         this.handleStartup(res, isHead);
       } else {
         this.sendJson(res, 404, { error: 'Not Found' }, isHead);
       }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Internal Server Error';
-      this.sendJson(res, 500, { error: message }, isHead);
+    } catch (_err) {
+      this.sendJson(res, 500, { error: 'Internal Server Error' }, isHead);
     }
   }
 
   /** `/healthz` — Liveness probe */
   private async handleLiveness(res: ServerResponse, isHead = false): Promise<void> {
-    const results = await this.runChecks(this.config.checks);
+    const results = await this.runChecks(this.livenessChecks);
 
-    // Run custom onHealthCheck if provided
-    if (this.config.onHealthCheck) {
+    // Run custom onLivenessCheck or onHealthCheck if provided
+    const livenessCheck = this.config.onLivenessCheck ?? this.config.onHealthCheck;
+    if (livenessCheck) {
       const start = Date.now();
       try {
-        const ok = await this.executeCheck(this.config.onHealthCheck, this.config.checkTimeoutMs);
+        const ok = await this.executeCheck(livenessCheck, this.config.checkTimeoutMs);
         results.push({
           name: 'custom',
           ok: !!ok,
@@ -293,10 +318,7 @@ export class HealthzServer {
       return;
     }
 
-    // Use readinessChecks if explicitly provided, otherwise fall back to general checks
-    const checksToRun = this.config.readinessChecks ?? this.config.checks;
-
-    const results = await this.runChecks(checksToRun);
+    const results = await this.runChecks(this.readinessChecks);
 
     // Run custom onReadinessCheck if provided
     if (this.config.onReadinessCheck) {
@@ -375,6 +397,8 @@ export class HealthzServer {
   }
 
   private sendJson(res: ServerResponse, status: number, body: unknown, isHead = false): void {
+    if (res.headersSent) return;
+
     const payload = JSON.stringify(body);
     res.writeHead(status, {
       'Content-Type': 'application/json; charset=utf-8',
@@ -389,6 +413,13 @@ export class HealthzServer {
     }
   }
 
+  /**
+   * Executes a check function with timeout and cooperative cancellation.
+   *
+   * Note on cancellation: The AbortController aborts when `ms` expires, which signals cooperative
+   * consumers (e.g., fetch, pg, ioredis) to terminate their work. The attached .catch() on checkPromise
+   * prevents unhandled rejections if the check promise rejects after the timeout has already resolved.
+   */
   private async executeCheck(fn: (signal?: AbortSignal) => boolean | Promise<boolean>, ms: number): Promise<boolean> {
     const controller = new AbortController();
     let timer: NodeJS.Timeout | undefined;
@@ -428,7 +459,5 @@ export class HealthzServer {
     process.off('SIGINT', this.onSigint);
     this.ready = false;
     this.startupComplete = false;
-    this.running = false;
-    this.shuttingDown = false;
   }
 }

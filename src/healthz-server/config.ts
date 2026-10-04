@@ -10,9 +10,10 @@ import type { CatbeeHealthzServerConfig } from './types';
  * "explicitly empty" (-> run nothing).
  */
 export interface ResolvedHealthzConfig extends Required<
-  Omit<CatbeeHealthzServerConfig, 'onHealthCheck' | 'onReadinessCheck' | 'readinessChecks'>
+  Omit<CatbeeHealthzServerConfig, 'onHealthCheck' | 'onLivenessCheck' | 'onReadinessCheck' | 'readinessChecks'>
 > {
   onHealthCheck?: CatbeeHealthzServerConfig['onHealthCheck'];
+  onLivenessCheck?: CatbeeHealthzServerConfig['onLivenessCheck'];
   onReadinessCheck?: CatbeeHealthzServerConfig['onReadinessCheck'];
   readinessChecks?: CatbeeHealthzServerConfig['readinessChecks'];
 }
