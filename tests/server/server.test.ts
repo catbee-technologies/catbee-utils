@@ -5,6 +5,8 @@ import express from 'express';
 import { HttpStatusCodes } from '../../src/http-status-codes';
 import { readFileSync } from '../../src/fs';
 import * as envUtils from '../../src/env';
+import http from 'node:http';
+import { HealthzServer } from '../../src/healthz-server';
 
 jest.mock('../../src/fs', () => ({
   ...jest.requireActual('../../src/fs'),
@@ -34,20 +36,37 @@ Object.defineProperty(process, 'getuid', {
 
 async function killServer(server: ExpressServer) {
   try {
-    if (server && server.getServer()) {
-      await server.stop(true);
-    }
+    await server.stop(true);
   } catch {
     // Ignore errors during cleanup
   }
+}
+
+function fetchProbe(port: number, path: string): Promise<{ status: number; body: any }> {
+  return new Promise((resolve, reject) => {
+    http
+      .get(`http://127.0.0.1:${port}${path}`, res => {
+        let data = '';
+        res.on('data', chunk => {
+          data += chunk;
+        });
+        res.on('end', () => {
+          try {
+            resolve({ status: res.statusCode!, body: JSON.parse(data) });
+          } catch {
+            resolve({ status: res.statusCode!, body: data });
+          }
+        });
+      })
+      .on('error', reject);
+  });
 }
 
 describe('ExpressServer', () => {
   const baseConfig: Partial<CatbeeGlobalServerConfig> = {
     port: 4000,
     host: 'localhost',
-    requestLogging: { enable: false }, // Disable for cleaner test output
-    healthCheck: { path: '/healthz', detailed: true }
+    requestLogging: { enable: false } // Disable for cleaner test output
   };
 
   describe('Initialization', () => {
@@ -231,29 +250,25 @@ describe('ExpressServer', () => {
     it('should apply global prefix to routes', async () => {
       const config = {
         ...baseConfig,
-        globalPrefix: '/api/v1',
-        healthCheck: {
-          path: '/healthz',
-          detailed: true,
-          withGlobalPrefix: true
-        }
+        globalPrefix: '/api/v1'
       };
 
       const server = new ExpressServer(config);
+      const router = express.Router();
+      router.get('/test', (_req, res) => res.json({ status: 'ok' }));
+      server.addBaseRouter(router);
       await server.waitUntilReady();
 
       // Start the server
       await server.start();
 
-      // Test that health check has the prefix
-      const res = await request(server.app).get('/api/v1/healthz');
+      // Test that route has the prefix
+      const res = await request(server.app).get('/api/v1/test');
       expect(res.status).toBe(HttpStatusCodes.OK);
-      expect(res.body?.message).toBe('OK');
-      expect(res.body?.error).toBe(false);
-      expect(res.body?.data).toBeNull();
+      expect(res.body?.status).toBe('ok');
 
-      // Regular health path should 404
-      const res2 = await request(server.app).get('/healthz');
+      // Regular path without prefix should 404
+      const res2 = await request(server.app).get('/test');
       expect(res2.status).toBe(HttpStatusCodes.NOT_FOUND);
 
       await killServer(server);
@@ -385,19 +400,6 @@ describe('ExpressServer', () => {
   });
 
   describe('Routes & Middleware', () => {
-    it('should respond to health checks', async () => {
-      const server = new ExpressServer(baseConfig);
-      await server.start();
-      const res = await request(server.app).get('/healthz');
-
-      expect(res.status).toBe(HttpStatusCodes.OK);
-      expect(res.body.message).toBe('OK');
-      expect(res.body.error).toBe(false);
-      expect(res.body.data).toBeNull();
-
-      await killServer(server);
-    });
-
     it('should handle custom routes', async () => {
       const server = new ExpressServer(baseConfig);
       server.registerRoute(['get'], '/test-route', (_req, res) => {
@@ -456,72 +458,76 @@ describe('ExpressServer', () => {
     });
   });
 
-  describe('Health Checks', () => {
-    it('should register and execute health checks', async () => {
-      const server = new ExpressServer(baseConfig);
+  describe('Health Checks & Readiness', () => {
+    afterEach(async () => {
+      await HealthzServer.stop();
+    });
 
-      const successCheck = jest.fn().mockReturnValue(true);
-      const failCheck = jest.fn().mockReturnValue(false);
-
-      server.registerHealthCheck('success-check', successCheck);
-      server.registerHealthCheck('fail-check', failCheck);
-
+    it('should report ready status via server.ready()', async () => {
+      const server = new ExpressServer({
+        port: 0,
+        healthzServer: { enable: true, port: 0, shutdownDelayMs: 0 }
+      });
+      await server.waitUntilReady();
       await server.start();
 
-      const res = await request(server.app).get('/healthz');
+      expect(await server.ready()).toBe(true);
 
-      expect(res.status).toBe(HttpStatusCodes.SERVICE_UNAVAILABLE);
-      expect(successCheck).toHaveBeenCalled();
-      expect(failCheck).toHaveBeenCalled();
-      expect(res.body.data.checks).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ name: 'success-check', status: true }),
-          expect.objectContaining({ name: 'fail-check', status: false })
-        ])
-      );
+      server.setReady(false);
+      expect(await server.ready()).toBe(false);
 
       await killServer(server);
     });
 
-    it('should handle async health checks', async () => {
-      const server = new ExpressServer(baseConfig);
+    it('should handle async health checks on HealthzServer', async () => {
+      const server = new ExpressServer({
+        port: 0,
+        healthzServer: { enable: true, port: 0, shutdownDelayMs: 0 }
+      });
 
       const asyncCheck = jest.fn().mockResolvedValue(true);
-      server.registerHealthCheck('async-check', asyncCheck);
+      server.registerHealthCheck('async-check', asyncCheck, 'readiness');
 
+      await server.waitUntilReady();
       await server.start();
 
-      const res = await request(server.app).get('/healthz');
+      const addr = server.getHealthzAddress()!;
+      const res = await fetchProbe(addr.port, '/readyz');
 
-      expect(res.status).toBe(HttpStatusCodes.OK);
+      expect(res.status).toBe(200);
       expect(asyncCheck).toHaveBeenCalled();
-      expect(res.body.data.checks).toEqual(
-        expect.arrayContaining([expect.objectContaining({ name: 'async-check', status: true })])
+      expect(res.body.checks).toEqual(
+        expect.arrayContaining([expect.objectContaining({ name: 'async-check', ok: true })])
       );
 
       await killServer(server);
     });
 
-    it('should handle health check errors gracefully', async () => {
-      const server = new ExpressServer(baseConfig);
+    it('should handle health check errors gracefully on HealthzServer', async () => {
+      const server = new ExpressServer({
+        port: 0,
+        healthzServer: { enable: true, port: 0, shutdownDelayMs: 0 }
+      });
 
       const errorCheck = jest.fn().mockImplementation(() => {
         throw new Error('Test error');
       });
 
-      server.registerHealthCheck('error-check', errorCheck);
+      server.registerHealthCheck('error-check', errorCheck, 'readiness');
 
+      await server.waitUntilReady();
       await server.start();
 
-      const res = await request(server.app).get('/healthz');
+      const addr = server.getHealthzAddress()!;
+      const res = await fetchProbe(addr.port, '/readyz');
 
-      expect(res.status).toBe(HttpStatusCodes.SERVICE_UNAVAILABLE);
+      expect(res.status).toBe(503);
       expect(errorCheck).toHaveBeenCalled();
-      expect(res.body.data.checks).toEqual(
+      expect(res.body.checks).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
             name: 'error-check',
-            status: false,
+            ok: false,
             error: 'Test error'
           })
         ])
@@ -827,6 +833,128 @@ describe('ExpressServer', () => {
       expect(res.body).toHaveProperty('message');
 
       await killServer(server);
+    });
+  });
+
+  describe('HealthzServer & HealthCheck Integration', () => {
+    afterEach(async () => {
+      await HealthzServer.stop();
+    });
+
+    it('should not mount any healthz route on Express server', async () => {
+      const server = new ExpressServer({ port: 0, host: 'localhost' });
+      await server.waitUntilReady();
+      const res = await request(server.app).get('/healthz');
+      expect(res.status).toBe(HttpStatusCodes.NOT_FOUND);
+    });
+
+    it('should manage HealthzServer lifecycle with ExpressServer', async () => {
+      const serverConfig = new ServerConfigBuilder()
+        .withPort(0)
+        .withHealthzServer({ port: 0, shutdownDelayMs: 0 })
+        .disableOpenApi()
+        .build();
+
+      const server = new ExpressServer(serverConfig);
+      expect(server.isHealthzServerEnabled()).toBe(true);
+
+      await server.waitUntilReady();
+      await server.start();
+
+      const addr = server.getHealthzAddress();
+      expect(addr).toBeDefined();
+      expect(addr!.port).toBeGreaterThan(0);
+      expect(server.isReady()).toBe(true);
+      expect(HealthzServer.isStarted()).toBe(true);
+
+      // Verify liveness probe
+      const liveness = await fetchProbe(addr!.port, '/healthz');
+      expect(liveness.status).toBe(200);
+      expect(liveness.body.status).toBe('ok');
+
+      // Verify readiness probe
+      const readiness = await fetchProbe(addr!.port, '/readyz');
+      expect(readiness.status).toBe(200);
+      expect(readiness.body.status).toBe('ok');
+
+      // Verify startup probe
+      const startup = await fetchProbe(addr!.port, '/startupz');
+      expect(startup.status).toBe(200);
+      expect(startup.body.status).toBe('ok');
+
+      // Test manual readiness control
+      server.setReady(false);
+      expect(server.isReady()).toBe(false);
+      const unready = await fetchProbe(addr!.port, '/readyz');
+      expect(unready.status).toBe(503);
+
+      server.setReady(true);
+      expect(server.isReady()).toBe(true);
+      const readyAgain = await fetchProbe(addr!.port, '/readyz');
+      expect(readyAgain.status).toBe(200);
+
+      // Stopping ExpressServer stops HealthzServer
+      await killServer(server);
+      expect(HealthzServer.isStarted()).toBe(false);
+      expect(server.getHealthzAddress()).toBeNull();
+    });
+
+    it('should sync registerHealthCheck to HealthzServer probes', async () => {
+      const serverConfig = new ServerConfigBuilder()
+        .withPort(0)
+        .withHealthzServer({ port: 0, shutdownDelayMs: 0 })
+        .disableOpenApi()
+        .build();
+
+      const server = new ExpressServer(serverConfig);
+
+      server.registerHealthCheck('db-check', () => true, 'readiness');
+      server.registerHealthCheck('live-check', () => true, 'liveness');
+
+      await server.waitUntilReady();
+      await server.start();
+
+      const addr = server.getHealthzAddress()!;
+
+      const liveRes = await fetchProbe(addr.port, '/healthz');
+      expect(liveRes.status).toBe(200);
+      expect(liveRes.body.checks).toEqual(
+        expect.arrayContaining([expect.objectContaining({ name: 'live-check', ok: true })])
+      );
+
+      const readyRes = await fetchProbe(addr.port, '/readyz');
+      expect(readyRes.status).toBe(200);
+      expect(readyRes.body.checks).toEqual(
+        expect.arrayContaining([expect.objectContaining({ name: 'db-check', ok: true })])
+      );
+
+      // Dynamic registration while server is running
+      server.registerHealthCheck('dynamic-db', () => false, 'readiness');
+      const dynamicReady = await fetchProbe(addr.port, '/readyz');
+      expect(dynamicReady.status).toBe(503);
+      expect(dynamicReady.body.checks).toEqual(
+        expect.arrayContaining([expect.objectContaining({ name: 'dynamic-db', ok: false })])
+      );
+
+      await killServer(server);
+    });
+
+    it('should reject start() and clean up when HealthzServer fails to start', async () => {
+      const healthzStartSpy = jest
+        .spyOn(HealthzServer, 'start')
+        .mockRejectedValueOnce(new Error('Healthz port collision EADDRINUSE'));
+
+      const server = new ExpressServer({
+        port: 0,
+        healthzServer: { enable: true, port: 8282, shutdownDelayMs: 0 }
+      });
+      await server.waitUntilReady();
+
+      await expect(server.start()).rejects.toThrow('Healthz port collision EADDRINUSE');
+      expect(server.getServer()).toBeNull();
+      expect(server.isRunning()).toBe(false);
+
+      healthzStartSpy.mockRestore();
     });
   });
 });

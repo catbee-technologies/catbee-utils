@@ -7,6 +7,7 @@ import type { CompressionOptions } from 'compression';
 import type { CookieParseOptions } from 'cookie-parser';
 import type { CorsOptions } from 'cors';
 import type { ToggleConfig } from './common';
+import type { CatbeeHealthzServerConfig } from '../healthz-server/types';
 
 /**
  * Server configuration for Catbee HTTP/Express server.
@@ -249,37 +250,17 @@ export interface CatbeeServerConfig {
     skipNotFoundRoutes?: boolean;
   };
 
-  /** Health-check configuration
-   *  - **path**: `/healthz`
-   *  - **detailed**: `true`
-   *  - **withGlobalPrefix**: `false`
+  /** Standalone Healthz probe HTTP server configuration (for Kubernetes liveness, readiness, startup probes)
+   *  - **default**: `false`
+   *  - **env**: `SERVER_HEALTHZ_ENABLE` || `HEALTHZ_ENABLE`
+   *
+   * When enabled, ExpressServer automatically:
+   * - Starts `HealthzServer` on `server.start()`
+   * - Sets `HealthzServer.setReady(true)` after Express server is listening and ready
+   * - Sets `HealthzServer.setReady(false)` and gracefully drains/stops `HealthzServer` on `server.stop()`
+   * - Syncs health checks registered via `server.registerHealthCheck()` to `HealthzServer`
    */
-  healthCheck?: {
-    /** Health-check endpoint path
-     *  - **default**: `'/healthz'`
-     *  - **env**: `SERVER_HEALTH_CHECK_PATH`
-     */
-    path?: string;
-    /** Include detailed check results in the response
-     *  - **default**: `true`
-     *  - **env**: `SERVER_HEALTH_CHECK_DETAILED_OUTPUT`
-     */
-    detailed?: boolean;
-
-    /** Apply global route prefix
-     *  - **default**: `false`
-     *  - **env**: `SERVER_HEALTH_CHECK_WITH_GLOBAL_PREFIX`
-     */
-    withGlobalPrefix?: boolean;
-
-    /** Custom health checks */
-    checks?: Array<{
-      /** Name of the health check */
-      name: string;
-      /** Check function that returns boolean or Promise<boolean> */
-      check: () => Promise<boolean> | boolean;
-    }>;
-  };
+  healthzServer?: ToggleConfig<CatbeeHealthzServerConfig & { enable?: boolean }>;
 
   /** Request timeout in ms
    *  - **default**: `30000` (30 seconds)
@@ -455,24 +436,5 @@ export interface CatbeeServerHooks {
   onResponse?: (req: Request, res: Response, next: NextFunction) => void;
 }
 
-/* Additional server configuration options not covered in CatbeeServerConfig */
-export interface GlobalServerAddons {
-  /**
-   * Skip healthz endpoint even if health checks are configured
-   *  - **default**: `false`
-   *  - **env**: `SERVER_SKIP_HEALTHZ_CHECKS_VALIDATION`
-   *
-   * @additionalInfo
-   * Set to true to return `200 OK` for `/healthz` without checks
-   * Useful in environments where a simple liveness probe is needed
-   * without performing actual health checks
-   * Example: Kubernetes liveness probe
-   * Note: This does not disable the health check functionality itself
-   *       Health checks can still be performed programmatically
-   *       or via other endpoints if needed
-   */
-  skipHealthzChecksValidation: boolean;
-}
-
 /** Combined global server configuration type */
-export type CatbeeGlobalServerConfig = CatbeeServerConfig & GlobalServerAddons;
+export type CatbeeGlobalServerConfig = CatbeeServerConfig;

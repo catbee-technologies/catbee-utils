@@ -507,5 +507,66 @@ describe('HealthzServer', () => {
       const { status } = await get(addr.port, '/env-healthz');
       expect(status).toBe(200);
     });
+
+    it('prefers HEALTHZ_* over SERVER_HEALTHZ_* environment variables', () => {
+      process.env.HEALTHZ_HOST = '127.0.0.1';
+      process.env.SERVER_HEALTHZ_HOST = '192.168.1.100';
+      process.env.HEALTHZ_PORT = '8888';
+      process.env.SERVER_HEALTHZ_PORT = '7777';
+      process.env.HEALTHZ_PATH = '/healthz';
+      process.env.SERVER_HEALTHZ_PATH = '/server-healthz';
+      process.env.HEALTHZ_READYZ_PATH = '/readyz';
+      process.env.SERVER_READYZ_PATH = '/server-readyz';
+      process.env.HEALTHZ_STARTUPZ_PATH = '/startupz';
+      process.env.SERVER_STARTUPZ_PATH = '/server-startupz';
+      process.env.HEALTHZ_DETAILED = 'false';
+      process.env.SERVER_HEALTHZ_DETAILED = 'true';
+      process.env.HEALTHZ_CHECK_TIMEOUT_MS = '4000';
+      process.env.SERVER_HEALTHZ_CHECK_TIMEOUT_MS = '2500';
+      process.env.HEALTHZ_SHUTDOWN_DELAY_MS = '8000';
+      process.env.SERVER_HEALTHZ_SHUTDOWN_DELAY_MS = '6500';
+      Env.clearCache();
+
+      const config = HealthzServer.getDefaultConfig();
+      expect(config.host).toBe('127.0.0.1');
+      expect(config.port).toBe(8888);
+      expect(config.healthzPath).toBe('/healthz');
+      expect(config.readyzPath).toBe('/readyz');
+      expect(config.startupzPath).toBe('/startupz');
+      expect(config.detailed).toBe(false);
+      expect(config.checkTimeoutMs).toBe(4000);
+      expect(config.shutdownDelayMs).toBe(8000);
+    });
+
+    it('falls back to SERVER_HEALTHZ_* when HEALTHZ_* variables are not set', () => {
+      delete process.env.HEALTHZ_HOST;
+      delete process.env.HEALTHZ_PORT;
+      delete process.env.HEALTHZ_PATH;
+      delete process.env.HEALTHZ_READYZ_PATH;
+      delete process.env.HEALTHZ_STARTUPZ_PATH;
+      delete process.env.HEALTHZ_DETAILED;
+      delete process.env.HEALTHZ_CHECK_TIMEOUT_MS;
+      delete process.env.HEALTHZ_SHUTDOWN_DELAY_MS;
+
+      process.env.SERVER_HEALTHZ_HOST = '192.168.1.100';
+      process.env.SERVER_HEALTHZ_PORT = '7777';
+      process.env.SERVER_HEALTHZ_PATH = '/server-healthz';
+      process.env.SERVER_READYZ_PATH = '/server-readyz';
+      process.env.SERVER_STARTUPZ_PATH = '/server-startupz';
+      process.env.SERVER_HEALTHZ_DETAILED = 'false';
+      process.env.SERVER_HEALTHZ_CHECK_TIMEOUT_MS = '2500';
+      process.env.SERVER_HEALTHZ_SHUTDOWN_DELAY_MS = '6500';
+      Env.clearCache();
+
+      const config = HealthzServer.getDefaultConfig();
+      expect(config.host).toBe('192.168.1.100');
+      expect(config.port).toBe(7777);
+      expect(config.healthzPath).toBe('/server-healthz');
+      expect(config.readyzPath).toBe('/server-readyz');
+      expect(config.startupzPath).toBe('/server-startupz');
+      expect(config.detailed).toBe(false);
+      expect(config.checkTimeoutMs).toBe(2500);
+      expect(config.shutdownDelayMs).toBe(6500);
+    });
   });
 });

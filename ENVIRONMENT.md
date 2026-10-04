@@ -36,10 +36,7 @@ Controls the Express-based HTTP application server setup, security middlewares, 
 | `SERVER_OPENAPI_MOUNT_PATH` | `string` | `/docs` | Path where OpenAPI documentation is mounted |
 | `SERVER_OPENAPI_VERBOSE` | `boolean` | `false` | Verbose OpenAPI generator logging |
 | `SERVER_OPENAPI_WITH_GLOBAL_PREFIX` | `boolean` | `false` | Apply global route prefix to OpenAPI docs path |
-| `SERVER_HEALTH_CHECK_PATH` | `string` | `/healthz` | Express built-in health check endpoint path |
-| `SERVER_HEALTH_CHECK_DETAILED_OUTPUT` | `boolean` | `true` | Include individual check results in Express health response |
-| `SERVER_HEALTH_CHECK_WITH_GLOBAL_PREFIX` | `boolean` | `false` | Apply global route prefix to Express health check route |
-| `SERVER_SKIP_HEALTHZ_CHECKS_VALIDATION` | `boolean` | `false` | Return `200 OK` on `/healthz` without running checks |
+| `SERVER_HEALTHZ_ENABLE` | `boolean` | `false` | Enable integrated dedicated Healthz probe server in CatbeeServer |
 | `SERVER_REQUEST_TIMEOUT_MS` | `duration` | `0` | Global HTTP request timeout (0 = disabled) |
 | `SERVER_RESPONSE_TIME_ENABLE` | `boolean` | `false` | Enable response time tracking middleware |
 | `SERVER_RESPONSE_TIME_ADD_HEADER` | `boolean` | `true` | Add `X-Response-Time` header to outgoing responses |
@@ -64,8 +61,8 @@ Controls the dedicated, standalone HTTP probe server designed for Kubernetes (`l
 | `HEALTHZ_READYZ_PATH` | `string` | `/readyz` | Readiness probe endpoint path (fallback: `SERVER_READYZ_PATH`) |
 | `HEALTHZ_STARTUPZ_PATH` | `string` | `/startupz` | Startup probe endpoint path (fallback: `SERVER_STARTUPZ_PATH`) |
 | `HEALTHZ_DETAILED` | `boolean` | `true` | Include individual check results in JSON responses (fallback: `SERVER_HEALTH_CHECK_DETAILED_OUTPUT`) |
-| `HEALTHZ_CHECK_TIMEOUT_MS` | `duration` | `5000` | Per-check timeout before failing & aborting via AbortSignal (ms or duration) |
-| `HEALTHZ_SHUTDOWN_DELAY_MS` | `duration` | `5000` | Graceful shutdown delay for LB draining after unreadying (ms or duration) |
+| `HEALTHZ_CHECK_TIMEOUT_MS` | `duration` | `5000` | Per-check timeout before failing & aborting via AbortSignal (fallback: `SERVER_HEALTHZ_CHECK_TIMEOUT_MS`) |
+| `HEALTHZ_SHUTDOWN_DELAY_MS` | `duration` | `5000` | Graceful shutdown delay for LB draining after unreadying (fallback: `SERVER_HEALTHZ_SHUTDOWN_DELAY_MS`) |
 
 ---
 

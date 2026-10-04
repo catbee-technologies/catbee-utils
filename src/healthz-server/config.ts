@@ -34,10 +34,20 @@ export function getDefaultHealthzConfig(): ResolvedHealthzConfig {
       Env.get('SERVER_HEALTH_CHECK_PATH', '/healthz'),
     readyzPath: Env.get('HEALTHZ_READYZ_PATH', '') || Env.get('SERVER_READYZ_PATH', '/readyz'),
     startupzPath: Env.get('HEALTHZ_STARTUPZ_PATH', '') || Env.get('SERVER_STARTUPZ_PATH', '/startupz'),
-    detailed: Env.getBoolean('HEALTHZ_DETAILED', Env.getBoolean('SERVER_HEALTH_CHECK_DETAILED_OUTPUT', true)),
+    detailed: Env.getBoolean(
+      'HEALTHZ_DETAILED',
+      Env.getBoolean('SERVER_HEALTHZ_DETAILED', Env.getBoolean('SERVER_HEALTH_CHECK_DETAILED_OUTPUT', true))
+    ),
     checks: [],
-    checkTimeoutMs: Env.getDuration('HEALTHZ_CHECK_TIMEOUT_MS', 5_000),
-    shutdownDelayMs: Env.getDuration('HEALTHZ_SHUTDOWN_DELAY_MS', 5_000)
+    checkTimeoutMs: Env.getDuration(
+      'HEALTHZ_CHECK_TIMEOUT_MS',
+      Env.getDuration('SERVER_HEALTHZ_CHECK_TIMEOUT_MS', 5_000)
+    ),
+    shutdownDelayMs: Env.getDuration(
+      'HEALTHZ_SHUTDOWN_DELAY_MS',
+      Env.getDuration('SERVER_HEALTHZ_SHUTDOWN_DELAY_MS', 5_000)
+    ),
+    handleSignals: true
   };
 }
 

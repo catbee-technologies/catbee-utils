@@ -1,5 +1,5 @@
 import { createServer, IncomingMessage, Server, ServerResponse } from 'node:http';
-import { resolveConfig, ResolvedHealthzConfig } from './config';
+import { getDefaultHealthzConfig, resolveConfig, ResolvedHealthzConfig } from './config';
 import type {
   CheckResult,
   HealthzAddressInfo,
@@ -76,8 +76,17 @@ export class HealthzServer {
     this.config = config;
     this.server = createServer((req, res) => this.handleRequest(req, res));
 
-    process.once('SIGTERM', this.onSigterm);
-    process.once('SIGINT', this.onSigint);
+    if (this.config.handleSignals !== false) {
+      process.once('SIGTERM', this.onSigterm);
+      process.once('SIGINT', this.onSigint);
+    }
+  }
+
+  /**
+   * Returns default Healthz server configuration resolved from environment variables.
+   */
+  static getDefaultConfig(): ResolvedHealthzConfig {
+    return getDefaultHealthzConfig();
   }
 
   /**
@@ -162,6 +171,34 @@ export class HealthzServer {
 
   static getInstance(): HealthzServer | undefined {
     return _global[SINGLETON_KEY];
+  }
+
+  /**
+   * Register a named check on this HealthzServer instance dynamically.
+   *
+   * @param check - The named check to register
+   * @param type - Which probe to attach this check to ('readiness', 'liveness', or 'both')
+   * @returns This instance for chaining
+   */
+  public registerCheck(check: NamedCheck, type: 'liveness' | 'readiness' | 'both' = 'readiness'): this {
+    if (type === 'liveness' || type === 'both') {
+      this.config.checks.push(check);
+    }
+    if (type === 'readiness' || type === 'both') {
+      this.config.readinessChecks ??= [...this.config.checks];
+      this.config.readinessChecks.push(check);
+    }
+    return this;
+  }
+
+  /**
+   * Register a named check on the active singleton HealthzServer instance (if started).
+   *
+   * @param check - The named check to register
+   * @param type - Which probe to attach this check to ('readiness', 'liveness', or 'both')
+   */
+  static registerCheck(check: NamedCheck, type: 'liveness' | 'readiness' | 'both' = 'readiness'): void {
+    _global[SINGLETON_KEY]?.registerCheck(check, type);
   }
 
   private async handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {

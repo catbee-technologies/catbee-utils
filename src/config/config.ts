@@ -3,6 +3,7 @@ import type { Logger, LoggerLevels } from '@catbee/utils/logger';
 import { Env } from '@catbee/utils/env';
 import { uuid } from '@catbee/utils/id';
 import { deepClone, deepObjMerge } from '@catbee/utils/object';
+import { getDefaultHealthzConfig } from '@catbee/utils/healthz-server';
 
 /**
  * Extends Express Request interface to add request ID tracking.
@@ -59,10 +60,9 @@ export const defaultServerConfig: CatbeeGlobalServerConfig = {
     verbose: Env.getBoolean('SERVER_OPENAPI_VERBOSE', false),
     withGlobalPrefix: Env.getBoolean('SERVER_OPENAPI_WITH_GLOBAL_PREFIX', false)
   },
-  healthCheck: {
-    path: Env.get('SERVER_HEALTH_CHECK_PATH', '/healthz'),
-    detailed: Env.getBoolean('SERVER_HEALTH_CHECK_DETAILED_OUTPUT', true),
-    withGlobalPrefix: Env.getBoolean('SERVER_HEALTH_CHECK_WITH_GLOBAL_PREFIX', false)
+  healthzServer: {
+    enable: Env.getBoolean('SERVER_HEALTHZ_ENABLE', Env.getBoolean('HEALTHZ_ENABLE', false)),
+    ...getDefaultHealthzConfig()
   },
   requestTimeout: Env.getDuration('SERVER_REQUEST_TIMEOUT_MS', 0),
   responseTime: {
@@ -79,8 +79,7 @@ export const defaultServerConfig: CatbeeGlobalServerConfig = {
     enable: Env.getBoolean('SERVER_SERVICE_VERSION_ENABLE', false),
     headerName: Env.get('SERVER_SERVICE_VERSION_HEADER_NAME', 'x-service-version'),
     version: Env.get('${npm_package_version}', '0.0.0')
-  },
-  skipHealthzChecksValidation: Env.getBoolean('SERVER_SKIP_HEALTHZ_CHECKS_VALIDATION', false)
+  }
 } as const;
 
 /** Default Catbee configuration loaded from environment variables. */

@@ -129,13 +129,33 @@ describe('ServerConfigBuilder', () => {
     expect(disabled.requestLogging?.enable).toBe(false);
   });
 
-  it('should configure health check', () => {
+  it('should configure, enable, and disable healthz probe server', () => {
     const config = new ServerConfigBuilder()
-      .withHealthCheck({ path: '/health', detailed: true })
+      .withHealthzServer({ port: 9090, healthzPath: '/probe/live', readinessChecks: [] })
       .disableOpenApi()
       .build();
-    expect(config.healthCheck?.path).toBe('/health');
-    expect(config.healthCheck?.detailed).toBe(true);
+    expect(config.healthzServer).toEqual(
+      expect.objectContaining({
+        enable: true,
+        port: 9090,
+        healthzPath: '/probe/live',
+        readinessChecks: []
+      })
+    );
+
+    const enabled = new ServerConfigBuilder().enableHealthzServer({ port: 9091 }).disableOpenApi().build();
+    expect(enabled.healthzServer).toEqual(
+      expect.objectContaining({
+        enable: true,
+        port: 9091
+      })
+    );
+
+    const disabled = new ServerConfigBuilder().enableHealthzServer().disableHealthzServer().disableOpenApi().build();
+    expect(disabled.healthzServer).toBe(false);
+
+    const boolEnabled = new ServerConfigBuilder().withHealthzServer(true).disableOpenApi().build();
+    expect(boolEnabled.healthzServer).toBe(true);
   });
 
   it('should configure OpenAPI via withOpenApi', () => {
@@ -179,20 +199,34 @@ describe('ServerConfigBuilder', () => {
     expect(disabled.responseTime?.enable).toBe(false);
   });
 
-  it('should configure body parser', () => {
+  it('should configure and disable body parser', () => {
     const config = new ServerConfigBuilder()
       .withBodyParser({ json: { limit: '2mb' } })
       .disableOpenApi()
       .build();
     expect((config.bodyParser as any)?.json?.limit).toBe('2mb');
+
+    const disabled = new ServerConfigBuilder().disableBodyParser().disableOpenApi().build();
+    expect(disabled.bodyParser).toBe(false);
   });
 
-  it('should configure cookies', () => {
+  it('should enable and disable OpenAPI', () => {
+    const enabled = new ServerConfigBuilder().enableOpenApi('spec.yaml').build();
+    expect(enabled.openApi?.enable).toBe(true);
+
+    const disabled = new ServerConfigBuilder().enableOpenApi('spec.yaml').disableOpenApi().build();
+    expect(disabled.openApi?.enable).toBe(false);
+  });
+
+  it('should configure and disable cookies', () => {
     const config = new ServerConfigBuilder()
       .withCookies({ decode: value => value })
       .disableOpenApi()
       .build();
     expect((config as any).cookieParser).toEqual({ decode: expect.any(Function) });
+
+    const disabled = new ServerConfigBuilder().withCookies(false).disableOpenApi().build();
+    expect(disabled.cookieParser).toBe(false);
   });
 
   it('should configure microservice', () => {

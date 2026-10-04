@@ -1,13 +1,13 @@
-import express, { Express, Request, Response, NextFunction, Router } from 'express';
+import express from 'express';
 import http from 'node:http';
 import https from 'node:https';
 import { Socket } from 'node:net';
 import { HttpStatusCodes } from '@catbee/utils/http-status-codes';
-import { createFinalErrorResponse, SuccessResponse } from '@catbee/utils/response';
+import { createFinalErrorResponse } from '@catbee/utils/response';
 import { errorHandler, requestId, responseTime, setupRequestContext, timeout } from '@catbee/utils/middleware';
 import { Env } from '@catbee/utils/env';
 import { getLogger } from '@catbee/utils/logger';
-import { InternalServerErrorException, ServiceUnavailableException, NotFoundException } from '@catbee/utils/exception';
+import { ServiceUnavailableException, NotFoundException } from '@catbee/utils/exception';
 import { getCatbeeServerGlobalConfig } from '@catbee/utils/config';
 import { deepObjMerge, isPlainObject } from '@catbee/utils/object';
 import { fileExists, readFileSync, readFile } from '@catbee/utils/fs';
@@ -16,6 +16,9 @@ import { isPort, isHostname } from '@catbee/utils/validation';
 import { optionalRequire } from '@catbee/utils/async';
 import { BUILD_MARKER } from './server.builder';
 import { uuid } from '@catbee/utils/id';
+import { HealthzServer } from '@catbee/utils/healthz-server';
+import type { Express, Request, Response, NextFunction, Router } from 'express';
+import type { CatbeeHealthzServerConfig, HealthzAddressInfo, NamedCheck } from '@catbee/utils/healthz-server';
 
 /**
  * Generate standardized error message for missing dependencies.
@@ -78,11 +81,12 @@ export class ExpressServer {
   private gracefulShutdownRegistered = false;
   /** Map of registered signal listeners for clean teardown */
   private readonly signalListeners = new Map<NodeJS.Signals, () => Promise<void>>();
-  /**
-   * Collection of registered health check functions.
-   * These are executed when the health check endpoint is accessed.
-   */
-  private readonly healthChecks: Array<{ name: string; check: () => Promise<boolean> | boolean }> = [];
+  /** Running address info for the Healthz probe server */
+  private healthzAddress?: HealthzAddressInfo | null;
+  /** Named checks queued for Healthz liveness probe */
+  private readonly healthzChecks: NamedCheck[] = [];
+  /** Named checks queued for Healthz readiness probe */
+  private readonly healthzReadinessChecks: NamedCheck[] = [];
 
   /** Promise that resolves when initialization (middleware + routes) is complete */
   private readonly initPromise: Promise<void>;
@@ -124,9 +128,22 @@ export class ExpressServer {
       throw new Error(msg);
     }
 
-    // Health checks
-    if (config?.healthCheck?.checks) {
-      this.healthChecks.push(...config.healthCheck.checks);
+    // Normalize healthzServer toggle if boolean
+    if (typeof this.config.healthzServer === 'boolean') {
+      this.config.healthzServer = {
+        ...HealthzServer.getDefaultConfig(),
+        enable: this.config.healthzServer
+      };
+    }
+
+    // Healthz probe checks
+    if (this.config.healthzServer && typeof this.config.healthzServer === 'object') {
+      if (this.config.healthzServer.checks) {
+        this.healthzChecks.push(...this.config.healthzServer.checks);
+      }
+      if (this.config.healthzServer.readinessChecks) {
+        this.healthzReadinessChecks.push(...this.config.healthzServer.readinessChecks);
+      }
     }
 
     // Set global prefix (normalize to empty string or "/prefix" without trailing slash)
@@ -551,16 +568,6 @@ export class ExpressServer {
    * 4. Error handler
    */
   protected async setupRoutes(): Promise<void> {
-    // Health check endpoint
-    const healthCheckPath = this.normalizePath(
-      this.config.healthCheck?.path || '/healthz',
-      this.config.healthCheck?.withGlobalPrefix
-    );
-
-    this.app.get(healthCheckPath, async (_req: Request, res: Response) => {
-      return this.handleHealthCheckRequest(res);
-    });
-
     // Application routes
     this.app.use(this.globalPrefix, this.rootRouter);
 
@@ -598,54 +605,27 @@ export class ExpressServer {
   }
 
   /**
-   * Execute health check and return response.
+   * Whether the Healthz probe server is enabled.
    */
-  private async handleHealthCheckRequest(res: Response): Promise<Response> {
-    try {
-      if (!this.healthChecks.length || getCatbeeServerGlobalConfig().skipHealthzChecksValidation) {
-        return res.status(HttpStatusCodes.OK).json(new SuccessResponse('OK'));
-      }
-
-      const results = await this.executeHealthChecks();
-      const allOk = results.every(r => r.status);
-      const status = allOk ? HttpStatusCodes.OK : HttpStatusCodes.SERVICE_UNAVAILABLE;
-      const response = new SuccessResponse(allOk ? 'OK' : 'Service unavailable');
-      if (!allOk) response.error = true;
-      if (this.config.healthCheck?.detailed) response.data = { checks: results };
-      return res.status(status).json(response);
-    } catch {
-      return res
-        .status(HttpStatusCodes.INTERNAL_SERVER_ERROR)
-        .json(new InternalServerErrorException('Health check failed'));
+  public isHealthzServerEnabled(): boolean {
+    if (typeof this.config.healthzServer === 'boolean') {
+      return this.config.healthzServer;
     }
+    return this.config.healthzServer?.enable === true;
   }
 
   /**
-   * Execute all registered health checks and return results.
+   * Get the graceful shutdown delay in milliseconds configured for HealthzServer.
    */
-  private async executeHealthChecks(): Promise<Array<{ name: string; status: boolean; error: string | null }>> {
-    const checkResults = await Promise.allSettled(
-      this.healthChecks.map(async ({ name, check }) => {
-        try {
-          const status = await Promise.resolve(check());
-          return { name, status, error: null };
-        } catch (error) {
-          return { name, status: false, error: (error as Error).message };
-        }
-      })
-    );
-
-    return checkResults.map(result => {
-      if (result.status === 'fulfilled') return result.value;
-      return { name: 'unknown', status: false, error: result.reason };
-    });
+  private getHealthzShutdownDelay(): number {
+    return typeof this.config.healthzServer === 'object' ? (this.config.healthzServer.shutdownDelayMs ?? 0) : 0;
   }
 
   /**
-   * Register a new health check function for monitoring service dependencies.
+   * Register a new health check function for monitoring service dependencies on the Healthz probe server.
    *
-   * Health checks are executed when the health endpoint is accessed and
-   * help determine if the service is ready to handle requests.
+   * By default, external dependencies (DB, Redis, etc.) are registered as `readiness` checks.
+   * Can also be registered as `liveness` or `both`.
    *
    * Examples:
    * - Database connectivity
@@ -654,29 +634,72 @@ export class ExpressServer {
    * - Memory/CPU usage checks
    *
    * @param name Unique identifier for the check (used in detailed responses)
-   * @param check Function returning boolean or Promise<boolean> indicating health
+   * @param check Function returning boolean or Promise<boolean> indicating health (supports optional AbortSignal)
+   * @param options Target probe type ('readiness' | 'liveness' | 'both') or options object
    * @returns This instance for method chaining
    */
-  public registerHealthCheck(name: string, check: () => Promise<boolean> | boolean): this {
-    this.healthChecks.push({ name, check });
+  public registerHealthCheck(
+    name: string,
+    check: (signal?: AbortSignal) => Promise<boolean> | boolean,
+    options?: 'readiness' | 'liveness' | 'both' | { type?: 'readiness' | 'liveness' | 'both' }
+  ): this {
+    const probeType = typeof options === 'string' ? options : (options?.type ?? 'readiness');
+    const namedCheck: NamedCheck = { name, check };
+
+    // Sync to HealthzServer probe checks
+    if (probeType === 'liveness' || probeType === 'both') {
+      this.healthzChecks.push(namedCheck);
+    }
+    if (probeType === 'readiness' || probeType === 'both') {
+      this.healthzReadinessChecks.push(namedCheck);
+    }
+
+    // Register dynamically if HealthzServer is already running
+    HealthzServer.registerCheck(namedCheck, probeType);
+
     return this;
   }
 
   /**
-   * Run registered health checks and return whether the service is ready.
-   * Useful for readiness probes in deployment tooling.
+   * Mark the service as ready / not-ready for traffic on the Healthz probe server.
    *
-   * @returns Promise resolving to `true` when all checks pass, otherwise `false`.
+   * @param ready Whether the service is ready to receive traffic
+   * @returns This instance for method chaining
    */
-  public async ready(): Promise<boolean> {
-    try {
-      if (!this.healthChecks.length || getCatbeeServerGlobalConfig().skipHealthzChecksValidation) return true;
-      const results = await this.executeHealthChecks();
-      return results.every(r => r.status === true);
-    } catch (err) {
-      getLogger().error({ err }, 'Error while running readiness checks');
-      return false;
-    }
+  public setReady(ready: boolean): this {
+    HealthzServer.setReady(ready);
+    return this;
+  }
+
+  /**
+   * Whether the service is currently marked as ready for traffic on the Healthz probe server.
+   */
+  public isReady(): boolean {
+    return HealthzServer.isReady();
+  }
+
+  /**
+   * Get the running HealthzServer instance (if started).
+   */
+  public getHealthzServer(): HealthzServer | undefined {
+    return HealthzServer.getInstance();
+  }
+
+  /**
+   * Get the address info of the running HealthzServer (if started).
+   */
+  public getHealthzAddress(): HealthzAddressInfo | null | undefined {
+    return this.healthzAddress;
+  }
+
+  /**
+   * Returns whether the service is currently marked as ready for traffic on the Healthz probe server.
+   * Useful for readiness checks in deployment tooling.
+   *
+   * @returns `true` when ready, otherwise `false`.
+   */
+  public ready(): boolean {
+    return HealthzServer.isReady();
   }
 
   /**
@@ -757,6 +780,9 @@ export class ExpressServer {
           try {
             server.removeAllListeners();
             server.close();
+            if (HealthzServer.isStarted()) {
+              HealthzServer.stop().catch(() => {});
+            }
           } catch {
             // Ignore errors during failure cleanup
           }
@@ -777,10 +803,54 @@ export class ExpressServer {
         .then(() => {
           // 3. Start listening ONLY after hooks and handlers are attached
           const onListening = async () => {
-            isListening = true;
-            this.logServerStartInfo();
-            await this.runHook('afterStart', server);
-            resolve(server);
+            try {
+              // Start Healthz probe server if enabled
+              if (this.isHealthzServerEnabled()) {
+                const healthzConfig: CatbeeHealthzServerConfig = {
+                  ...(typeof this.config.healthzServer === 'object' ? this.config.healthzServer : {}),
+                  handleSignals: false,
+                  checks: [...this.healthzChecks],
+                  readinessChecks: [...this.healthzReadinessChecks]
+                };
+                const addr = await HealthzServer.start(healthzConfig);
+                if (!addr) {
+                  throw new Error('Healthz probe server failed to start (already running in this process)');
+                }
+                this.healthzAddress = addr;
+              }
+
+              this.logServerStartInfo();
+              await this.runHook('afterStart', server);
+
+              // Mark ready on Healthz probe server after successful startup
+              if (this.isHealthzServerEnabled()) {
+                HealthzServer.setReady(true);
+              }
+
+              isListening = true;
+              resolve(server);
+            } catch (err) {
+              const error = err instanceof Error ? err : new Error(String(err));
+              getLogger().error({ err: error }, 'Server startup failed');
+
+              // Clean up main server + health server
+              if (HealthzServer.isStarted()) {
+                await HealthzServer.stop().catch(() => {});
+              }
+
+              try {
+                server.removeAllListeners();
+                server.close();
+              } catch {
+                // Ignore errors during failure cleanup
+              }
+
+              this.server = null;
+              this.healthzAddress = null;
+              this.connections.clear();
+
+              reject(error);
+            }
           };
 
           const listenArgs: [number, (string | undefined)?, (() => void)?] = [
@@ -839,9 +909,9 @@ export class ExpressServer {
     const url = `${protocol}://${host}:${port}`;
     getLogger().info(`Server running on ${url}`);
 
-    if (this.config.healthCheck && this.config.healthCheck?.path) {
+    if (this.healthzAddress) {
       getLogger().info(
-        `Health check available at ${url}${this.normalizePath(this.config.healthCheck.path, this.config.healthCheck.withGlobalPrefix)}`
+        `Healthz probe server running on http://${this.healthzAddress.address}:${this.healthzAddress.port}`
       );
     }
     if (this.config.openApi?.enable) {
@@ -868,7 +938,7 @@ export class ExpressServer {
    * - Monitoring systems are notified
    */
   public async stop(force = false): Promise<void> {
-    if (!this.server) {
+    if (!this.server && !HealthzServer.isStarted()) {
       getLogger().warn('Stop called but server is not running');
       return;
     }
@@ -878,11 +948,32 @@ export class ExpressServer {
     }
 
     this.isShuttingDown = true;
-    await this.runHook('beforeStop', this.server);
+
+    // Immediately mark unready on Healthz server to pull pod from load balancer endpoints
+    if (HealthzServer.isStarted()) {
+      HealthzServer.setReady(false);
+    }
+
+    if (this.server) {
+      await this.runHook('beforeStop', this.server);
+    }
 
     try {
-      await this.gracefulShutdown(force);
+      // Graceful drain delay before closing server connections (if configured and not forced)
+      const shutdownDelay = this.getHealthzShutdownDelay();
+      if (shutdownDelay > 0 && !force && HealthzServer.isStarted()) {
+        getLogger().info(`Waiting ${shutdownDelay}ms for load balancer to drain traffic...`);
+        await new Promise<void>(resolve => setTimeout(resolve, shutdownDelay));
+      }
+
+      if (this.server) {
+        await this.gracefulShutdown(force);
+      }
     } finally {
+      if (HealthzServer.isStarted()) {
+        await HealthzServer.stop();
+        this.healthzAddress = null;
+      }
       this.isShuttingDown = false;
     }
   }
@@ -980,7 +1071,7 @@ export class ExpressServer {
 
         try {
           this.disableGracefulShutdown();
-          await this.stop(true);
+          await this.stop(false);
           process.exit(0);
         } catch (err) {
           getLogger().fatal({ err }, 'Shutdown failed');

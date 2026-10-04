@@ -162,6 +162,14 @@ export interface CatbeeHealthzServerConfig {
    *  - **env**: `HEALTHZ_SHUTDOWN_DELAY_MS`
    */
   shutdownDelayMs?: number;
+
+  /**
+   * Whether the HealthzServer should register its own SIGTERM/SIGINT process signal listeners.
+   * When managed by an orchestrating server (such as Catbee ExpressServer), set this to `false`
+   * to prevent signal listener conflicts and allow coordinated teardown.
+   *  - **default**: `true`
+   */
+  handleSignals?: boolean;
 }
 
 /**

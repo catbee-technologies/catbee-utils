@@ -99,10 +99,18 @@ describe('config', () => {
           verbose: false,
           withGlobalPrefix: false
         },
-        healthCheck: {
-          path: '/healthz',
+        healthzServer: {
+          checkTimeoutMs: 5000,
+          checks: [],
           detailed: false,
-          withGlobalPrefix: false
+          enable: false,
+          handleSignals: true,
+          healthzPath: '/healthz',
+          host: '0.0.0.0',
+          port: 8282,
+          readyzPath: '/readyz',
+          shutdownDelayMs: 5000,
+          startupzPath: '/startupz'
         },
         requestTimeout: 0,
         responseTime: {
@@ -118,8 +126,7 @@ describe('config', () => {
           enable: false,
           headerName: 'x-service-version',
           version: '0.0.0'
-        },
-        skipHealthzChecksValidation: false
+        }
       }
     };
 
@@ -170,7 +177,7 @@ describe('config', () => {
           return enabledKeys.has(key) ? true : fallback;
         }),
         get: jest.fn((key: string, fallback: string) => {
-          if (key === 'SERVER_HEALTH_CHECK_PATH') return '/hc';
+          if (key === 'HEALTHZ_PATH') return '/hc';
           return fallback;
         }),
         isDev: jest.fn(() => false),
@@ -185,7 +192,7 @@ describe('config', () => {
     expect(cfg.server.helmet).toEqual({});
     expect(cfg.server.compression).toEqual({});
     expect(cfg.server.cookieParser).toEqual({});
-    expect(cfg.server.healthCheck.path).toBe('/hc');
+    expect(cfg.server.healthzServer.healthzPath).toBe('/hc');
 
     jest.resetModules();
     jest.doMock('../src/env', () => getEnvMockModule());

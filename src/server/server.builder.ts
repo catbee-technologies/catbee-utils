@@ -1,5 +1,6 @@
 import { deepClone, deepObjMerge, isPlainObject } from '@catbee/utils/object';
 import type { CatbeeServerConfig } from '@catbee/utils/types';
+import type { CatbeeHealthzServerConfig } from '@catbee/utils/healthz-server';
 import { getCatbeeServerGlobalConfig } from '@catbee/utils/config';
 import { isPort, isHostname } from '@catbee/utils/validation';
 
@@ -296,37 +297,49 @@ export class ServerConfigBuilder {
   }
 
   /**
-   * Configures server health check endpoint.
+   * Configures the dedicated Healthz probe HTTP server for Kubernetes.
    *
-   * @param opts - Health check configuration options
+   * @param opts - Healthz server configuration options or boolean toggle
    * @returns The builder instance for chaining
-   * @default - { path: '/healthz', detailed: true, withGlobalPrefix: false }
    *
    * @example
    * ```typescript
-   * builder.withHealthCheck({
-   *   path: '/health',
-   *   detailed: true
+   * builder.withHealthzServer({
+   *   port: 8282,
+   *   shutdownDelayMs: 5000,
+   *   readinessChecks: [
+   *     { name: 'db', check: () => checkDb() }
+   *   ]
    * })
    * ```
    */
-  withHealthCheck(opts: Partial<NonNullable<CatbeeServerConfig['healthCheck']>>): this {
-    this.mergeConfig('healthCheck', opts as NonNullable<CatbeeServerConfig['healthCheck']>);
+  withHealthzServer(opts: NonNullable<CatbeeServerConfig['healthzServer']>): this {
+    if (typeof opts === 'boolean') {
+      this.config.healthzServer = opts;
+    } else {
+      const current = isPlainObject(this.config.healthzServer) ? deepClone(this.config.healthzServer as object) : {};
+      this.config.healthzServer = deepObjMerge({}, current, { enable: true, ...opts }) as any;
+    }
     return this;
   }
 
   /**
-   * Enables health check endpoint with default or custom settings
-   * @param opts - Optional health check configuration
-   * @returns The builder instance for chaining
+   * Enables the dedicated Healthz probe HTTP server.
    *
-   * @example
-   * ```typescript
-   * builder.disableHealthCheck()
-   * ```
+   * @param opts - Optional Healthz server configuration options
+   * @returns The builder instance for chaining
    */
-  disableHealthCheck(): this {
-    return this.setEnabled('healthCheck', false);
+  enableHealthzServer(opts: Partial<CatbeeHealthzServerConfig> = {}): this {
+    return this.withHealthzServer({ ...opts, enable: true });
+  }
+
+  /**
+   * Disables the dedicated Healthz probe HTTP server.
+   *
+   * @returns The builder instance for chaining
+   */
+  disableHealthzServer(): this {
+    return this.withHealthzServer(false);
   }
 
   /**
