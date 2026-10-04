@@ -1,4 +1,11 @@
-import { ContextStore, StoreKeys, getRequestId, getFromContext, TypedContextKey } from '../../src/context-store';
+import {
+  ContextStore,
+  StoreKeys,
+  TypedStoreKeys,
+  getRequestId,
+  getFromContext,
+  TypedContextKey
+} from '../../src/context-store';
 
 describe('ContextStoreUtils', () => {
   it('should return undefined for missing key outside run context', () => {
@@ -178,6 +185,80 @@ describe('ContextStoreUtils', () => {
     middleware(req, {}, () => {
       expect(ContextStore.get(StoreKeys.REQUEST_ID)).toBe('req-abc');
       done();
+    });
+  });
+
+  describe('TypedStoreKeys and ContextKey interoperability', () => {
+    it('should expose getSymbol returning the underlying symbol', () => {
+      expect(TypedStoreKeys.REQUEST_ID.getSymbol()).toBe(StoreKeys.REQUEST_ID);
+      expect(TypedStoreKeys.LOGGER.getSymbol()).toBe(StoreKeys.LOGGER);
+      expect(TypedStoreKeys.CORRELATION_ID.getSymbol()).toBe(StoreKeys.CORRELATION_ID);
+      expect(TypedStoreKeys.SPAN_ID.getSymbol()).toBe(StoreKeys.SPAN_ID);
+      expect(TypedStoreKeys.MESSAGE_ID.getSymbol()).toBe(StoreKeys.MESSAGE_ID);
+      expect(TypedStoreKeys.MESSAGE_TYPE.getSymbol()).toBe(StoreKeys.MESSAGE_TYPE);
+      expect(TypedStoreKeys.QUEUE_NAME.getSymbol()).toBe(StoreKeys.QUEUE_NAME);
+    });
+
+    it('should have distinct symbols for all predefined StoreKeys', () => {
+      const symbols = Object.values(StoreKeys);
+      const uniqueSymbols = new Set(symbols);
+      expect(uniqueSymbols.size).toBe(symbols.length);
+      expect(StoreKeys.SPAN_ID).toBeDefined();
+      expect(StoreKeys.MESSAGE_ID).toBeDefined();
+      expect(StoreKeys.MESSAGE_TYPE).toBeDefined();
+      expect(StoreKeys.QUEUE_NAME).toBeDefined();
+    });
+
+    it('should allow ContextStore methods (get, set, has, delete) to accept TypedContextKey', () => {
+      ContextStore.run({}, () => {
+        expect(ContextStore.has(TypedStoreKeys.CORRELATION_ID)).toBe(false);
+
+        ContextStore.set(TypedStoreKeys.CORRELATION_ID, 'corr-test-123');
+        expect(ContextStore.has(TypedStoreKeys.CORRELATION_ID)).toBe(true);
+        expect(ContextStore.get(TypedStoreKeys.CORRELATION_ID)).toBe('corr-test-123');
+        // Check interop with the raw symbol key
+        expect(ContextStore.get(StoreKeys.CORRELATION_ID)).toBe('corr-test-123');
+        expect(TypedStoreKeys.CORRELATION_ID.get()).toBe('corr-test-123');
+
+        expect(ContextStore.delete(TypedStoreKeys.CORRELATION_ID)).toBe(true);
+        expect(ContextStore.has(TypedStoreKeys.CORRELATION_ID)).toBe(false);
+        expect(ContextStore.get(TypedStoreKeys.CORRELATION_ID)).toBeUndefined();
+      });
+    });
+
+    it('should allow getFromContext to accept TypedContextKey', () => {
+      ContextStore.run({ [StoreKeys.TENANT_ID]: 'tenant-test-456' }, () => {
+        expect(getFromContext<string>(TypedStoreKeys.TENANT_ID)).toBe('tenant-test-456');
+        expect(getFromContext<string>(TypedStoreKeys.USER_ID)).toBeUndefined();
+      });
+    });
+
+    it('should allow ContextStore.withValue to accept TypedContextKey', () => {
+      ContextStore.run({ [StoreKeys.TRACE_ID]: 'trace-orig' }, () => {
+        const result = ContextStore.withValue(TypedStoreKeys.TRACE_ID, 'trace-temp', () => {
+          expect(ContextStore.get(TypedStoreKeys.TRACE_ID)).toBe('trace-temp');
+          expect(TypedStoreKeys.TRACE_ID.get()).toBe('trace-temp');
+          return 'done';
+        });
+
+        expect(result).toBe('done');
+        expect(ContextStore.get(TypedStoreKeys.TRACE_ID)).toBe('trace-orig');
+        expect(TypedStoreKeys.TRACE_ID.get()).toBe('trace-orig');
+      });
+    });
+
+    it('should support messaging and queue keys with TypedStoreKeys', () => {
+      ContextStore.run({}, () => {
+        TypedStoreKeys.SPAN_ID.set('span-1');
+        TypedStoreKeys.MESSAGE_ID.set('msg-100');
+        TypedStoreKeys.MESSAGE_TYPE.set('order.created');
+        TypedStoreKeys.QUEUE_NAME.set('orders-queue');
+
+        expect(TypedStoreKeys.SPAN_ID.get()).toBe('span-1');
+        expect(TypedStoreKeys.MESSAGE_ID.get()).toBe('msg-100');
+        expect(TypedStoreKeys.MESSAGE_TYPE.get()).toBe('order.created');
+        expect(TypedStoreKeys.QUEUE_NAME.get()).toBe('orders-queue');
+      });
     });
   });
 });

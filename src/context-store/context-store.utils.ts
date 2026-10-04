@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
+import type { Logger } from 'pino';
 
 /**
  * Type representing the store object used in AsyncLocalStorage.
@@ -9,20 +10,95 @@ export interface Store {
 }
 
 /**
+ * Type-safe wrapper for accessing and modifying context values with specific types.
+ *
+ * @typeParam T - The value type.
+ */
+export class TypedContextKey<T> {
+  /**
+   * Creates a new typed context key.
+   * @param symbol - The unique symbol for this key
+   * @param defaultValue - Optional default value if key is not found
+   */
+  constructor(
+    private readonly symbol: symbol,
+    private readonly defaultValue?: T
+  ) {}
+
+  /**
+   * Gets the current value for this key.
+   * @returns The value or defaultValue if not found
+   */
+  get(): T | undefined {
+    return ContextStore.get<T>(this.symbol) ?? this.defaultValue;
+  }
+
+  /**
+   * Sets the value for this key.
+   * @param value The value to set
+   */
+  set(value: T): void {
+    ContextStore.set<T>(this.symbol, value);
+  }
+
+  /**
+   * Checks if this key exists in the context.
+   * @returns True if the key exists
+   */
+  exists(): boolean {
+    return ContextStore.has(this.symbol);
+  }
+
+  /**
+   * Deletes this key from the context.
+   * @returns True if the key was deleted
+   */
+  delete(): boolean {
+    return ContextStore.delete(this.symbol);
+  }
+
+  /**
+   * Gets the symbol for this key.
+   * @returns Symbol for this key
+   */
+  getSymbol(): symbol {
+    return this.symbol;
+  }
+}
+
+export type ContextKey<T = unknown> = symbol | TypedContextKey<T>;
+
+/**
  * Predefined symbols used as keys in AsyncLocalStorage.
  * Add new symbols here to avoid duplication.
  */
 export const StoreKeys = {
   LOGGER: Symbol('LOGGER'),
   REQUEST_ID: Symbol('REQUEST_ID'),
-  USER: Symbol('USER'),
-  SESSION: Symbol('SESSION'),
-  TRANSACTION_ID: Symbol('TRANSACTION_ID'),
+  CORRELATION_ID: Symbol('CORRELATION_ID'),
   USER_ID: Symbol('USER_ID'),
+  TRANSACTION_ID: Symbol('TRANSACTION_ID'),
   TENANT_ID: Symbol('TENANT_ID'),
   TRACE_ID: Symbol('TRACE_ID'),
-  CORRELATION_ID: Symbol('CORRELATION_ID')
-};
+  SPAN_ID: Symbol('SPAN_ID'),
+  MESSAGE_ID: Symbol('MESSAGE_ID'),
+  MESSAGE_TYPE: Symbol('MESSAGE_TYPE'),
+  QUEUE_NAME: Symbol('QUEUE_NAME')
+} as const;
+
+export const TypedStoreKeys = {
+  LOGGER: new TypedContextKey<Logger>(StoreKeys.LOGGER),
+  REQUEST_ID: new TypedContextKey<string>(StoreKeys.REQUEST_ID),
+  CORRELATION_ID: new TypedContextKey<string>(StoreKeys.CORRELATION_ID),
+  USER_ID: new TypedContextKey<string>(StoreKeys.USER_ID),
+  TRANSACTION_ID: new TypedContextKey<string>(StoreKeys.TRANSACTION_ID),
+  TENANT_ID: new TypedContextKey<string>(StoreKeys.TENANT_ID),
+  TRACE_ID: new TypedContextKey<string>(StoreKeys.TRACE_ID),
+  SPAN_ID: new TypedContextKey<string>(StoreKeys.SPAN_ID),
+  MESSAGE_ID: new TypedContextKey<string>(StoreKeys.MESSAGE_ID),
+  MESSAGE_TYPE: new TypedContextKey<string>(StoreKeys.MESSAGE_TYPE),
+  QUEUE_NAME: new TypedContextKey<string>(StoreKeys.QUEUE_NAME)
+} as const;
 
 /**
  * Retrieves the current request ID from the async context, if available.
@@ -30,7 +106,11 @@ export const StoreKeys = {
  * @returns {string | undefined} The request ID string or undefined if not present in the current context.
  */
 export function getRequestId(): string | undefined {
-  return ContextStore.get<string>(StoreKeys.REQUEST_ID);
+  return TypedStoreKeys.REQUEST_ID.get();
+}
+
+function resolveKey<T>(key: ContextKey<T>): symbol {
+  return key instanceof TypedContextKey ? key.getSymbol() : key;
 }
 
 /**
@@ -39,8 +119,9 @@ export function getRequestId(): string | undefined {
  * @param key The store key symbol
  * @returns The typed value from the store
  */
-export function getFromContext<T>(key: symbol): T | undefined {
-  return ContextStore.get<T>(key);
+export function getFromContext<T>(key: ContextKey<T>): T | undefined {
+  const symbol = resolveKey(key);
+  return ContextStore.get<T>(symbol);
 }
 
 /**
@@ -82,9 +163,10 @@ export class ContextStore {
    * @param {symbol} key - Unique symbol used as the store key.
    * @returns {T | undefined} The value found (typed) or undefined if not present.
    */
-  static get<T>(key: symbol): T | undefined {
+  static get<T>(key: ContextKey<T>): T | undefined {
+    const symbol = resolveKey(key);
     const store = this.storage.getStore();
-    return store?.[key] as T | undefined;
+    return store?.[symbol] as T | undefined;
   }
 
   /**
@@ -95,12 +177,13 @@ export class ContextStore {
    * @param {T} value - Value to set in context.
    * @throws {Error} If called outside an active context (not within a .run call or in the wrong async boundaries).
    */
-  static set<T>(key: symbol, value: T): void {
+  static set<T>(key: ContextKey<T>, value: T): void {
+    const symbol = resolveKey(key);
     const store = this.storage.getStore();
     if (!store) {
-      throw new Error(`Failed to set ${String(key)}: AsyncLocalStorage store is not initialized.`);
+      throw new Error(`Failed to set ${String(symbol)}: AsyncLocalStorage store is not initialized.`);
     }
-    store[key] = value;
+    store[symbol] = value;
   }
 
   /**
@@ -131,9 +214,10 @@ export class ContextStore {
    * @param {symbol} key - The symbol key to check.
    * @returns {boolean} True if the key exists, false otherwise.
    */
-  static has(key: symbol): boolean {
+  static has(key: ContextKey): boolean {
+    const symbol = resolveKey(key);
     const store = this.storage.getStore();
-    return store !== undefined && key in store;
+    return store !== undefined && symbol in store;
   }
 
   /**
@@ -143,12 +227,13 @@ export class ContextStore {
    * @returns {boolean} True if the key was deleted, false if the key wasn't found or no active context.
    * @throws {Error} If called outside an active context.
    */
-  static delete(key: symbol): boolean {
+  static delete(key: ContextKey): boolean {
+    const symbol = resolveKey(key);
     const store = this.storage.getStore();
     if (!store) {
-      throw new Error(`Failed to delete ${String(key)}: AsyncLocalStorage store is not initialized.`);
+      throw new Error(`Failed to delete ${String(symbol)}: AsyncLocalStorage store is not initialized.`);
     }
-    return delete store[key];
+    return delete store[symbol];
   }
 
   /**
@@ -177,30 +262,20 @@ export class ContextStore {
    * @returns {T} The result of the callback function.
    * @throws {Error} If called outside an active context.
    */
-  static withValue<T>(key: symbol, value: unknown, callback: () => T): T {
-    const store = this.storage.getStore();
-    if (!store) {
-      throw new Error(`Failed to set temporary value: AsyncLocalStorage store is not initialized.`);
+  static withValue<T, V>(key: ContextKey<V>, value: V, callback: () => T): T {
+    const symbol = resolveKey(key);
+    const currentStore = this.storage.getStore();
+
+    if (!currentStore) {
+      throw new Error('Failed to set temporary value: AsyncLocalStorage store is not initialized.');
     }
 
-    // Save original value
-    const hasOriginal = key in store;
-    const originalValue = store[key];
+    const newStore: Store = {
+      ...currentStore,
+      [symbol]: value
+    };
 
-    // Set temporary value
-    store[key] = value;
-
-    try {
-      // Run callback
-      return callback();
-    } finally {
-      // Restore original value
-      if (hasOriginal) {
-        store[key] = originalValue;
-      } else {
-        delete store[key];
-      }
-    }
+    return this.storage.run(newStore, callback);
   }
 
   /**
@@ -237,59 +312,5 @@ export class ContextStore {
       const initialValues = initialValuesFactory(req);
       ContextStore.run(initialValues as Store, next);
     };
-  }
-}
-
-/**
- * Type-safe wrapper for accessing and modifying context values with specific types.
- *
- * @typeParam T - The value type.
- */
-export class TypedContextKey<T> {
-  /**
-   * Creates a new typed context key.
-   *
-   * @param symbol - The unique symbol for this key
-   * @param defaultValue - Optional default value if key is not found
-   */
-  constructor(
-    private readonly symbol: symbol,
-    private readonly defaultValue?: T
-  ) {}
-
-  /**
-   * Gets the current value for this key.
-   *
-   * @returns The value or defaultValue if not found
-   */
-  get(): T | undefined {
-    return ContextStore.get<T>(this.symbol) ?? this.defaultValue;
-  }
-
-  /**
-   * Sets the value for this key.
-   *
-   * @param value The value to set
-   */
-  set(value: T): void {
-    ContextStore.set<T>(this.symbol, value);
-  }
-
-  /**
-   * Checks if this key exists in the context.
-   *
-   * @returns True if the key exists
-   */
-  exists(): boolean {
-    return ContextStore.has(this.symbol);
-  }
-
-  /**
-   * Deletes this key from the context.
-   *
-   * @returns True if the key was deleted
-   */
-  delete(): boolean {
-    return ContextStore.delete(this.symbol);
   }
 }
