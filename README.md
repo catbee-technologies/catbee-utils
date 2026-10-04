@@ -111,6 +111,7 @@ server.enableGracefulShutdown();
 | Module                                                                      | Description                                             |
 | --------------------------------------------------------------------------- | ------------------------------------------------------- |
 | [Express Server](https://catbee.in/docs/@catbee/utils/server)               | Fast, secure, and scalable server setup                 |
+| [Healthz Server](https://catbee.in/docs/@catbee/utils/healthz-server)       | Healthz Server              |
 | [Array Utilities](https://catbee.in/docs/@catbee/utils/array)               | Advanced array manipulation                             |
 | [Async Utilities](https://catbee.in/docs/@catbee/utils/async)               | Promise helpers, concurrency, timing                    |
 | [Cache Utilities](https://catbee.in/docs/@catbee/utils/cache)               | In-memory caching with TTL                              |

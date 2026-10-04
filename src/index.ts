@@ -15,6 +15,7 @@ export * from './env';
 export * from './error';
 export * from './exception';
 export * from './fs';
+export * from './healthz-server';
 export * from './http-status-codes';
 export * from './id';
 export * from './logger';
