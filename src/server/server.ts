@@ -679,6 +679,23 @@ export class ExpressServer {
   }
 
   /**
+   * Mark application startup as completed on the Healthz probe server (switches `/startupz` to 200).
+   *
+   * @returns This instance for method chaining
+   */
+  public markStartupComplete(): this {
+    HealthzServer.markStartupComplete();
+    return this;
+  }
+
+  /**
+   * Whether application startup has completed on the Healthz probe server.
+   */
+  public isStartupComplete(): boolean {
+    return HealthzServer.isStartupComplete();
+  }
+
+  /**
    * Get the running HealthzServer instance (if started).
    */
   public getHealthzServer(): HealthzServer | undefined {
@@ -764,107 +781,120 @@ export class ExpressServer {
   private async doStart(): Promise<http.Server | https.Server> {
     // Ensure initialization (middleware + routes) completed before starting
     await this.initPromise;
-    await this.runHook('beforeStart', this.app);
 
-    const server = this.createServerInstance();
-    this.server = server;
+    // Start Healthz probe server first if enabled (probes respond immediately while server boots)
+    if (this.isHealthzServerEnabled()) {
+      const healthzConfig: CatbeeHealthzServerConfig = {
+        ...(typeof this.config.healthzServer === 'object' ? this.config.healthzServer : {}),
+        handleSignals: false,
+        checks: [...this.healthzChecks],
+        readinessChecks: [...this.healthzReadinessChecks]
+      };
+      const addr = await HealthzServer.start(healthzConfig);
+      if (!addr) {
+        throw new Error('Healthz probe server failed to start (already running in this process)');
+      }
+      this.healthzAddress = addr;
+    }
 
-    return new Promise<http.Server | https.Server>((resolve, reject) => {
-      let isListening = false;
+    try {
+      await this.runHook('beforeStart', this.app);
 
-      // Unified error listener handling both startup failure and runtime errors
-      server.on('error', (err: Error) => {
-        if (!isListening) {
-          getLogger().error({ err }, 'Server failed to start');
+      const server = this.createServerInstance();
+      this.server = server;
 
-          try {
-            server.removeAllListeners();
-            server.close();
-            if (HealthzServer.isStarted()) {
-              HealthzServer.stop().catch(() => {});
-            }
-          } catch {
-            // Ignore errors during failure cleanup
-          }
+      return await new Promise<http.Server | https.Server>((resolve, reject) => {
+        let isListening = false;
 
-          this.server = null;
-          this.connections.clear();
-          reject(err);
-        } else {
-          getLogger().error({ err }, 'Server runtime error');
-        }
-      });
+        // Unified error listener handling both startup failure and runtime errors
+        server.on('error', async (err: Error) => {
+          if (!isListening) {
+            getLogger().error({ err }, 'Server failed to start');
 
-      // 1. Set up connection tracking BEFORE listening
-      this.setupConnectionTracking();
-
-      // 2. Run onServerCreated hook BEFORE listening
-      Promise.resolve(this.runHook('onServerCreated', server))
-        .then(() => {
-          // 3. Start listening ONLY after hooks and handlers are attached
-          const onListening = async () => {
             try {
-              // Start Healthz probe server if enabled
-              if (this.isHealthzServerEnabled()) {
-                const healthzConfig: CatbeeHealthzServerConfig = {
-                  ...(typeof this.config.healthzServer === 'object' ? this.config.healthzServer : {}),
-                  handleSignals: false,
-                  checks: [...this.healthzChecks],
-                  readinessChecks: [...this.healthzReadinessChecks]
-                };
-                const addr = await HealthzServer.start(healthzConfig);
-                if (!addr) {
-                  throw new Error('Healthz probe server failed to start (already running in this process)');
-                }
-                this.healthzAddress = addr;
-              }
-
-              this.logServerStartInfo();
-              await this.runHook('afterStart', server);
-
-              // Mark ready on Healthz probe server after successful startup
-              if (this.isHealthzServerEnabled()) {
-                HealthzServer.setReady(true);
-              }
-
-              isListening = true;
-              resolve(server);
-            } catch (err) {
-              const error = err instanceof Error ? err : new Error(String(err));
-              getLogger().error({ err: error }, 'Server startup failed');
-
-              // Clean up main server + health server
-              if (HealthzServer.isStarted()) {
+              server.removeAllListeners();
+              server.close();
+              if (HealthzServer.isRunning()) {
                 await HealthzServer.stop().catch(() => {});
               }
-
-              try {
-                server.removeAllListeners();
-                server.close();
-              } catch {
-                // Ignore errors during failure cleanup
-              }
-
-              this.server = null;
-              this.healthzAddress = null;
-              this.connections.clear();
-
-              reject(error);
+            } catch {
+              // Ignore errors during failure cleanup
             }
-          };
 
-          const listenArgs: [number, (string | undefined)?, (() => void)?] = [
-            this.config.port,
-            this.config.host,
-            onListening
-          ];
-
-          server.listen(...(listenArgs as any));
-        })
-        .catch(err => {
-          server.emit('error', err instanceof Error ? err : new Error(String(err)));
+            this.server = null;
+            this.healthzAddress = null;
+            this.connections.clear();
+            reject(err);
+          } else {
+            getLogger().error({ err }, 'Server runtime error');
+          }
         });
-    });
+
+        // 1. Set up connection tracking BEFORE listening
+        this.setupConnectionTracking();
+
+        // 2. Run onServerCreated hook BEFORE listening
+        Promise.resolve(this.runHook('onServerCreated', server))
+          .then(() => {
+            // 3. Start listening ONLY after hooks and handlers are attached
+            const onListening = async () => {
+              try {
+                this.logServerStartInfo();
+                await this.runHook('afterStart', server);
+
+                // Mark startup complete and ready on Healthz probe server
+                if (this.isHealthzServerEnabled()) {
+                  HealthzServer.markStartupComplete();
+                  HealthzServer.setReady(true);
+                }
+
+                isListening = true;
+                resolve(server);
+              } catch (err) {
+                const error = err instanceof Error ? err : new Error(String(err));
+                getLogger().error({ err: error }, 'Server startup failed');
+
+                // Clean up main server + health server
+                if (HealthzServer.isRunning()) {
+                  await HealthzServer.stop().catch(() => {});
+                }
+
+                try {
+                  server.removeAllListeners();
+                  server.close();
+                } catch {
+                  // Ignore errors during failure cleanup
+                }
+
+                this.server = null;
+                this.healthzAddress = null;
+                this.connections.clear();
+
+                reject(error);
+              }
+            };
+
+            const listenArgs: [number, (string | undefined)?, (() => void)?] = [
+              this.config.port,
+              this.config.host,
+              onListening
+            ];
+
+            server.listen(...(listenArgs as any));
+          })
+          .catch(err => {
+            server.emit('error', err instanceof Error ? err : new Error(String(err)));
+          });
+      });
+    } catch (err) {
+      if (HealthzServer.isRunning()) {
+        await HealthzServer.stop().catch(() => {});
+      }
+      this.healthzAddress = null;
+      this.server = null;
+      this.connections.clear();
+      throw err;
+    }
   }
 
   /**
@@ -938,7 +968,7 @@ export class ExpressServer {
    * - Monitoring systems are notified
    */
   public async stop(force = false): Promise<void> {
-    if (!this.server && !HealthzServer.isStarted()) {
+    if (!this.server && !HealthzServer.isRunning()) {
       getLogger().warn('Stop called but server is not running');
       return;
     }
@@ -950,7 +980,7 @@ export class ExpressServer {
     this.isShuttingDown = true;
 
     // Immediately mark unready on Healthz server to pull pod from load balancer endpoints
-    if (HealthzServer.isStarted()) {
+    if (HealthzServer.isRunning()) {
       HealthzServer.setReady(false);
     }
 
@@ -961,7 +991,7 @@ export class ExpressServer {
     try {
       // Graceful drain delay before closing server connections (if configured and not forced)
       const shutdownDelay = this.getHealthzShutdownDelay();
-      if (shutdownDelay > 0 && !force && HealthzServer.isStarted()) {
+      if (shutdownDelay > 0 && !force && HealthzServer.isRunning()) {
         getLogger().info(`Waiting ${shutdownDelay}ms for load balancer to drain traffic...`);
         await new Promise<void>(resolve => setTimeout(resolve, shutdownDelay));
       }
@@ -970,7 +1000,7 @@ export class ExpressServer {
         await this.gracefulShutdown(force);
       }
     } finally {
-      if (HealthzServer.isStarted()) {
+      if (HealthzServer.isRunning()) {
         await HealthzServer.stop();
         this.healthzAddress = null;
       }

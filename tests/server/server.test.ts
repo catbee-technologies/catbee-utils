@@ -865,7 +865,8 @@ describe('ExpressServer', () => {
       expect(addr).toBeDefined();
       expect(addr!.port).toBeGreaterThan(0);
       expect(server.isReady()).toBe(true);
-      expect(HealthzServer.isStarted()).toBe(true);
+      expect(HealthzServer.isRunning()).toBe(true);
+      expect(HealthzServer.isStartupComplete()).toBe(true);
 
       // Verify liveness probe
       const liveness = await fetchProbe(addr!.port, '/healthz');
@@ -895,7 +896,8 @@ describe('ExpressServer', () => {
 
       // Stopping ExpressServer stops HealthzServer
       await killServer(server);
-      expect(HealthzServer.isStarted()).toBe(false);
+      expect(HealthzServer.isRunning()).toBe(false);
+      expect(HealthzServer.isStartupComplete()).toBe(false);
       expect(server.getHealthzAddress()).toBeNull();
     });
 
@@ -955,6 +957,69 @@ describe('ExpressServer', () => {
       expect(server.isRunning()).toBe(false);
 
       healthzStartSpy.mockRestore();
+    });
+
+    it('should start HealthzServer before the main Express server starts listening and coordinate probes', async () => {
+      let probesBeforeListening: { healthz: number; readyz: number; startupz: number } | undefined;
+      let healthzRunningBeforeListening = false;
+      let startupCompleteBeforeListening: boolean | undefined;
+      let readyBeforeListening: boolean | undefined;
+
+      const serverConfig = new ServerConfigBuilder()
+        .withPort(0)
+        .withHealthzServer({ port: 0, shutdownDelayMs: 0 })
+        .disableOpenApi()
+        .build();
+
+      const server = new ExpressServer(serverConfig, {
+        onServerCreated: async () => {
+          // At this point, HealthzServer is listening, but Express server.listen() has not completed
+          healthzRunningBeforeListening = HealthzServer.isRunning();
+          startupCompleteBeforeListening = HealthzServer.isStartupComplete();
+          readyBeforeListening = HealthzServer.isReady();
+
+          const port = server.getHealthzAddress()!.port;
+          const live = await fetchProbe(port, '/healthz');
+          const ready = await fetchProbe(port, '/readyz');
+          const startup = await fetchProbe(port, '/startupz');
+
+          probesBeforeListening = {
+            healthz: live.status,
+            readyz: ready.status,
+            startupz: startup.status
+          };
+        }
+      });
+
+      await server.waitUntilReady();
+      await server.start();
+
+      // Before listening:
+      // Healthz server is listening, but app is not yet started or ready
+      expect(healthzRunningBeforeListening).toBe(true);
+      expect(startupCompleteBeforeListening).toBe(false);
+      expect(readyBeforeListening).toBe(false);
+      expect(probesBeforeListening).toEqual({
+        healthz: 200,
+        readyz: 503,
+        startupz: 503
+      });
+
+      // After listening:
+      // Express server listening -> afterStart ran -> markStartupComplete() & setReady(true) called
+      expect(server.isStartupComplete()).toBe(true);
+      expect(server.isReady()).toBe(true);
+
+      const port = server.getHealthzAddress()!.port;
+      const liveAfter = await fetchProbe(port, '/healthz');
+      const readyAfter = await fetchProbe(port, '/readyz');
+      const startupAfter = await fetchProbe(port, '/startupz');
+
+      expect(liveAfter.status).toBe(200);
+      expect(readyAfter.status).toBe(200);
+      expect(startupAfter.status).toBe(200);
+
+      await killServer(server);
     });
   });
 });

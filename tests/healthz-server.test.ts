@@ -240,22 +240,56 @@ describe('HealthzServer', () => {
   });
 
   describe('GET /startupz (startup)', () => {
-    it('returns 200 immediately after start() (server has started)', async () => {
+    it('returns 503 before markStartupComplete() and 200 after', async () => {
       const addr = (await HealthzServer.start({ port: 0 }))!;
-      // Startup probe reflects that the server process started, not readiness
-      const { status, body } = await get(addr.port, '/startupz');
-      expect(status).toBe(200);
-      expect(body.status).toBe('ok');
+
+      // Before startup completion: 503
+      const before = await get(addr.port, '/startupz');
+      expect(before.status).toBe(503);
+      expect(before.body.status).toBe('unhealthy');
+      expect(HealthzServer.isStartupComplete()).toBe(false);
+
+      // Signal startup complete
+      HealthzServer.markStartupComplete();
+
+      // After startup completion: 200
+      const after = await get(addr.port, '/startupz');
+      expect(after.status).toBe(200);
+      expect(after.body.status).toBe('ok');
+      expect(HealthzServer.isStartupComplete()).toBe(true);
     });
 
     it('is independent from readiness state', async () => {
       const addr = (await HealthzServer.start({ port: 0 }))!;
+      HealthzServer.markStartupComplete();
+
       // Startup should be 200 even without setReady
       const startup = await get(addr.port, '/startupz');
       expect(startup.status).toBe(200);
 
       // Readiness should still be 503
       const readiness = await get(addr.port, '/readyz');
+      expect(readiness.status).toBe(503);
+    });
+
+    it('keeps startupComplete = true and /startupz = 200 when readiness becomes false', async () => {
+      const addr = (await HealthzServer.start({ port: 0 }))!;
+      HealthzServer.markStartupComplete();
+      HealthzServer.setReady(true);
+
+      expect(HealthzServer.isStartupComplete()).toBe(true);
+      expect(HealthzServer.isReady()).toBe(true);
+
+      // Readiness transitions to false (e.g. during graceful drain or temporary dependency outage)
+      HealthzServer.setReady(false);
+
+      expect(HealthzServer.isStartupComplete()).toBe(true);
+      expect(HealthzServer.isReady()).toBe(false);
+
+      const startup = await get(addr.port, '/startupz');
+      const readiness = await get(addr.port, '/readyz');
+
+      expect(startup.status).toBe(200);
       expect(readiness.status).toBe(503);
     });
   });
@@ -275,6 +309,7 @@ describe('HealthzServer', () => {
         startupzPath: '/started'
       }))!;
 
+      HealthzServer.markStartupComplete();
       const liveness = await get(addr.port, '/live');
       const startup = await get(addr.port, '/started');
 
@@ -318,12 +353,22 @@ describe('HealthzServer', () => {
       expect(HealthzServer.isReady()).toBe(false);
     });
 
-    it('isStarted() reflects whether server is running', async () => {
-      expect(HealthzServer.isStarted()).toBe(false);
+    it('isRunning() reflects whether health server is running', async () => {
+      expect(HealthzServer.isRunning()).toBe(false);
       await HealthzServer.start({ port: 0 });
-      expect(HealthzServer.isStarted()).toBe(true);
+      expect(HealthzServer.isRunning()).toBe(true);
       await HealthzServer.stop();
-      expect(HealthzServer.isStarted()).toBe(false);
+      expect(HealthzServer.isRunning()).toBe(false);
+    });
+
+    it('isStartupComplete() reflects whether application startup completed', async () => {
+      expect(HealthzServer.isStartupComplete()).toBe(false);
+      await HealthzServer.start({ port: 0 });
+      expect(HealthzServer.isStartupComplete()).toBe(false);
+      HealthzServer.markStartupComplete();
+      expect(HealthzServer.isStartupComplete()).toBe(true);
+      await HealthzServer.stop();
+      expect(HealthzServer.isStartupComplete()).toBe(false);
     });
 
     it('setReady() is a no-op when server is not running', () => {

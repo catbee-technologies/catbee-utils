@@ -24,7 +24,7 @@ const _global = globalThis as unknown as ProcessGlobal;
  * |-----------|-------------|------------------|-----------|
  * | Liveness  | `/healthz`  | `livenessProbe`  | Runs configured checks; 200 = alive, 503 = unhealthy |
  * | Readiness | `/readyz`   | `readinessProbe` | Checks readiness flag + readiness checks; 503 while not ready |
- * | Startup   | `/startupz` | `startupProbe`   | 200 once the server has successfully started listening; 503 before that |
+ * | Startup   | `/startupz` | `startupProbe`   | 200 once application startup completes (`markStartupComplete()`); 503 while booting |
  *
  * ### Kubernetes Probe Best Practices:
  * - **Liveness (`/healthz`)**: Keep these checks extremely lightweight (e.g. process is responsive,
@@ -34,7 +34,8 @@ const _global = globalThis as unknown as ProcessGlobal;
  * - **Readiness (`/readyz`)**: Place external dependency checks (DB, Redis, downstream APIs) here via
  *   `readinessChecks`. If a dependency fails, Kubernetes temporarily pulls the pod from service endpoints
  *   without restarting the container, allowing it to recover gracefully.
- * - **Startup (`/startupz`)**: Verifies the health server process has started listening.
+ * - **Startup (`/startupz`)**: Verifies the application has completed its startup sequence
+ *   (signaled via `markStartupComplete()`). Protects slow-starting applications from premature liveness kills.
  *
  * @example
  * ```ts
@@ -42,17 +43,18 @@ const _global = globalThis as unknown as ProcessGlobal;
  *
  * const addr = await HealthzServer.start({
  *   port: 8282,
- *   // Keep liveness lightweight:
  *   checks: [
  *     { name: 'process', check: () => true },
  *   ],
- *   // Place dependency checks on readiness:
  *   readinessChecks: [
  *     { name: 'database', check: (signal) => db.ping({ signal }) },
  *     { name: 'redis',    check: (signal) => redis.ping({ signal }) },
  *   ],
  *   shutdownDelayMs: 10_000,
  * });
+ *
+ * // Signal application startup complete (switches /startupz to 200):
+ * HealthzServer.markStartupComplete();
  *
  * // Signal readiness after all background services and migrations are ready:
  * HealthzServer.setReady(true);
@@ -63,8 +65,10 @@ export class HealthzServer {
   private readonly config: ResolvedHealthzConfig;
   private readonly startedAt: number = Date.now();
 
-  /** Whether the health server has successfully started listening (for `/startupz`) */
-  private started = false;
+  /** Whether the health HTTP server is currently running and listening on its port */
+  private running = false;
+  /** Whether application startup has completed (for `/startupz`) */
+  private startupComplete = false;
   /** Whether the service is ready to receive traffic (for `/readyz`) */
   private ready = false;
   private shuttingDown = false;
@@ -111,7 +115,7 @@ export class HealthzServer {
 
       instance.server.listen({ host: config.host, port: config.port }, () => {
         instance.server.off('error', onError);
-        instance.started = true;
+        instance.running = true;
 
         const addr = instance.server.address();
 
@@ -131,9 +135,22 @@ export class HealthzServer {
     });
   }
 
-  /** Whether the health-check server is currently running and started. */
-  static isStarted(): boolean {
-    return _global[SINGLETON_KEY]?.started ?? false;
+  /** Whether the Healthz HTTP probe server is currently running and listening on its port. */
+  static isRunning(): boolean {
+    return _global[SINGLETON_KEY]?.running ?? false;
+  }
+
+  /** Mark application startup as completed (switches `/startupz` to 200). */
+  static markStartupComplete(): void {
+    const instance = _global[SINGLETON_KEY];
+    if (!instance) return;
+
+    instance.startupComplete = true;
+  }
+
+  /** Whether application startup has completed (for `/startupz`). */
+  static isStartupComplete(): boolean {
+    return _global[SINGLETON_KEY]?.startupComplete ?? false;
   }
 
   /** Mark the service as ready / not-ready for traffic. */
@@ -307,14 +324,14 @@ export class HealthzServer {
 
   /** `/startupz` — Startup probe */
   private handleStartup(res: ServerResponse, isHead = false): void {
-    if (this.started) {
+    if (this.startupComplete) {
       this.sendProbe(res, 200, 'ok', [], isHead);
     } else {
       this.sendProbe(
         res,
         503,
         'unhealthy',
-        [{ name: 'startup', ok: false, durationMs: 0, error: 'Service has not started yet' }],
+        [{ name: 'startup', ok: false, durationMs: 0, error: 'Application startup not complete' }],
         isHead
       );
     }
@@ -410,7 +427,8 @@ export class HealthzServer {
     process.off('SIGTERM', this.onSigterm);
     process.off('SIGINT', this.onSigint);
     this.ready = false;
-    this.started = false;
+    this.startupComplete = false;
+    this.running = false;
     this.shuttingDown = false;
   }
 }
