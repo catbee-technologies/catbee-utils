@@ -721,4 +721,158 @@ describe('HealthzServer', () => {
       expect(config.shutdownDelayMs).toBe(6500);
     });
   });
+
+  describe('Instance methods and API parity', () => {
+    it('provides instance and static getters for address, port, host, and url', async () => {
+      const addr = (await HealthzServer.start({ port: 0, host: '127.0.0.1' }))!;
+      const instance = HealthzServer.getInstance()!;
+      expect(instance).toBeDefined();
+
+      expect(instance.getAddress()).toEqual(addr);
+      expect(HealthzServer.getAddress()).toEqual(addr);
+
+      expect(instance.getPort()).toBe(addr.port);
+      expect(HealthzServer.getPort()).toBe(addr.port);
+
+      expect(instance.getHost()).toBe('127.0.0.1');
+      expect(HealthzServer.getHost()).toBe('127.0.0.1');
+
+      expect(instance.getUrl()).toBe(`http://127.0.0.1:${addr.port}`);
+      expect(HealthzServer.getUrl()).toBe(`http://127.0.0.1:${addr.port}`);
+
+      expect(instance.isRunning()).toBe(true);
+      expect(instance.isReady()).toBe(false);
+      instance.setReady(true);
+      expect(instance.isReady()).toBe(true);
+
+      expect(instance.isStartupComplete()).toBe(false);
+      instance.markStartupComplete();
+      expect(instance.isStartupComplete()).toBe(true);
+      instance.setStartupComplete(false);
+      expect(instance.isStartupComplete()).toBe(false);
+    });
+
+    it('formats IPv6 host correctly in getUrl', async () => {
+      const addr = (await HealthzServer.start({ port: 0, host: '::1' }))!;
+      const instance = HealthzServer.getInstance()!;
+      expect(instance.getUrl()).toBe(`http://[${addr.address}]:${addr.port}`);
+    });
+
+    it('handles bracketed IPv6 host in start() without crashing', async () => {
+      const addr = await HealthzServer.start({ port: 0, host: '[::1]' });
+      expect(addr).not.toBeNull();
+      expect(addr!.port).toBeGreaterThan(0);
+    });
+
+    it('supports check unregistration and check inspection', async () => {
+      await HealthzServer.start({
+        port: 0,
+        checks: [{ name: 'check-1', check: () => true }]
+      });
+
+      HealthzServer.registerCheck({ name: 'check-2', check: () => true }, 'readiness');
+      const checks = HealthzServer.getChecks();
+      expect(checks.liveness.map(c => c.name)).toContain('check-1');
+      expect(checks.readiness.map(c => c.name)).toContain('check-2');
+
+      HealthzServer.unregisterCheck('check-1', 'liveness');
+      expect(HealthzServer.getChecks().liveness.map(c => c.name)).not.toContain('check-1');
+
+      HealthzServer.unregisterCheck('check-2', 'readiness');
+      expect(HealthzServer.getChecks().readiness.map(c => c.name)).not.toContain('check-2');
+    });
+
+    it('deduplicates and updates checks in-place when re-registering with same name', async () => {
+      const addr = (await HealthzServer.start({ port: 0 }))!;
+      HealthzServer.setReady(true);
+
+      HealthzServer.registerCheck({ name: 'dyn', check: () => true }, 'liveness');
+      let live = await get(addr.port, '/healthz');
+      expect(live.body.checks).toHaveLength(1);
+      expect(live.body.checks![0].ok).toBe(true);
+
+      // Re-register check with same name but returning false
+      HealthzServer.registerCheck({ name: 'dyn', check: () => false }, 'liveness');
+      live = await get(addr.port, '/healthz');
+      expect(live.body.checks).toHaveLength(1);
+      expect(live.body.checks![0].ok).toBe(false);
+    });
+
+    it('treats void check functions as healthy (resolving without error)', async () => {
+      const addr = (await HealthzServer.start({
+        port: 0,
+        checks: [
+          {
+            name: 'void-check',
+            check: async () => {
+              /* returns void */
+            }
+          }
+        ]
+      }))!;
+
+      const live = await get(addr.port, '/healthz');
+      expect(live.status).toBe(200);
+      expect(live.body.checks![0].ok).toBe(true);
+    });
+
+    it('includes Allow: GET, HEAD header on 405 response', async () => {
+      const addr = (await HealthzServer.start({ port: 0 }))!;
+      const res = await new Promise<{ status: number; headers: http.IncomingHttpHeaders }>((resolve, reject) => {
+        const req = http.request(`http://127.0.0.1:${addr.port}/healthz`, { method: 'POST' }, res => {
+          resolve({ status: res.statusCode!, headers: res.headers });
+        });
+        req.on('error', reject);
+        req.end();
+      });
+
+      expect(res.status).toBe(405);
+      expect(res.headers.allow).toBe('GET, HEAD');
+    });
+
+    it('normalizes paths configured without leading slash and handles trailing/repeated slashes', async () => {
+      const addr = (await HealthzServer.start({
+        port: 0,
+        healthzPath: 'custom-live',
+        readyzPath: 'custom-ready',
+        startupzPath: 'custom-startup'
+      }))!;
+
+      HealthzServer.setReady(true);
+      HealthzServer.markStartupComplete();
+
+      const live = await get(addr.port, '/custom-live');
+      expect(live.status).toBe(200);
+
+      const liveTrailing = await get(addr.port, '/custom-live/');
+      expect(liveTrailing.status).toBe(200);
+
+      const liveRepeatedSlashes = await get(addr.port, `/custom-live${'/'.repeat(200)}`);
+      expect(liveRepeatedSlashes.status).toBe(200);
+
+      const ready = await get(addr.port, '/custom-ready');
+      expect(ready.status).toBe(200);
+
+      const startup = await get(addr.port, '/custom-startup');
+      expect(startup.status).toBe(200);
+    });
+
+    it('extracts error string from non-Error thrown values', async () => {
+      const addr = (await HealthzServer.start({
+        port: 0,
+        checks: [
+          {
+            name: 'string-error',
+            check: () => {
+              throw 'DB string failure';
+            }
+          }
+        ]
+      }))!;
+
+      const live = await get(addr.port, '/healthz');
+      expect(live.status).toBe(503);
+      expect(live.body.checks![0].error).toBe('DB string failure');
+    });
+  });
 });

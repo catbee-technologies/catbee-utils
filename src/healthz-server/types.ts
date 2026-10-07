@@ -13,11 +13,11 @@
  * > To prevent background resource leaks, always pass `signal` to underlying drivers/clients
  * > (e.g. `fetch(url, { signal })`, database clients, HTTP clients) or check `signal?.aborted`.
  *
- * - Return `true` (or resolve to true) to signal healthy.
+ * - Return `true` (or resolve to true, or resolve void without error) to signal healthy.
  * - Return `false` (or resolve to false) to signal unhealthy.
  * - Throw an error (or reject) to signal unhealthy with an error message.
  */
-export type HealthCheckFn = (signal?: AbortSignal) => boolean | Promise<boolean>;
+export type HealthCheckFn = (signal?: AbortSignal) => boolean | void | Promise<boolean | void>;
 
 /**
  * A readiness check function.
@@ -34,11 +34,11 @@ export type HealthCheckFn = (signal?: AbortSignal) => boolean | Promise<boolean>
  * > To prevent background resource leaks, always pass `signal` to underlying drivers/clients
  * > (e.g. `fetch(url, { signal })`, database clients, HTTP clients) or check `signal?.aborted`.
  *
- * - Return `true` (or resolve to true) to signal ready.
+ * - Return `true` (or resolve to true, or resolve void without error) to signal ready.
  * - Return `false` (or resolve to false) to signal not ready.
  * - Throw an error (or reject) to signal not ready with an error.
  */
-export type ReadinessCheckFn = (signal?: AbortSignal) => boolean | Promise<boolean>;
+export type ReadinessCheckFn = (signal?: AbortSignal) => boolean | void | Promise<boolean | void>;
 
 /**
  * A named health check with an associated check function.
@@ -48,10 +48,11 @@ export interface NamedCheck {
   name: string;
   /**
    * Check function — return false or throw to indicate failure.
+   * Resolving void without throwing is considered healthy/ready.
    * Receives an AbortSignal that is triggered when the check times out.
    * Cancellation via the signal is cooperative; pass `signal` to underlying operations.
    */
-  check: (signal?: AbortSignal) => boolean | Promise<boolean>;
+  check: (signal?: AbortSignal) => boolean | void | Promise<boolean | void>;
 }
 
 /**

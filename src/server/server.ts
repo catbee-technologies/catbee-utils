@@ -75,8 +75,12 @@ export class ExpressServer {
   private readonly app: Express;
   /** Set of active WebSocket connections */
   private readonly connections = new Set<Socket>();
-  /** Flag indicating if the server is shutting down */
+  /** Flag indicating if the server is shutting down (rejects traffic with 503) */
   private isShuttingDown = false;
+  /** Flag indicating if the server is in graceful drain delay (sets Connection: close while servicing traffic) */
+  private isDraining = false;
+  /** Internal readiness state (used when HealthzServer is not enabled) */
+  private internalReady = false;
   /** Flag indicating if graceful shutdown handlers are registered */
   private gracefulShutdownRegistered = false;
   /** Map of registered signal listeners for clean teardown */
@@ -87,11 +91,15 @@ export class ExpressServer {
   private readonly healthzChecks: NamedCheck[] = [];
   /** Named checks queued for Healthz readiness probe */
   private readonly healthzReadinessChecks: NamedCheck[] = [];
+  /** Whether readiness checks were explicitly provided or registered */
+  private hasExplicitReadinessChecks = false;
 
   /** Promise that resolves when initialization (middleware + routes) is complete */
   private readonly initPromise: Promise<void>;
   /** In-flight start promise to protect against concurrent start() calls */
   private startPromise?: Promise<http.Server | https.Server>;
+  /** In-flight stop promise to protect against concurrent stop() calls */
+  private stopPromise?: Promise<void>;
 
   /**
    * Initializes server with intelligent defaults and security best practices.
@@ -141,7 +149,8 @@ export class ExpressServer {
       if (this.config.healthzServer.checks) {
         this.healthzChecks.push(...this.config.healthzServer.checks);
       }
-      if (this.config.healthzServer.readinessChecks) {
+      if (this.config.healthzServer.readinessChecks !== undefined) {
+        this.hasExplicitReadinessChecks = true;
         this.healthzReadinessChecks.push(...this.config.healthzServer.readinessChecks);
       }
     }
@@ -265,6 +274,9 @@ export class ExpressServer {
           .status(HttpStatusCodes.SERVICE_UNAVAILABLE)
           .json(new ServiceUnavailableException('Server is shutting down'));
         return;
+      }
+      if (this.isDraining) {
+        res.setHeader('Connection', 'close');
       }
       next();
     });
@@ -640,18 +652,29 @@ export class ExpressServer {
    */
   public registerHealthCheck(
     name: string,
-    check: (signal?: AbortSignal) => Promise<boolean> | boolean,
+    check: (signal?: AbortSignal) => Promise<boolean | void> | boolean | void,
     options?: 'readiness' | 'liveness' | 'both' | { type?: 'readiness' | 'liveness' | 'both' }
   ): this {
     const probeType = typeof options === 'string' ? options : (options?.type ?? 'readiness');
     const namedCheck: NamedCheck = { name, check };
 
-    // Sync to HealthzServer probe checks
+    // Sync to HealthzServer probe checks with deduplication
     if (probeType === 'liveness' || probeType === 'both') {
-      this.healthzChecks.push(namedCheck);
+      const idx = this.healthzChecks.findIndex(c => c.name === name);
+      if (idx !== -1) {
+        this.healthzChecks[idx] = namedCheck;
+      } else {
+        this.healthzChecks.push(namedCheck);
+      }
     }
     if (probeType === 'readiness' || probeType === 'both') {
-      this.healthzReadinessChecks.push(namedCheck);
+      this.hasExplicitReadinessChecks = true;
+      const idx = this.healthzReadinessChecks.findIndex(c => c.name === name);
+      if (idx !== -1) {
+        this.healthzReadinessChecks[idx] = namedCheck;
+      } else {
+        this.healthzReadinessChecks.push(namedCheck);
+      }
     }
 
     // Register dynamically if HealthzServer is already running
@@ -661,12 +684,91 @@ export class ExpressServer {
   }
 
   /**
+   * Unregister a health check by name.
+   *
+   * @param name Name of the check to remove
+   * @param options Target probe type ('readiness' | 'liveness' | 'both') or options object
+   * @returns This instance for method chaining
+   */
+  public unregisterHealthCheck(
+    name: string,
+    options?: 'readiness' | 'liveness' | 'both' | { type?: 'readiness' | 'liveness' | 'both' }
+  ): this {
+    const probeType = typeof options === 'string' ? options : (options?.type ?? 'both');
+
+    if (probeType === 'liveness' || probeType === 'both') {
+      const idx = this.healthzChecks.findIndex(c => c.name === name);
+      if (idx !== -1) this.healthzChecks.splice(idx, 1);
+    }
+    if (probeType === 'readiness' || probeType === 'both') {
+      const idx = this.healthzReadinessChecks.findIndex(c => c.name === name);
+      if (idx !== -1) this.healthzReadinessChecks.splice(idx, 1);
+    }
+
+    HealthzServer.unregisterCheck(name, probeType);
+    return this;
+  }
+
+  /**
+   * Get all registered Healthz checks queued for this Express server.
+   */
+  public getHealthzChecks(): { liveness: NamedCheck[]; readiness: NamedCheck[] } {
+    return {
+      liveness: [...this.healthzChecks],
+      readiness: [...this.healthzReadinessChecks]
+    };
+  }
+
+  /**
+   * Register a readiness health check.
+   *
+   * @param name Unique identifier for the check (used in detailed responses)
+   * @param check Function returning boolean or Promise<boolean> indicating health (supports optional AbortSignal)
+   * @returns This instance for method chaining
+   */
+  public registerReadinessCheck(
+    name: string,
+    check: (signal?: AbortSignal) => Promise<boolean | void> | boolean | void
+  ): this {
+    return this.registerHealthCheck(name, check, 'readiness');
+  }
+
+  /**
+   * Register a liveness health check.
+   *
+   * @param name Unique identifier for the check (used in detailed responses)
+   * @param check Function returning boolean or Promise<boolean> indicating health (supports optional AbortSignal)
+   * @returns This instance for method chaining
+   */
+  public registerLivenessCheck(
+    name: string,
+    check: (signal?: AbortSignal) => Promise<boolean | void> | boolean | void
+  ): this {
+    return this.registerHealthCheck(name, check, 'liveness');
+  }
+
+  /**
+   * Register a readiness and liveness health check.
+   *
+   * @param name Unique identifier for the check (used in detailed responses)
+   * @param check Function returning boolean or Promise<boolean> indicating health (supports optional AbortSignal)
+   * @returns This instance for method chaining
+   */
+  public registerReadinessAndLivenessChecks(
+    name: string,
+    check: (signal?: AbortSignal) => Promise<boolean | void> | boolean | void
+  ): this {
+    return this.registerHealthCheck(name, check, 'both');
+  }
+
+  /**
    * Mark the service as ready / not-ready for traffic on the Healthz probe server.
    *
    * @param ready Whether the service is ready to receive traffic
    * @returns This instance for method chaining
    */
   public setReady(ready: boolean): this {
+    this.internalReady = ready;
     HealthzServer.setReady(ready);
     return this;
   }
@@ -675,7 +777,10 @@ export class ExpressServer {
    * Whether the service is currently marked as ready for traffic on the Healthz probe server.
    */
   public isReady(): boolean {
-    return HealthzServer.isReady();
+    if (this.isHealthzServerEnabled()) {
+      return HealthzServer.isReady();
+    }
+    return this.internalReady && this.isRunning();
   }
 
   /**
@@ -692,7 +797,10 @@ export class ExpressServer {
    * Whether application startup has completed on the Healthz probe server.
    */
   public isStartupComplete(): boolean {
-    return HealthzServer.isStartupComplete();
+    if (this.isHealthzServerEnabled()) {
+      return HealthzServer.isStartupComplete();
+    }
+    return this.isRunning();
   }
 
   /**
@@ -716,7 +824,7 @@ export class ExpressServer {
    * @returns `true` when ready, otherwise `false`.
    */
   public ready(): boolean {
-    return HealthzServer.isReady();
+    return this.isReady();
   }
 
   /**
@@ -788,7 +896,7 @@ export class ExpressServer {
         ...(typeof this.config.healthzServer === 'object' ? this.config.healthzServer : {}),
         handleSignals: false,
         checks: [...this.healthzChecks],
-        readinessChecks: [...this.healthzReadinessChecks]
+        ...(this.hasExplicitReadinessChecks ? { readinessChecks: [...this.healthzReadinessChecks] } : {})
       };
       const addr = await HealthzServer.start(healthzConfig);
       if (!addr) {
@@ -842,6 +950,7 @@ export class ExpressServer {
                 this.logServerStartInfo();
                 await this.runHook('afterStart', server);
 
+                this.internalReady = true;
                 // Mark startup complete and ready on Healthz probe server
                 if (this.isHealthzServerEnabled()) {
                   HealthzServer.markStartupComplete();
@@ -940,9 +1049,8 @@ export class ExpressServer {
     getLogger().info(`Server running on ${url}`);
 
     if (this.healthzAddress) {
-      getLogger().info(
-        `Healthz probe server running on http://${this.healthzAddress.address}:${this.healthzAddress.port}`
-      );
+      const healthzHost = this.formatHostForUrl(this.healthzAddress.address);
+      getLogger().info(`Healthz server running on http://${healthzHost}:${this.healthzAddress.port}`);
     }
     if (this.config.openApi?.enable) {
       getLogger().info(
@@ -972,12 +1080,23 @@ export class ExpressServer {
       getLogger().warn('Stop called but server is not running');
       return;
     }
-    if (this.isShuttingDown) {
-      getLogger().warn('Shutdown already in progress');
-      return;
+    if (this.stopPromise) {
+      return this.stopPromise;
     }
 
-    this.isShuttingDown = true;
+    this.stopPromise = this.doStop(force);
+    try {
+      await this.stopPromise;
+    } finally {
+      this.stopPromise = undefined;
+    }
+  }
+
+  /**
+   * Internal implementation of server shutdown.
+   */
+  private async doStop(force = false): Promise<void> {
+    this.internalReady = false;
 
     // Immediately mark unready on Healthz server to pull pod from load balancer endpoints
     if (HealthzServer.isRunning()) {
@@ -993,8 +1112,12 @@ export class ExpressServer {
       const shutdownDelay = this.getHealthzShutdownDelay();
       if (shutdownDelay > 0 && !force && HealthzServer.isRunning()) {
         getLogger().info(`Waiting ${shutdownDelay}ms for load balancer to drain traffic...`);
+        this.isDraining = true;
         await new Promise<void>(resolve => setTimeout(resolve, shutdownDelay));
       }
+
+      this.isDraining = false;
+      this.isShuttingDown = true;
 
       if (this.server) {
         await this.gracefulShutdown(force);
@@ -1005,6 +1128,7 @@ export class ExpressServer {
         this.healthzAddress = null;
       }
       this.isShuttingDown = false;
+      this.isDraining = false;
     }
   }
 
@@ -1100,10 +1224,11 @@ export class ExpressServer {
         getLogger().info(`Received ${signal}, initiating graceful shutdown...`);
 
         try {
-          this.disableGracefulShutdown();
           await this.stop(false);
+          this.disableGracefulShutdown();
           process.exit(0);
         } catch (err) {
+          this.disableGracefulShutdown();
           getLogger().fatal({ err }, 'Shutdown failed');
           process.exit(1);
         }

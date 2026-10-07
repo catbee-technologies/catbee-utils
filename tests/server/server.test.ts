@@ -1021,5 +1021,145 @@ describe('ExpressServer', () => {
 
       await killServer(server);
     });
+
+    it('falls back readinessChecks to checks when readinessChecks is omitted', async () => {
+      const serverConfig = new ServerConfigBuilder()
+        .withPort(0)
+        .withHealthzServer({
+          port: 0,
+          shutdownDelayMs: 0,
+          checks: [{ name: 'fallback-check', check: () => true }]
+        })
+        .disableOpenApi()
+        .build();
+
+      const server = new ExpressServer(serverConfig);
+      await server.waitUntilReady();
+      await server.start();
+
+      const addr = server.getHealthzAddress()!;
+
+      // Liveness probe runs fallback-check
+      const live = await fetchProbe(addr.port, '/healthz');
+      expect(live.body.checks).toEqual(
+        expect.arrayContaining([expect.objectContaining({ name: 'fallback-check', ok: true })])
+      );
+
+      // Readiness probe ALSO runs fallback-check because readinessChecks was omitted!
+      const ready = await fetchProbe(addr.port, '/readyz');
+      expect(ready.body.checks).toEqual(
+        expect.arrayContaining([expect.objectContaining({ name: 'fallback-check', ok: true })])
+      );
+
+      await killServer(server);
+    });
+
+    it('services traffic with Connection: close during graceful drain delay', async () => {
+      const serverConfig = new ServerConfigBuilder()
+        .withPort(0)
+        .withHealthzServer({ port: 0, shutdownDelayMs: 200 })
+        .disableOpenApi()
+        .build();
+
+      const server = new ExpressServer(serverConfig);
+      server.get('/test-drain', (_req, res) => {
+        res.json({ success: true });
+      });
+
+      await server.waitUntilReady();
+      await server.start();
+
+      // Start stop() in background (which starts 200ms drain delay)
+      const stopPromise = server.stop(false);
+
+      // Give it 30ms to enter drain delay
+      await new Promise(r => setTimeout(r, 30));
+
+      // During drain delay, request should succeed (status 200) with Connection: close
+      const res = await request(server.app).get('/test-drain');
+      expect(res.status).toBe(HttpStatusCodes.OK);
+      expect(res.headers.connection).toBe('close');
+      expect(res.body).toEqual({ success: true });
+
+      await stopPromise;
+    });
+
+    it('handles concurrent stop() calls safely without error', async () => {
+      const server = new ExpressServer({
+        port: 0,
+        healthzServer: { enable: true, port: 0, shutdownDelayMs: 0 },
+        openApi: { enable: false }
+      });
+
+      await server.waitUntilReady();
+      await server.start();
+
+      // Concurrent stop() calls
+      await expect(Promise.all([server.stop(), server.stop()])).resolves.not.toThrow();
+      expect(server.isRunning()).toBe(false);
+      expect(HealthzServer.isRunning()).toBe(false);
+    });
+
+    it('supports unregisterHealthCheck and getHealthzChecks', async () => {
+      const server = new ExpressServer({
+        port: 0,
+        healthzServer: { enable: true, port: 0, shutdownDelayMs: 0 },
+        openApi: { enable: false }
+      });
+
+      server.registerHealthCheck('db', () => true, 'readiness');
+      server.registerHealthCheck('ping', () => true, 'liveness');
+
+      const queued = server.getHealthzChecks();
+      expect(queued.readiness.map(c => c.name)).toContain('db');
+      expect(queued.liveness.map(c => c.name)).toContain('ping');
+
+      server.unregisterHealthCheck('db', 'readiness');
+      expect(server.getHealthzChecks().readiness.map(c => c.name)).not.toContain('db');
+
+      server.unregisterHealthCheck('ping', 'liveness');
+      expect(server.getHealthzChecks().liveness.map(c => c.name)).not.toContain('ping');
+    });
+
+    it('deduplicates checks registered with same name on ExpressServer', async () => {
+      const server = new ExpressServer({
+        port: 0,
+        healthzServer: { enable: true, port: 0, shutdownDelayMs: 0 },
+        openApi: { enable: false }
+      });
+
+      server.registerHealthCheck('metric', () => true, 'liveness');
+      server.registerHealthCheck('metric', () => false, 'liveness');
+
+      const checks = server.getHealthzChecks();
+      expect(checks.liveness.filter(c => c.name === 'metric')).toHaveLength(1);
+    });
+
+    it('returns correct readiness and startup status when healthzServer is disabled', async () => {
+      const server = new ExpressServer({ port: 0, host: 'localhost', openApi: { enable: false } });
+      await server.waitUntilReady();
+
+      expect(server.isHealthzServerEnabled()).toBe(false);
+      expect(server.isReady()).toBe(false);
+      expect(server.ready()).toBe(false);
+      expect(server.isStartupComplete()).toBe(false);
+
+      await server.start();
+
+      expect(server.isReady()).toBe(true);
+      expect(server.ready()).toBe(true);
+      expect(server.isStartupComplete()).toBe(true);
+
+      // Manual readiness toggling
+      server.setReady(false);
+      expect(server.isReady()).toBe(false);
+      server.setReady(true);
+      expect(server.isReady()).toBe(true);
+
+      await killServer(server);
+
+      expect(server.isReady()).toBe(false);
+      expect(server.isStartupComplete()).toBe(false);
+    });
   });
 });
