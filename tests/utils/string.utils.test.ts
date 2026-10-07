@@ -14,7 +14,10 @@ import {
   escapeRegex,
   unescapeHtml,
   isBlank,
-  ellipsis
+  ellipsis,
+  trimChars,
+  trimLeadingChars,
+  trimTrailingChars
 } from '../../src/string';
 
 describe('StringUtils', () => {
@@ -99,6 +102,10 @@ describe('StringUtils', () => {
     it('handles unicode', () => {
       expect(slugify('Straße ünicode 𐍈')).toBe('strae-nicode');
     });
+    it('handles long sequences of dashes efficiently without ReDoS', () => {
+      const input = '-'.repeat(1000) + 'test' + '-'.repeat(1000);
+      expect(slugify(input)).toBe('test');
+    });
   });
 
   describe('truncate', () => {
@@ -170,6 +177,15 @@ describe('StringUtils', () => {
       expect(stripHtml('<div>foo</div>bar')).toBe('foobar');
       expect(stripHtml('<p>test</p><br>')).toBe('test');
       expect(stripHtml('no tags')).toBe('no tags');
+    });
+
+    it('removes nested tags completely to prevent multi-character bypasses', () => {
+      expect(stripHtml('<scr<script>ipt>alert(1)</script>')).toBe('alert(1)');
+    });
+
+    it('handles long sequences of opening brackets efficiently without ReDoS', () => {
+      const input = '<'.repeat(1000);
+      expect(stripHtml(input)).toBe(input);
     });
   });
 
@@ -301,6 +317,50 @@ describe('StringUtils', () => {
     it('handles non-string input', () => {
       expect(ellipsis(null as any, 10)).toBe(null);
       expect(ellipsis(123 as any, 10)).toBe(123);
+    });
+  });
+
+  describe('trimChars', () => {
+    it('trims leading and trailing occurrences of a character', () => {
+      expect(trimChars('///api/users///', '/')).toBe('api/users');
+      expect(trimChars('---hello-world---', '-')).toBe('hello-world');
+      expect(trimChars('  hello  ')).toBe('hello');
+    });
+
+    it('handles set of characters', () => {
+      expect(trimChars('/\\/\\path\\/\\', '/\\')).toBe('path');
+    });
+
+    it('returns empty string when input is empty or contains only target characters', () => {
+      expect(trimChars('', '/')).toBe('');
+      expect(trimChars('////', '/')).toBe('');
+      expect(trimChars('---', '-')).toBe('');
+    });
+
+    it('returns unchanged string if target characters not at edges', () => {
+      expect(trimChars('api/users', '/')).toBe('api/users');
+    });
+  });
+
+  describe('trimLeadingChars', () => {
+    it('trims only leading characters', () => {
+      expect(trimLeadingChars('///api/users///', '/')).toBe('api/users///');
+      expect(trimLeadingChars('---hello', '-')).toBe('hello');
+    });
+
+    it('returns empty string for only target characters', () => {
+      expect(trimLeadingChars('////', '/')).toBe('');
+    });
+  });
+
+  describe('trimTrailingChars', () => {
+    it('trims only trailing characters', () => {
+      expect(trimTrailingChars('///api/users///', '/')).toBe('///api/users');
+      expect(trimTrailingChars('hello---', '-')).toBe('hello');
+    });
+
+    it('returns empty string for only target characters', () => {
+      expect(trimTrailingChars('////', '/')).toBe('');
     });
   });
 });

@@ -42,12 +42,13 @@ export function toCamelCase(str: string): string {
  * @returns {string} The slugified string.
  */
 export function slugify(str: string): string {
-  return str
+  const slug = str
     .toLowerCase()
     .replace(/[^\w\s-]/g, '') // remove non-word
     .replace(/\s+/g, '-') // spaces to dash
-    .replace(/-+/g, '-') // multiple dashes to one
-    .replace(/^-+|-+$/g, ''); // trim leading/trailing dashes
+    .replace(/-+/g, '-'); // multiple dashes to one
+
+  return trimChars(slug, '-');
 }
 
 /**
@@ -114,7 +115,13 @@ export function mask(str: string, visibleStart: number = 0, visibleEnd: number =
  * @returns {string} The string with HTML tags removed.
  */
 export function stripHtml(str: string): string {
-  return str.replace(/<[^>]*>/g, '');
+  let prev: string;
+  let result = str;
+  do {
+    prev = result;
+    result = result.replace(/<[^<>]*>/g, '');
+  } while (result !== prev);
+  return result;
 }
 
 /**
@@ -236,4 +243,74 @@ export function ellipsis(str: string, maxLength: number, suffix: string = '...')
   const truncated = str.slice(0, maxLength - suffix.length);
   const lastSpace = truncated.lastIndexOf(' ');
   return (lastSpace > 0 ? truncated.slice(0, lastSpace) : truncated) + suffix;
+}
+
+/**
+ * Trims leading and trailing occurrences of specified characters in linear O(n) time
+ * without using regular expressions (immune to polynomial ReDoS).
+ *
+ * @param {string} str - The input string.
+ * @param {string} [chars=' '] - Character or set of characters to trim.
+ * @returns {string} The trimmed string.
+ *
+ * @example
+ * trimChars('///api/users///', '/'); // 'api/users'
+ * trimChars('---hello-world---', '-'); // 'hello-world'
+ */
+export function trimChars(str: string, chars: string = ' '): string {
+  if (!str) return '';
+  let start = 0;
+  let end = str.length;
+
+  while (start < end && chars.includes(str[start])) {
+    start++;
+  }
+  while (end > start && chars.includes(str[end - 1])) {
+    end--;
+  }
+
+  return str.slice(start, end);
+}
+
+/**
+ * Trims leading occurrences of specified characters in linear O(n) time.
+ *
+ * @param {string} str - The input string.
+ * @param {string} [chars=' '] - Character or set of characters to trim from start.
+ * @returns {string} The trimmed string.
+ *
+ * @example
+ * trimLeadingChars('///api/users', '/'); // 'api/users'
+ */
+export function trimLeadingChars(str: string, chars: string = ' '): string {
+  if (!str) return '';
+  let start = 0;
+  const end = str.length;
+
+  while (start < end && chars.includes(str[start])) {
+    start++;
+  }
+
+  return str.slice(start, end);
+}
+
+/**
+ * Trims trailing occurrences of specified characters in linear O(n) time.
+ *
+ * @param {string} str - The input string.
+ * @param {string} [chars=' '] - Character or set of characters to trim from end.
+ * @returns {string} The trimmed string.
+ *
+ * @example
+ * trimTrailingChars('https://example.com///', '/'); // 'https://example.com'
+ */
+export function trimTrailingChars(str: string, chars: string = ' '): string {
+  if (!str) return '';
+  let end = str.length;
+
+  while (end > 0 && chars.includes(str[end - 1])) {
+    end--;
+  }
+
+  return str.slice(0, end);
 }

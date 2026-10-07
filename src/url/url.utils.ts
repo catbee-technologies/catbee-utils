@@ -1,4 +1,5 @@
 import { URL, URLSearchParams } from 'node:url';
+import { trimChars, trimTrailingChars } from '@catbee/utils/string';
 
 /**
  * Appends query parameters to a given URL.
@@ -107,8 +108,8 @@ export function joinPaths(...segments: string[]): string {
   let result = segments
     .filter(s => s !== undefined && s !== null)
     .map((segment, index) => {
-      if (index === 0) return segment.replace(/\/+$/, '');
-      return segment.replace(/^\/+|\/+$/g, '');
+      if (index === 0) return trimTrailingChars(segment, '/');
+      return trimChars(segment, '/');
     })
     .filter(Boolean)
     .join('/');
@@ -136,8 +137,8 @@ export function normalizeUrl(url: string, base?: string): string {
     const parsedUrl = base ? new URL(normalized, base) : new URL(normalized);
 
     // Normalize
-    parsedUrl.pathname = parsedUrl.pathname.replace(/\/+/g, '/'); // Collapse multiple slashes
-    parsedUrl.pathname = parsedUrl.pathname.replace(/\/+$/, ''); // Remove trailing slash
+    const collapsed = parsedUrl.pathname.replace(/\/+/g, '/'); // Collapse multiple slashes
+    parsedUrl.pathname = trimTrailingChars(collapsed, '/'); // Remove trailing slash
     parsedUrl.hostname = parsedUrl.hostname.toLowerCase();
 
     return parsedUrl.toString();
