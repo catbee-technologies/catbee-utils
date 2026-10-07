@@ -423,9 +423,9 @@ export interface CatbeeServerHooks {
   /** Called before server starts listening */
   beforeStart?: (app: Express) => Promise<void> | void;
   /** Called after server is ready */
-  afterStart?: (server: http.Server) => Promise<void> | void;
+  afterStart?: (server: http.Server | https.Server) => Promise<void> | void;
   /** Called before graceful shutdown */
-  beforeStop?: (server: http.Server) => Promise<void> | void;
+  beforeStop?: (server: http.Server | https.Server) => Promise<void> | void;
   /** Called after server stops */
   afterStop?: () => Promise<void> | void;
   /** Custom error handler (overrides Catbee default if provided) */
