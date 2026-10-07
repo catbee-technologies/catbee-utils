@@ -16,6 +16,7 @@ import { isPort, isHostname } from '@catbee/utils/validation';
 import { optionalRequire } from '@catbee/utils/async';
 import { BUILD_MARKER } from './server.builder';
 import { uuid } from '@catbee/utils/id';
+import { trimChars } from '@catbee/utils/string';
 import { HealthzServer } from '@catbee/utils/healthz-server';
 import type { Express, Request, Response, NextFunction, Router } from 'express';
 import type { CatbeeHealthzServerConfig, HealthzAddressInfo, NamedCheck } from '@catbee/utils/healthz-server';
@@ -1622,14 +1623,8 @@ export class ExpressServer {
 
   private normalizePath(path: string, withGlobalPrefix = false): string {
     const sanitize = (p: string): string => {
-      return (
-        '/' +
-        p
-          .trim()
-          .replace(/^\/+/, '') // remove leading slashes
-          .replace(/\/{2,}/g, '/') // collapse multiple slashes
-          .replace(/\/+$/, '')
-      ); // remove trailing slash
+      const inner = trimChars(p.trim(), '/');
+      return inner ? '/' + inner.replace(/\/{2,}/g, '/') : '/';
     };
 
     // Resolve global prefix if enabled

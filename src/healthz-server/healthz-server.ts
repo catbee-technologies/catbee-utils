@@ -1,4 +1,5 @@
 import { createServer, IncomingMessage, Server, ServerResponse } from 'node:http';
+import { trimChars } from '@catbee/utils/string';
 import { getDefaultHealthzConfig, resolveConfig, ResolvedHealthzConfig } from './config';
 import type {
   CheckResult,
@@ -28,21 +29,8 @@ function getErrorMessage(err: unknown): string {
 }
 
 function normalizeProbePath(p: string): string {
-  if (!p) {
-    return '/';
-  }
-  let start = 0;
-  let end = p.length;
-  while (start < end && p[start] === '/') {
-    start++;
-  }
-  while (end > start && p[end - 1] === '/') {
-    end--;
-  }
-  if (start >= end) {
-    return '/';
-  }
-  return `/${p.slice(start, end)}`;
+  const trimmed = trimChars(p, '/');
+  return trimmed ? `/${trimmed}` : '/';
 }
 
 /**
