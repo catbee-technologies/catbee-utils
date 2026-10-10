@@ -1,1 +1,9 @@
-export { ensureError, hasErrorMessage, serializeError, type SerializedError } from './error.utils';
+export {
+  ensureError,
+  hasErrorMessage,
+  serializeError,
+  formatServerListenError,
+  type SerializedError,
+  type ServerListenError,
+  type ServerListenErrorContext
+} from './error.utils';

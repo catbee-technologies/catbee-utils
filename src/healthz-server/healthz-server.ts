@@ -1,5 +1,6 @@
 import { createServer, IncomingMessage, Server, ServerResponse } from 'node:http';
 import { trimChars } from '@catbee/utils/string';
+import { formatServerListenError } from '@catbee/utils/error';
 import { getDefaultHealthzConfig, resolveConfig, ResolvedHealthzConfig } from './config';
 import type {
   CheckResult,
@@ -140,7 +141,13 @@ export class HealthzServer {
         instance.shuttingDown = false;
         instance.addressInfo = null;
         delete _global[SINGLETON_KEY];
-        reject(err);
+        const formattedErr = formatServerListenError(err, {
+          serverName: 'Healthz probe server',
+          port: config.port,
+          host: bindHost,
+          configEnvVar: 'SERVER_HEALTHZ_PORT/HEALTHZ_PORT'
+        });
+        reject(formattedErr);
       };
 
       instance.server.once('error', onError);

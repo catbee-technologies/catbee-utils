@@ -1,4 +1,5 @@
 import http from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { HealthzServer, getDefaultHealthzConfig, resolveConfig } from '../src/healthz-server';
 import { Env } from '../src/env';
 import type { ProbeResponse } from '../src/healthz-server';
@@ -873,6 +874,28 @@ describe('HealthzServer', () => {
       const live = await get(addr.port, '/healthz');
       expect(live.status).toBe(503);
       expect(live.body.checks![0].error).toBe('DB string failure');
+    });
+
+    it('improves error message when port is already in use (EADDRINUSE)', async () => {
+      const blocker = http.createServer();
+      await new Promise<void>((resolve, reject) => {
+        blocker.once('error', reject);
+        blocker.listen(0, '127.0.0.1', () => resolve());
+      });
+      const busyPort = (blocker.address() as AddressInfo).port;
+
+      try {
+        await expect(
+          HealthzServer.start({
+            host: '127.0.0.1',
+            port: busyPort
+          })
+        ).rejects.toThrow(
+          `Healthz probe server: Port ${busyPort} is already in use (127.0.0.1:${busyPort}). Another process is already listening on this address. Please choose a different port via SERVER_HEALTHZ_PORT/HEALTHZ_PORT or terminate the conflicting process.`
+        );
+      } finally {
+        await new Promise<void>(resolve => blocker.close(() => resolve()));
+      }
     });
   });
 });

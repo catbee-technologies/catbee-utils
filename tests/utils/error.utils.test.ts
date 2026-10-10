@@ -1,4 +1,10 @@
-import { ensureError, hasErrorMessage, serializeError, type SerializedError } from '../../src/error';
+import {
+  ensureError,
+  hasErrorMessage,
+  serializeError,
+  formatServerListenError,
+  type SerializedError
+} from '../../src/error';
 
 describe('ensureError', () => {
   it('should return the same Error instance', () => {
@@ -153,5 +159,96 @@ describe('serializeError', () => {
         cause: input
       })
     );
+  });
+});
+
+describe('formatServerListenError', () => {
+  it('should enhance EADDRINUSE error with actionable advice and preserve errno properties', () => {
+    const error = new Error('listen EADDRINUSE: address already in use 0.0.0.0:8282') as NodeJS.ErrnoException;
+    error.code = 'EADDRINUSE';
+    error.errno = -4091;
+    error.syscall = 'listen';
+    error.address = '0.0.0.0';
+    error.port = 8282;
+
+    const formatted = formatServerListenError(error, {
+      port: 8282,
+      host: '0.0.0.0',
+      configEnvVar: 'SERVER_PORT/PORT'
+    });
+
+    expect(formatted.message).toBe(
+      'Port 8282 is already in use (0.0.0.0:8282). Another process is already listening on this address. Please choose a different port via SERVER_PORT/PORT or terminate the conflicting process.'
+    );
+    expect(formatted.code).toBe('EADDRINUSE');
+    expect(formatted.errno).toBe(-4091);
+    expect(formatted.syscall).toBe('listen');
+    expect(formatted.address).toBe('0.0.0.0');
+    expect(formatted.port).toBe(8282);
+    expect(formatted.stack).toContain(
+      'Error: Port 8282 is already in use (0.0.0.0:8282). Another process is already listening on this address.'
+    );
+  });
+
+  it('should include serverName prefix when specified (e.g. Healthz probe server)', () => {
+    const error = new Error('listen EADDRINUSE: address already in use 0.0.0.0:8081') as NodeJS.ErrnoException;
+    error.code = 'EADDRINUSE';
+    error.port = 8081;
+    error.address = '0.0.0.0';
+
+    const formatted = formatServerListenError(error, {
+      serverName: 'Healthz probe server',
+      port: 8081,
+      host: '0.0.0.0',
+      configEnvVar: 'SERVER_HEALTHZ_PORT/HEALTHZ_PORT'
+    });
+
+    expect(formatted.message).toBe(
+      'Healthz probe server: Port 8081 is already in use (0.0.0.0:8081). Another process is already listening on this address. Please choose a different port via SERVER_HEALTHZ_PORT/HEALTHZ_PORT or terminate the conflicting process.'
+    );
+  });
+
+  it('should enhance EACCES error with permission advice', () => {
+    const error = new Error('listen EACCES: permission denied 0.0.0.0:80') as NodeJS.ErrnoException;
+    error.code = 'EACCES';
+    error.port = 80;
+    error.address = '0.0.0.0';
+
+    const formatted = formatServerListenError(error, {
+      port: 80,
+      host: '0.0.0.0',
+      configEnvVar: 'PORT'
+    });
+
+    expect(formatted.message).toContain('Permission denied to bind to 0.0.0.0:80 (EACCES)');
+    expect(formatted.message).toContain('Ports below 1024 typically require elevated administrative privileges');
+  });
+
+  it('should enhance EADDRNOTAVAIL error with network interface advice', () => {
+    const error = new Error('listen EADDRNOTAVAIL: address not available 192.168.1.99:8282') as NodeJS.ErrnoException;
+    error.code = 'EADDRNOTAVAIL';
+    error.port = 8282;
+    error.address = '192.168.1.99';
+
+    const formatted = formatServerListenError(error, {
+      port: 8282,
+      host: '192.168.1.99'
+    });
+
+    expect(formatted.message).toContain('Address 192.168.1.99:8282 is not available on this system (EADDRNOTAVAIL)');
+  });
+
+  it('should leave unknown error codes untouched', () => {
+    const error = new Error('Something else went wrong') as NodeJS.ErrnoException;
+    error.code = 'ECONNRESET';
+
+    const formatted = formatServerListenError(error);
+
+    expect(formatted.message).toBe('Something else went wrong');
+  });
+
+  it('should handle non-object inputs safely', () => {
+    expect(formatServerListenError(null as any)).toBeNull();
+    expect(formatServerListenError(undefined as any)).toBeUndefined();
   });
 });
