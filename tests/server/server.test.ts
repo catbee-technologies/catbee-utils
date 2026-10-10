@@ -6,6 +6,7 @@ import { HttpStatusCodes } from '../../src/http-status-codes';
 import { readFileSync } from '../../src/fs';
 import * as envUtils from '../../src/env';
 import http from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { HealthzServer } from '../../src/healthz-server';
 
 jest.mock('../../src/fs', () => ({
@@ -957,6 +958,32 @@ describe('ExpressServer', () => {
       expect(server.isRunning()).toBe(false);
 
       healthzStartSpy.mockRestore();
+    });
+
+    it('should format EADDRINUSE error with clear, actionable message when port is already in use', async () => {
+      const blocker = http.createServer();
+      await new Promise<void>((resolve, reject) => {
+        blocker.once('error', reject);
+        blocker.listen(0, '127.0.0.1', () => resolve());
+      });
+      const busyPort = (blocker.address() as AddressInfo).port;
+
+      const server = new ExpressServer({
+        port: busyPort,
+        host: '127.0.0.1',
+        healthzServer: { enable: false }
+      });
+      await server.waitUntilReady();
+
+      try {
+        await expect(server.start()).rejects.toThrow(
+          `Port ${busyPort} is already in use (127.0.0.1:${busyPort}). Choose a different port via SERVER_PORT/PORT`
+        );
+        expect(server.getServer()).toBeNull();
+        expect(server.isRunning()).toBe(false);
+      } finally {
+        await new Promise<void>(resolve => blocker.close(() => resolve()));
+      }
     });
 
     it('should start HealthzServer before the main Express server starts listening and coordinate probes', async () => {

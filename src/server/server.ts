@@ -7,6 +7,7 @@ import { createFinalErrorResponse } from '@catbee/utils/response';
 import { errorHandler, requestId, responseTime, setupRequestContext, timeout } from '@catbee/utils/middleware';
 import { Env } from '@catbee/utils/env';
 import { getLogger } from '@catbee/utils/logger';
+import { formatServerListenError } from '@catbee/utils/error';
 import { ServiceUnavailableException, NotFoundException } from '@catbee/utils/exception';
 import { getCatbeeServerGlobalConfig } from '@catbee/utils/config';
 import { deepObjMerge, isPlainObject } from '@catbee/utils/object';
@@ -918,7 +919,13 @@ export class ExpressServer {
         // Unified error listener handling both startup failure and runtime errors
         server.on('error', async (err: Error) => {
           if (!isListening) {
-            getLogger().error({ err }, 'Server failed to start');
+            const formattedErr = formatServerListenError(err, {
+              port: this.config.port,
+              host: this.config.host,
+              configEnvVar: 'SERVER_PORT/PORT'
+            });
+
+            getLogger().error({ err: formattedErr }, 'Server failed to start');
 
             try {
               server.removeAllListeners();
@@ -933,7 +940,7 @@ export class ExpressServer {
             this.server = null;
             this.healthzAddress = null;
             this.connections.clear();
-            reject(err);
+            reject(formattedErr);
           } else {
             getLogger().error({ err }, 'Server runtime error');
           }

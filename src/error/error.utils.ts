@@ -53,3 +53,61 @@ export function serializeError(err: unknown): SerializedError {
     cause: error.cause
   };
 }
+
+export interface ServerListenError extends Error {
+  code?: string;
+  errno?: number;
+  syscall?: string;
+  address?: string;
+  port?: number;
+}
+
+export interface ServerListenErrorContext {
+  serverName?: string;
+  port?: number | string;
+  host?: string;
+  configEnvVar?: string;
+}
+
+/**
+ * Enhances a Node.js network listen error (e.g., EADDRINUSE, EACCES) with human-readable,
+ * actionable context while preserving all original error properties (code, errno, syscall, address, port).
+ *
+ * @param err - The Error or ErrnoException thrown/emitted during server listen.
+ * @param context - Optional context including server name, target port, host, and configuration hint.
+ * @returns The enhanced Error with improved message and stack.
+ */
+export function formatServerListenError<T extends Error = Error>(err: T, context: ServerListenErrorContext = {}): T {
+  if (!err || typeof err !== 'object') {
+    return err;
+  }
+
+  const nodeErr = err as ServerListenError;
+  const port = nodeErr.port ?? context.port;
+  const host = nodeErr.address ?? context.host ?? '0.0.0.0';
+  const envHint = context.configEnvVar ? ` via ${context.configEnvVar}` : '';
+  const portDisplay = port ?? 'unknown';
+
+  let enhancedMessage: string | null = null;
+
+  if (nodeErr.code === 'EADDRINUSE') {
+    const prefix = context.serverName ? `${context.serverName}: port` : 'Port';
+    enhancedMessage = `${prefix} ${portDisplay} is already in use (${host}:${portDisplay}). Choose a different port${envHint}`;
+  } else if (nodeErr.code === 'EACCES') {
+    const prefix = context.serverName ? `${context.serverName}: permission` : 'Permission';
+    enhancedMessage = `${prefix} denied to bind to ${host}:${portDisplay} (EACCES). Ports below 1024 typically require elevated administrative privileges. Choose a different port${envHint}`;
+  } else if (nodeErr.code === 'EADDRNOTAVAIL') {
+    const prefix = context.serverName ? `${context.serverName}: address` : 'Address';
+    enhancedMessage = `${prefix} ${host}:${portDisplay} is not available on this system (EADDRNOTAVAIL). Verify the configured host or network interfaces`;
+  }
+
+  if (enhancedMessage) {
+    const rawStack = nodeErr.stack;
+    nodeErr.message = enhancedMessage;
+    if (typeof rawStack === 'string') {
+      nodeErr.stack = rawStack;
+    }
+  }
+
+  return err;
+}
