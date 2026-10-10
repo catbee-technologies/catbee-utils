@@ -78,6 +78,7 @@ Controls the Pino-based structured logger, logging thresholds, formatting, and f
 | `LOGGER_PRETTY_COLORIZE` | `boolean` | `true` | Colorize pretty-print terminal output |
 | `LOGGER_PRETTY_SINGLE_LINE` | `boolean` | `false` | Format pretty logs as single lines |
 | `LOGGER_DIR` | `string` | `''` (empty) | Directory path for file logging transport (empty = stdout only) |
+| `LOGGER_SEVERITY` | `boolean` | `false` | Include GCP/Cloud Logging compatible `severity` field (`INFO`, `WARN`, `ERROR`, etc.) in logs |
 
 ---
 

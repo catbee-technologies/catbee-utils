@@ -678,4 +678,43 @@ describe('LoggerUtils', () => {
       expect((loggerUtils._globalThis as any)[Symbol.for('logger')]).toBeUndefined();
     });
   });
+
+  describe('severity formatting', () => {
+    it('configures severity formatter when logger.severity is enabled', () => {
+      loggerUtils.resetLogger();
+      setCatbeeGlobalConfig({
+        logger: {
+          name: 'SeverityLogger',
+          severity: true
+        }
+      });
+
+      loggerUtils.getLogger();
+      const pinoCallArgs = (pino as unknown as jest.Mock).mock.calls.find(args => args[0]?.name === 'SeverityLogger');
+      expect(pinoCallArgs[0].formatters).toBeDefined();
+      const levelFormatter = pinoCallArgs[0].formatters.level;
+      expect(levelFormatter('info', 30)).toEqual({
+        level: 30,
+        severity: 'INFO'
+      });
+      expect(levelFormatter('warn', 40)).toEqual({
+        level: 40,
+        severity: 'WARN'
+      });
+    });
+
+    it('omits formatters when logger.severity is false or not set', () => {
+      loggerUtils.resetLogger();
+      setCatbeeGlobalConfig({
+        logger: {
+          name: 'StandardLogger',
+          severity: false
+        }
+      });
+
+      loggerUtils.getLogger();
+      const pinoCallArgs = (pino as unknown as jest.Mock).mock.calls.find(args => args[0]?.name === 'StandardLogger');
+      expect(pinoCallArgs[0].formatters).toBeUndefined();
+    });
+  });
 });

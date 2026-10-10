@@ -1,4 +1,4 @@
-import type { LoggerLevels } from '@catbee/utils/logger';
+import type { LoggerLevel } from '@catbee/utils/logger';
 import { CatbeeGlobalServerConfig } from './server';
 
 export interface CatbeeConfig {
@@ -8,7 +8,7 @@ export interface CatbeeConfig {
      * Environment variable: LOGGER_LEVEL
      * Default: 'info' in production, 'debug' in development
      */
-    level?: LoggerLevels;
+    level?: LoggerLevel;
     /**
      * Name of the logger instance (defaults to npm package name)
      * Environment variable: LOGGER_NAME
@@ -39,6 +39,12 @@ export interface CatbeeConfig {
      * Note: Directory must exist, it is not created automatically
      */
     dir?: string;
+    /**
+     * Includes a GCP/Cloud Logging compatible 'severity' field (e.g., 'INFO', 'ERROR') in log outputs.
+     * Environment variable: LOGGER_SEVERITY
+     * Default: false
+     */
+    severity?: boolean;
   };
   cache: {
     /**

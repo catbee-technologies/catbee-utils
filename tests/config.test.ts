@@ -56,7 +56,8 @@ describe('config', () => {
         pretty: false,
         colorize: false,
         singleLine: false,
-        dir: ''
+        dir: '',
+        severity: false
       },
       cache: {
         defaultTtl: 3600000

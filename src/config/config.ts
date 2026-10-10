@@ -1,5 +1,5 @@
 import type { CatbeeConfig, CatbeeGlobalServerConfig } from '@catbee/utils/types';
-import type { Logger, LoggerLevels } from '@catbee/utils/logger';
+import type { Logger, LoggerLevel } from '@catbee/utils/logger';
 import { Env } from '@catbee/utils/env';
 import { uuid } from '@catbee/utils/id';
 import { deepClone, deepObjMerge } from '@catbee/utils/object';
@@ -85,12 +85,13 @@ export const defaultServerConfig: CatbeeGlobalServerConfig = {
 /** Default Catbee configuration loaded from environment variables. */
 const defaultCatbeeConfig: CatbeeConfig = {
   logger: {
-    level: Env.get('LOGGER_LEVEL', Env.isDev() || Env.isTest() ? 'debug' : 'info') as LoggerLevels,
+    level: Env.get('LOGGER_LEVEL', Env.isDev() || Env.isTest() ? 'debug' : 'info') as LoggerLevel,
     name: Env.get('LOGGER_NAME', Env.get('npm_package_name', '@catbee/utils')),
     pretty: Env.getBoolean('LOGGER_PRETTY', false),
     colorize: Env.getBoolean('LOGGER_PRETTY_COLORIZE', true),
     singleLine: Env.getBoolean('LOGGER_PRETTY_SINGLE_LINE', false),
-    dir: Env.getPath('LOGGER_DIR', '', { mustExist: false })
+    dir: Env.getPath('LOGGER_DIR', '', { mustExist: false }),
+    severity: Env.getBoolean('LOGGER_SEVERITY', false)
   },
   cache: {
     defaultTtl: Env.getNumber('CACHE_DEFAULT_TTL_SECONDS', 3600) * 1000

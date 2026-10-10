@@ -396,7 +396,19 @@ function setupLogger(isGlobal: boolean = true): PinoLogger {
       err: pino.stdSerializers.err,
       error: pino.stdSerializers.err
     },
-    timestamp: stdTimeFunctions.isoTime
+    timestamp: stdTimeFunctions.isoTime,
+    ...(loggerConfig?.severity
+      ? {
+          formatters: {
+            level(label, number) {
+              return {
+                level: number,
+                severity: label.toUpperCase()
+              };
+            }
+          }
+        }
+      : {})
   };
 
   let logger: PinoLogger;
