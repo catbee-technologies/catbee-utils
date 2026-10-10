@@ -19,10 +19,10 @@ export default {
     ]
   ],
   moduleNameMapper: {
-    "^@catbee/utils$": "<rootDir>/src",
-    "^@catbee/utils/(.*)$": "<rootDir>/src/$1"
+    '^@catbee/utils$': '<rootDir>/src',
+    '^@catbee/utils/(.*)$': '<rootDir>/src/$1'
   },
-  modulePathIgnorePatterns: ["<rootDir>/dist/"],
+  modulePathIgnorePatterns: ['<rootDir>/dist/'],
   testMatch: ['**/tests/**/*.test.ts'],
   coveragePathIgnorePatterns: ['index.ts', 'src/types', 'src/servers/server.ts'],
   testResultsProcessor: 'jest-sonar-reporter',
@@ -33,8 +33,8 @@ export default {
       'ts-jest',
       {
         tsconfig: 'tsconfig.test.json',
-        diagnostics: false,
-      },
-    ],
+        diagnostics: false
+      }
+    ]
   }
 };

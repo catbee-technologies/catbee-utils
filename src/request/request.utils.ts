@@ -1,5 +1,5 @@
 import { Request } from 'express';
-import type { SortDirection, WithPagination } from '@catbee/utils/response';
+import type { SortDirection, WithPagination } from '@catbee/utils/types';
 import { BadRequestException } from '@catbee/utils/exception';
 
 /**

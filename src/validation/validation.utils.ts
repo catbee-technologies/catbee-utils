@@ -1,4 +1,4 @@
-import net from 'node:net';
+import { isIP } from 'node:net';
 
 const PORT_REGEX = /^[0-9]{1,5}$/;
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -250,7 +250,7 @@ export function isIPv4(str: string): boolean {
 export function isIPv6(str: string): boolean {
   if (!str || typeof str !== 'string' || str.length > 45) return false;
   try {
-    return net.isIP(str) === 6;
+    return isIP(str) === 6;
   } catch {
     return false;
   }

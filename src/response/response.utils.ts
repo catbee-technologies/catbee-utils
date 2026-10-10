@@ -1,5 +1,5 @@
 import type { Request } from 'express';
-import { ApiErrorResponse, ApiResponse } from '@catbee/utils/response';
+import type { ApiErrorResponse, ApiResponse } from '@catbee/utils/types';
 import { getRequestId } from '@catbee/utils/context-store';
 import { Env } from '@catbee/utils/env';
 import { uuid } from '@catbee/utils/id';

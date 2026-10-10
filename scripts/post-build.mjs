@@ -26,7 +26,7 @@ const pkg = JSON.parse(readFileSync(join(cwd, 'package.json'), 'utf-8'));
 delete pkg.scripts;
 delete pkg.devDependencies;
 
-const filePatterns = ['mjs', 'cjs', 'd.ts', 'd.mts'].map(ext => `**/*.${ext}`);
+const filePatterns = ['mjs', 'cjs', 'd.ts'].map(ext => `**/*.${ext}`);
 
 pkg.main = `index.cjs`;
 pkg.module = `index.mjs`;
@@ -51,24 +51,6 @@ pkg.keywords = [
   'developer-tools'
 ];
 
-function rewriteImports(filePath) {
-  if (!existsSync(filePath)) return;
-  let content = readFileSync(filePath, 'utf-8');
-  if (filePath.endsWith('index.cjs')) {
-    content = content.replace(/require\(["'](\.\/?[^"']+)["']\)/g, (_, p) => `require("${p}/index.cjs")`);
-  }
-  if (filePath.endsWith('index.mjs')) {
-    content = content.replace(
-      /export\s+\*\s+from\s+["'](\.\/?[^"']+)["']/g,
-      (_, p) => `export * from "${p}/index.mjs"`
-    );
-  }
-  writeFileSync(filePath, content, 'utf-8');
-}
-
-rewriteImports(join(distDir, 'index.cjs'));
-rewriteImports(join(distDir, 'index.mjs'));
-
 const exportsMap = {};
 const entries = readdirSync(distDir, { withFileTypes: true }).filter(d => d.isDirectory());
 
@@ -86,12 +68,13 @@ function scanExports(dir, keyBase = '') {
         rmSync(full);
       }
       if (item.name === 'index.mjs') {
-        // delete other than index.d.ts like other .d.ts files
-        const key = `./${exportKey.replace(/\/index\.mjs$/, '')}`;
+        const baseKey = exportKey.replace(/\/index\.mjs$/, '');
+        const key = `./${baseKey}`;
+
         exportsMap[key] = {
+          types: `./${baseKey}/index.d.ts`,
           import: `./${exportKey}`,
-          require: `./${exportKey.replace('index.mjs', 'index.cjs')}`,
-          types: `./${exportKey.replace('index.mjs', 'index.d.ts')}`
+          require: `./${exportKey.replace('index.mjs', 'index.cjs')}`
         };
       }
     }
@@ -104,9 +87,9 @@ for (const dir of entries) {
 
 pkg.exports = {
   '.': {
-    import: `./index.mjs`,
-    require: `./index.cjs`,
-    types: `./index.d.ts`
+    types: './index.d.ts',
+    import: './index.mjs',
+    require: './index.cjs'
   },
   ...exportsMap
 };

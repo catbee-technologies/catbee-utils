@@ -6,8 +6,8 @@ import type { HelmetOptions } from 'helmet';
 import type { CompressionOptions } from 'compression';
 import type { CookieParseOptions } from 'cookie-parser';
 import type { CorsOptions } from 'cors';
-import type { ToggleConfig } from './common';
-import type { CatbeeHealthzServerConfig } from '../healthz-server/types';
+import type { ToggleConfig } from '@catbee/utils/types';
+import type { CatbeeHealthzServerConfig } from '@catbee/utils/healthz-server';
 
 /**
  * Server configuration for Catbee HTTP/Express server.

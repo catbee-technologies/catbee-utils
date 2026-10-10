@@ -1,7 +1,8 @@
 import type { Request, Response, NextFunction } from 'express';
 import { uuid } from '@catbee/utils/id';
 import { HttpStatusCodes } from '@catbee/utils/http-status-codes';
-import { createFinalErrorResponse, ErrorResponse, ApiErrorResponse } from '@catbee/utils/response';
+import { createFinalErrorResponse, ErrorResponse } from '@catbee/utils/response';
+import type { ApiErrorResponse } from '@catbee/utils/types';
 import { getLogger } from '@catbee/utils/logger';
 import { ContextStore, StoreKeys } from '@catbee/utils/context-store';
 import { RequestTimeoutException } from '@catbee/utils/exception';
