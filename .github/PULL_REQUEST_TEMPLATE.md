@@ -6,37 +6,91 @@ Please ensure your Pull Request meets the following requirements:
       https://github.com/catbee-technologies/catbee-utils/blob/main/.commitlintrc.mjs
 - [ ] Tests have been added or updated (if applicable)
 - [ ] Documentation has been added or updated (if applicable)
-- [ ] I have run `npm run lint` and `npm run test` locally and verified all checks pass
+- [ ] I have run `npm run lint`, `npm run build`, and `npm run test` locally and verified all checks pass
+
 ---
 
 ## PR Type
 
 What kind of change does this PR introduce?
 
-<!-- Select ONE by marking it with an "x". -->
+<!-- Select ONE or more by marking with an "x". -->
 
-- [ ] Bugfix
-- [ ] Feature
-- [ ] Code style update (formatting, variables)
-- [ ] Refactoring (no functional or API changes)
-- [ ] Build-related changes
-- [ ] CI-related changes
-- [ ] Documentation changes
-- [ ] Performance improvement
+- [ ] Bugfix (`fix`)
+- [ ] Feature (`feat`)
+- [ ] Performance improvement (`perf`)
+- [ ] Refactoring (`refactor`)
+- [ ] Tests (`test`)
+- [ ] Documentation (`docs`)
+- [ ] Code style update (`style`)
+- [ ] Build / Tooling (`build`)
+- [ ] CI / Workflow (`ci`)
+- [ ] Dependency updates (`deps`)
+- [ ] Maintenance / Chore (`chore`)
 - [ ] Other (please describe below)
+
+---
+
+## Affected Module(s)
+
+<!-- Select all that apply with an "x". -->
+
+- [ ] `ArrayUtils` (Array utilities)
+- [ ] `AsyncUtils` (Async & promise utilities)
+- [ ] `CacheUtils` (In-memory cache utilities)
+- [ ] `ConfigBuilder` / Config options
+- [ ] `ContextStoreUtils` (AsyncLocalStorage context store)
+- [ ] `CryptoUtils` (Encryption, hashing & HMAC)
+- [ ] `DateUtils` / `DateBuilder` (Date & time utilities)
+- [ ] `DecoratorUtils` (Method & class decorators)
+- [ ] `DirectoryUtils` (Directory operations)
+- [ ] `EnvUtils` (Environment variable parsing)
+- [ ] `ErrorUtils` / `ExceptionUtils` (Error handling & custom exceptions)
+- [ ] `FileSystemUtils` (File system operations)
+- [ ] `HealthzServer` (Health check & probe server)
+- [ ] `HttpStatusCodes` (HTTP status codes & constants)
+- [ ] `IdUtils` (UUID, nanoid & identifier generation)
+- [ ] `LoggerUtils` (Structured logging / Pino wrapper)
+- [ ] `MiddlewareUtils` (Express middlewares & guards)
+- [ ] `ObjectUtils` (Object manipulation & deep cloning)
+- [ ] `PerformanceUtils` (Timing & benchmark helpers)
+- [ ] `RequestUtils` (HTTP request helpers)
+- [ ] `ResponseUtils` (API response formatters)
+- [ ] `ExpressServer` / `ServerConfigBuilder` (Express server bootstrap)
+- [ ] `StreamUtils` (Node.js stream utilities)
+- [ ] `StringUtils` (String manipulation & helpers)
+- [ ] `TypeUtils` (Type checking & guards)
+- [ ] `UrlUtils` / `UrlBuilder` (URL parsing & building)
+- [ ] `ValidationUtils` (Schema & input validation)
+- [ ] TypeScript Types & Interfaces
+- [ ] Documentation
+- [ ] Build / Tooling / CI
+
+---
+
+## Related Issue(s)
+
+<!-- Link related issues: e.g., Closes #12, Fixes #34, or N/A -->
+
+Closes #
+
+---
+
+## Description / Summary
+
+<!-- Provide a concise explanation of what this PR does and why. -->
 
 ---
 
 ## Current Behavior
 
-<!-- Describe the existing behavior or link to a related issue. -->
-Issue Number: N/A
+<!-- Describe the existing behavior before this change. -->
 
 ---
 
 ## New Behavior
 
-<!-- Describe the new behavior, improvements, or changes introduced by this PR. -->
+<!-- Describe the new behavior, improvements, or API additions introduced by this PR. -->
 
 ---
 
@@ -51,6 +105,12 @@ Does this PR introduce a breaking change?
 
 ---
 
+## Verification & Testing
+
+<!-- Describe how these changes were tested (unit tests, integration tests, or manual scripts). -->
+
+---
+
 ## Additional Information
 
-<!-- Add any extra details, context, screenshots, or references. -->
+<!-- Add any extra details, context, benchmarks, screenshots, or references. -->
