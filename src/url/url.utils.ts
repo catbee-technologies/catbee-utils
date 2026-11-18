@@ -215,7 +215,7 @@ export function createUrlBuilder(baseUrl: string) {
 export function extractQueryParams(url: string, paramNames: string[]): Record<string, string> {
   try {
     const parsedUrl = new URL(url);
-    const result: Record<string, string> = {};
+    const result: Record<string, string> = Object.create(null);
 
     for (const name of paramNames) {
       const value = parsedUrl.searchParams.get(name);
@@ -224,7 +224,7 @@ export function extractQueryParams(url: string, paramNames: string[]): Record<st
       }
     }
 
-    return result;
+    return Object.fromEntries(Object.entries(result));
   } catch {
     return {};
   }
@@ -294,21 +294,21 @@ export function parseTypedQueryParams<T extends Record<string, any>>(
 ): Partial<T> {
   try {
     const { searchParams } = new URL(url);
-    const result = {} as Partial<T>;
+    const result: Record<string, any> = Object.create(null);
 
     for (const [key, value] of searchParams.entries()) {
-      if (converters && key in converters) {
+      if (converters && Object.hasOwn(converters, key)) {
         try {
-          result[key as keyof T] = converters[key as keyof T](value);
+          result[key] = converters[key as keyof T](value);
         } catch {
           // Skip on conversion error
         }
       } else {
-        result[key as keyof T] = value as any;
+        result[key] = value;
       }
     }
 
-    return result;
+    return Object.fromEntries(Object.entries(result)) as Partial<T>;
   } catch {
     return {};
   }

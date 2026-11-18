@@ -241,14 +241,15 @@ export function extractFilterParams(
   query: Record<string, string | string[]>,
   allowedFilters: string[]
 ): Record<string, string | string[]> {
-  const filters: Record<string, string | string[]> = {};
+  if (!query || typeof query !== 'object') return {};
+  const filters: Record<string, string | string[]> = Object.create(null);
 
   // Find filter parameters in the query
   for (const field of allowedFilters) {
-    if (field in query) {
+    if (Object.hasOwn(query, field)) {
       filters[field] = query[field];
     }
   }
 
-  return filters;
+  return Object.fromEntries(Object.entries(filters));
 }

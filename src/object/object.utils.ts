@@ -502,13 +502,13 @@ export function invertBy<T extends Record<string, any>>(
   keyFn: (value: any) => string
 ): Record<string, string[]> {
   if (!isObject(obj)) return {};
-  const result: Record<string, string[]> = {};
+  const result: Record<string, string[]> = Object.create(null);
   for (const [key, value] of Object.entries(obj)) {
     const newKey = keyFn(value);
     if (!result[newKey]) result[newKey] = [];
     result[newKey].push(key);
   }
-  return result;
+  return Object.fromEntries(Object.entries(result));
 }
 
 /**

@@ -259,4 +259,19 @@ describe('extractFilterParams', () => {
   it('handles array values in filters', () => {
     expect(extractFilterParams({ type: ['a', 'b'] }, allowedFilters)).toEqual({ type: ['a', 'b'] });
   });
+
+  it('does not leak Object.prototype properties when not present in query', () => {
+    expect(extractFilterParams({}, ['toString', 'constructor', 'valueOf'])).toEqual({});
+  });
+
+  it('extracts Object.prototype properties when explicitly present as own properties', () => {
+    const query = { ['toString']: 'custom_string', ['__proto__']: 'custom_proto' };
+    const filters = extractFilterParams(query, ['toString', '__proto__']);
+    expect(filters).toEqual({
+      toString: 'custom_string',
+      ['__proto__']: 'custom_proto'
+    });
+    expect(Object.hasOwn(filters, 'toString')).toBe(true);
+    expect(Object.hasOwn(filters, '__proto__')).toBe(true);
+  });
 });

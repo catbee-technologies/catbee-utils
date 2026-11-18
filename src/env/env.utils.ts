@@ -723,7 +723,7 @@ export class Env {
    * // { DATABASE_URL: "postgres://...", API_KEY: "******", ... }
    */
   static getSafeEnv(sensitiveKeys: string[] = ['password', 'secret', 'key', 'token', 'auth']): Record<string, string> {
-    const safeEnv: Record<string, string> = {};
+    const safeEnv: Record<string, string> = Object.create(null);
 
     for (const [key, value] of Object.entries(process.env)) {
       if (!value) continue;
@@ -732,7 +732,7 @@ export class Env {
       safeEnv[key] = isSensitive ? '******' : value;
     }
 
-    return safeEnv;
+    return Object.fromEntries(Object.entries(safeEnv));
   }
 
   /**
@@ -756,7 +756,7 @@ export class Env {
 
     // Apply variables to process.env only for keys that are not already defined
     for (const [k, v] of Object.entries(variables)) {
-      if (!process.env[k]) {
+      if (!Object.hasOwn(process.env, k)) {
         process.env[k] = v;
       }
     }
@@ -765,7 +765,7 @@ export class Env {
   }
 
   private static parseEnvContent(content: string): Record<string, string> {
-    const variables: Record<string, string> = {};
+    const variables: Record<string, string> = Object.create(null);
     const lines = content.split(/\r?\n/);
 
     let i = 0;
@@ -800,14 +800,14 @@ export class Env {
         i = result.nextIndex;
       }
 
-      if (!process.env[key]) {
+      if (!Object.hasOwn(process.env, key)) {
         variables[key] = value;
       }
 
       i++;
     }
 
-    return variables;
+    return Object.fromEntries(Object.entries(variables));
   }
 
   private static isCommentOrEmpty(line: string): boolean {

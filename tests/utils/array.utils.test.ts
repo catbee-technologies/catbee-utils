@@ -115,6 +115,24 @@ describe('ArrayUtils', () => {
       expect(groupBy(null, 'x')).toEqual({});
       expect(groupBy([], 'x')).toEqual({});
     });
+    it('handles Object.prototype keys (constructor, toString, __proto__)', () => {
+      const words = ['ok', 'constructor', 'toString', '__proto__', 'ok'];
+      const grouped = groupBy(words, w => w);
+      expect(grouped).toEqual({
+        ok: ['ok', 'ok'],
+        constructor: ['constructor'],
+        toString: ['toString'],
+        ['__proto__']: ['__proto__']
+      });
+      expect(Object.hasOwn(grouped, '__proto__')).toBe(true);
+      expect(Object.hasOwn(grouped, 'constructor')).toBe(true);
+      expect(Object.hasOwn(grouped, 'toString')).toBe(true);
+      expect(grouped['__proto__']).toEqual(['__proto__']);
+
+      const byProp = groupBy([{ key: '__proto__' }, { key: '__proto__' }], 'key');
+      expect(Object.hasOwn(byProp, '__proto__')).toBe(true);
+      expect(byProp['__proto__']).toHaveLength(2);
+    });
   });
 
   describe('shuffle', () => {
@@ -271,6 +289,25 @@ describe('ArrayUtils', () => {
     it('returns {} for non-array', () => {
       // @ts-expect-error
       expect(countBy(null, () => 'x')).toEqual({});
+      expect(countBy([], () => 'x')).toEqual({});
+    });
+    it('handles Object.prototype keys (constructor, toString, __proto__)', () => {
+      const words = ['ok', 'constructor', 'toString', '__proto__', 'ok'];
+      const counts = countBy(words, w => w);
+      expect(counts).toEqual({
+        ok: 2,
+        constructor: 1,
+        toString: 1,
+        ['__proto__']: 1
+      });
+      expect(Object.hasOwn(counts, '__proto__')).toBe(true);
+      expect(Object.hasOwn(counts, 'constructor')).toBe(true);
+      expect(Object.hasOwn(counts, 'toString')).toBe(true);
+      expect(counts['__proto__']).toBe(1);
+
+      const repeated = countBy(['constructor', 'constructor', '__proto__', '__proto__'], x => x);
+      expect(repeated['constructor']).toBe(2);
+      expect(repeated['__proto__']).toBe(2);
     });
   });
 

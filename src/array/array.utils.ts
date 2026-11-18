@@ -114,7 +114,7 @@ export function groupBy<T>(
   const keyFn =
     typeof keyOrFn === 'function' ? keyOrFn : (item: T) => String(getValueByPath(item as object, keyOrFn as string));
 
-  const result: Record<string, T[]> = {};
+  const result: Record<string, T[]> = Object.create(null);
   for (const item of array) {
     const key = String(keyFn(item));
     if (Object.hasOwn(result, key)) {
@@ -402,13 +402,13 @@ export function compact<T>(array: readonly T[]): NonNullable<T>[] {
  * @returns {Record<string, number>} Object with counts by key.
  */
 export function countBy<T>(array: readonly T[], keyFn: (item: T) => StrNumSym): Record<string, number> {
-  if (!Array.isArray(array)) return {};
-  const result: Record<string, number> = {};
+  if (!Array.isArray(array) || array.length === 0) return {};
+  const result: Record<string, number> = Object.create(null);
   for (const item of array) {
     const key = String(keyFn(item));
     result[key] = (result[key] ?? 0) + 1;
   }
-  return result;
+  return Object.fromEntries(Object.entries(result));
 }
 
 /**

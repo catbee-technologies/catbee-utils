@@ -636,6 +636,13 @@ describe('EnvUtils', () => {
       expect(safe.MY_AUTH).toBe('******');
       expect(safe.SAFE).toBe('ok');
     });
+
+    it('safely handles Object.prototype keys without mutating prototype', () => {
+      Env.set('toString', 'custom_to_string');
+      const safe = Env.getSafeEnv();
+      expect(Object.hasOwn(safe, 'toString')).toBe(true);
+      expect(safe.toString).toBe('custom_to_string');
+    });
   });
 
   describe('loadFromFile', () => {
@@ -727,6 +734,16 @@ describe('EnvUtils', () => {
       Env.loadFromFile('.env');
 
       expect(process.env.EXISTING).toBe('original-value');
+    });
+
+    it('loads variables named after Object.prototype properties', () => {
+      readFileSyncMock.mockReturnValue('toString=custom-to-string');
+
+      const result = Env.loadFromFile('.env.proto');
+
+      expect(result).toHaveProperty('toString', 'custom-to-string');
+      expect(process.env.toString).toBe('custom-to-string');
+      delete process.env.toString;
     });
   });
 
