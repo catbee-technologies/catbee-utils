@@ -177,6 +177,16 @@ describe('UrlUtils', () => {
     it('returns empty object for invalid URL', () => {
       expect(extractQueryParams('not a url', ['x'])).toEqual({});
     });
+    it('handles Object.prototype keys (__proto__, toString)', () => {
+      const url = 'https://a.com/?__proto__=polluted&toString=val';
+      const extracted = extractQueryParams(url, ['__proto__', 'toString']);
+      expect(extracted).toEqual({
+        ['__proto__']: 'polluted',
+        toString: 'val'
+      });
+      expect(Object.hasOwn(extracted, '__proto__')).toBe(true);
+      expect(Object.hasOwn(extracted, 'toString')).toBe(true);
+    });
   });
 
   describe('removeQueryParams', () => {
@@ -215,6 +225,16 @@ describe('UrlUtils', () => {
     });
     it('returns {} for invalid URL', () => {
       expect(parseTypedQueryParams('not a url')).toEqual({});
+    });
+    it('does not invoke Object.prototype methods when matching param names with converters', () => {
+      const url = 'https://a.com/?toString=hello&__proto__=polluted';
+      const result = parseTypedQueryParams<any>(url, { page: Number } as any);
+      expect(result).toEqual({
+        toString: 'hello',
+        ['__proto__']: 'polluted'
+      });
+      expect(Object.hasOwn(result, '__proto__')).toBe(true);
+      expect(Object.hasOwn(result, 'toString')).toBe(true);
     });
   });
 

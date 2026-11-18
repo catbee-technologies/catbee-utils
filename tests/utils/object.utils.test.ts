@@ -756,6 +756,19 @@ describe('ObjUtils', () => {
     it('handles empty object', () => {
       expect(invertBy({}, v => String(v))).toEqual({});
     });
+
+    it('handles Object.prototype keys (constructor, toString, __proto__)', () => {
+      const obj = { a: 'toString', b: '__proto__', c: 'toString', d: 'constructor' };
+      const inverted = invertBy(obj, v => v);
+      expect(inverted).toEqual({
+        toString: ['a', 'c'],
+        ['__proto__']: ['b'],
+        constructor: ['d']
+      });
+      expect(Object.hasOwn(inverted, '__proto__')).toBe(true);
+      expect(Object.hasOwn(inverted, 'toString')).toBe(true);
+      expect(Object.hasOwn(inverted, 'constructor')).toBe(true);
+    });
   });
 
   describe('transform', () => {
